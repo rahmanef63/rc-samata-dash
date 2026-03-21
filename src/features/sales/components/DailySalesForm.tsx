@@ -44,7 +44,7 @@ export function DailySalesForm() {
   const currentBranchId = branches?.[0]?._id;
 
   const rawSales = useDailySales(currentBranchId || "");
-  const salesData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as (DailySale & { _id: string })[];
+  const salesData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as DailySale[];
 
   const mutations = {
     createMutation: useCreateSale(),
@@ -52,7 +52,7 @@ export function DailySalesForm() {
     deleteMutation: useDeleteSale(),
   };
 
-  const crud = useConvexCrudState<DailySale & { _id: string }>(mutations as any);
+  const crud = useConvexCrudState<DailySale>(mutations as any);
   // Auto-inject branchId for creates
   const customCrudCreate = async (data: any) => {
     if(!currentBranchId) return;

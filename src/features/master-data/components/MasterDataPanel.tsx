@@ -57,16 +57,16 @@ type Tab = typeof tabs[number];
 export function MasterDataPanel() {
   const [activeTab, setActiveTab] = useState<Tab>("Vendors");
 
-  const vendorsData = useVendors()?.map(v => ({ ...v, id: v._id })) || [];
-  const channelsData = useIncomeChannels()?.map(v => ({ ...v, id: v._id, isSettlementDelayed: Boolean(v.isSettlementDelayed) })) || [];
-  const categoriesData = useExpenseCategories()?.map(v => ({ ...v, id: v._id })) || [];
+  const vendorsData = (useVendors() || []).map(v => ({ ...v, id: v._id })) as unknown as Vendor[];
+  const channelsData = (useIncomeChannels() || []).map(v => ({ ...v, id: v._id, isSettlementDelayed: Boolean(v.isSettlementDelayed) })) as unknown as IncomeChannel[];
+  const categoriesData = (useExpenseCategories() || []).map(v => ({ ...v, id: v._id })) as unknown as ExpenseCategory[];
 
   const vendorMutations = {
     createMutation: useCreateVendor(),
     updateMutation: useUpdateVendor(),
     deleteMutation: useDeleteVendor()
   };
-  const vendorCrud = useConvexCrudState<Vendor & { _id: string }>(vendorMutations as any);
+  const vendorCrud = useConvexCrudState<Vendor>(vendorMutations as any);
   const vendorTable = useTableState(vendorsData, ["name", "type", "phone"]);
 
   const channelMutations = {
@@ -74,7 +74,7 @@ export function MasterDataPanel() {
     updateMutation: useUpdateIncomeChannel(),
     deleteMutation: useDeleteIncomeChannel()
   };
-  const channelCrud = useConvexCrudState<IncomeChannel & { _id: string }>(channelMutations as any);
+  const channelCrud = useConvexCrudState<IncomeChannel>(channelMutations as any);
   const channelTable = useTableState(channelsData, ["name", "type"]);
 
   const catMutations = {
@@ -82,7 +82,7 @@ export function MasterDataPanel() {
     updateMutation: useUpdateExpenseCategory(),
     deleteMutation: useDeleteExpenseCategory()
   };
-  const catCrud = useConvexCrudState<ExpenseCategory & { _id: string }>(catMutations as any);
+  const catCrud = useConvexCrudState<ExpenseCategory>(catMutations as any);
   const catTable = useTableState(categoriesData, ["name", "type"]);
 
   return (

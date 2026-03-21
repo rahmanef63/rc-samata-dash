@@ -16,7 +16,7 @@ export interface ConvexCrudState<T> {
   onDelete: (data: any) => Promise<void>;
 }
 
-export function useConvexCrudState<T extends { _id: string }>(config: {
+export function useConvexCrudState<T = any>(config: {
   createMutation: (data: any) => Promise<any>;
   updateMutation: (data: Record<string, any>) => Promise<any>;
   deleteMutation: (data: { id: string }) => Promise<any>;
@@ -61,7 +61,7 @@ export function useConvexCrudState<T extends { _id: string }>(config: {
       // E.g., { id: selectedItem._id, ...data }
       const payload = { ...data };
       if (selectedItem) {
-        payload.id = selectedItem._id;
+        payload.id = (selectedItem as any)._id || (selectedItem as any).id;
       }
       await config.updateMutation(payload);
       close();
@@ -71,7 +71,7 @@ export function useConvexCrudState<T extends { _id: string }>(config: {
 
   const onDelete = useCallback(
     async (data: any) => {
-      const id = data._id || data.id || (selectedItem && selectedItem._id);
+      const id = data._id || data.id || (selectedItem && ((selectedItem as any)._id || (selectedItem as any).id));
       if (id) {
         await config.deleteMutation({ id });
       }
