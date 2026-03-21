@@ -1,5 +1,8 @@
 // ─── Common status types ─────────────────────────────────
-export type TransactionStatus = "draft" | "submitted" | "approved" | "settled" | "rejected" | "pending" | "completed" | "review" | "paid" | "overdue" | "partial" | "open" | "disbursed" | "closed" | "requested";
+export type TransactionStatus =
+  | "draft" | "submitted" | "approved" | "settled" | "rejected"
+  | "pending" | "completed" | "review" | "paid" | "overdue"
+  | "partial" | "open" | "disbursed" | "closed" | "requested";
 export type Direction = "in" | "out";
 export type BadgeColor = "success" | "warning" | "destructive" | "primary";
 
@@ -88,7 +91,7 @@ export interface ExpenseLineItem {
   subtotal: number;
 }
 
-// ─── Payables (Piutang Belanja Bahan) ────────────────────
+// ─── Payables ────────────────────────────────────────────
 export interface Payable {
   id: string;
   expenseId: string;
@@ -185,7 +188,7 @@ export interface AuditLog {
   actedAt: string;
 }
 
-// ─── Shared data structures ─────────────────────────────
+// ─── Shared UI structures ────────────────────────────────
 export interface DataPoint {
   label: string;
   value: number;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { TransactionRow } from "@/shared/components";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -8,7 +8,7 @@ import { recentTransactions, itemVariants } from "../lib";
 import type { Transaction } from "../types";
 
 export function DashboardRecentTransactions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [selected, setSelected] = useState<Transaction | null>(null);
 
   return (
@@ -16,7 +16,7 @@ export function DashboardRecentTransactions() {
       <motion.div variants={itemVariants} className="lg:col-span-2 bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold">Recent Transactions</h2>
-          <button onClick={() => navigate("/finance")} className="text-xs text-primary font-medium hover:underline">View All</button>
+          <button onClick={() => router.push("/finance")} className="text-xs text-primary font-medium hover:underline">View All</button>
         </div>
         <div className="space-y-3">
           {recentTransactions.map((tx) => (

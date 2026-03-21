@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import type { PettyCashRequest } from "../types";
 import { toast } from "sonner";
 
 export function DashboardPettyCashRequests() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [selected, setSelected] = useState<PettyCashRequest | null>(null);
 
   const handleApprove = (req: PettyCashRequest) => {
@@ -28,7 +28,7 @@ export function DashboardPettyCashRequests() {
       <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold">Petty Cash Requests</h2>
-          <button onClick={() => navigate("/petty-cash")} className="text-xs text-primary font-medium hover:underline">
+          <button onClick={() => router.push("/petty-cash")} className="text-xs text-primary font-medium hover:underline">
             <StatusBadge status="pending">3 Action Required</StatusBadge>
           </button>
         </div>

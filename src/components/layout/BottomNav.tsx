@@ -1,6 +1,8 @@
+"use client";
+
 import { Home, DollarSign, BarChart3, Bot, Settings, Menu } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useSidebar } from "@/components/ui/sidebar";
 
@@ -13,7 +15,7 @@ const navItems = [
 ];
 
 export function BottomNav() {
-  const location = useLocation();
+  const pathname = usePathname();
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -22,8 +24,8 @@ export function BottomNav() {
         {navItems.map((item) => {
           const isActive =
             item.url === "/"
-              ? location.pathname === "/"
-              : location.pathname.startsWith(item.url);
+              ? pathname === "/"
+              : pathname.startsWith(item.url);
           return (
             <NavLink
               key={item.title}
@@ -40,9 +42,17 @@ export function BottomNav() {
                     transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                   />
                 )}
-                <item.icon className={`relative h-5 w-5 transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                <item.icon
+                  className={`relative h-5 w-5 transition-colors ${
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  }`}
+                />
               </div>
-              <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+              <span
+                className={`text-[10px] font-semibold transition-colors ${
+                  isActive ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
                 {item.title}
               </span>
             </NavLink>

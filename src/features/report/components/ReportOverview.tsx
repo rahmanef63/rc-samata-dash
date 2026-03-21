@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { TrendingUp, Building2, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ interface Branch { name: string; transactions: string; amount: string; percentag
 interface Report { name: string; date: string; size: string }
 
 export function ReportOverview() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const chartData = monthlyData.map(d => ({ label: d.month, value: d.value }));
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -22,7 +22,7 @@ export function ReportOverview() {
       {/* Monthly Revenue - clickable */}
       <div
         className="bg-card rounded-xl shadow-card p-5 cursor-pointer hover:shadow-card-hover transition-shadow"
-        onClick={() => navigate("/finance")}
+        onClick={() => router.push("/finance")}
       >
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm text-muted-foreground">Monthly Revenue</p>
@@ -37,10 +37,10 @@ export function ReportOverview() {
       <AreaChartCard data={chartData} title="Revenue Trend" height={192} gradientId="repGrad" tooltipLabel="Revenue" />
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="cursor-pointer" onClick={() => navigate("/expenses")}>
+        <div className="cursor-pointer" onClick={() => router.push("/expenses")}>
           <PieChartCard data={expenseBreakdown} title="Expense Breakdown" subtitle="Total 6 bulan" height={200} />
         </div>
-        <div className="cursor-pointer" onClick={() => navigate("/closing")}>
+        <div className="cursor-pointer" onClick={() => router.push("/closing")}>
           <WaterfallChart data={cashflowWaterfallReport} title="Cashflow Waterfall" subtitle="Aliran kas 6 bulan" height={200} />
         </div>
       </div>

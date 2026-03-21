@@ -1,5 +1,5 @@
 import { DollarSign, Wallet, AlertTriangle, TrendingUp, Receipt, Moon, Package } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { KpiCard } from "@/components/ui/kpi-card";
 
 const kpiItems = [
@@ -14,7 +14,7 @@ const kpiItems = [
 ];
 
 export function DashboardKpiCards() {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -26,7 +26,7 @@ export function DashboardKpiCards() {
           value={item.value}
           badge={item.badge}
           badgeColor={item.badgeColor}
-          onClick={() => navigate(item.path)}
+          onClick={() => router.push(item.path)}
         />
       ))}
     </div>

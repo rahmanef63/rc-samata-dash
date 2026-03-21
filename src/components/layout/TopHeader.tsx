@@ -1,3 +1,5 @@
+"use client";
+
 import { Bell, ChevronDown, Search, Sun, Moon } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,7 +15,12 @@ function getGreeting() {
 }
 
 function formatDate() {
-  return new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return new Date().toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 export function TopHeader() {
@@ -21,13 +28,12 @@ export function TopHeader() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const dark = document.documentElement.classList.contains("dark");
-    setIsDark(dark);
+    setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
   const toggleDark = () => {
     document.documentElement.classList.toggle("dark");
-    setIsDark(!isDark);
+    setIsDark((prev) => !prev);
   };
 
   return (
@@ -40,8 +46,12 @@ export function TopHeader() {
               <span className="text-primary-foreground font-bold text-xs">R</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[13px] font-semibold leading-tight">{getGreeting()} 👋</span>
-              <span className="text-[10px] text-muted-foreground leading-tight">{formatDate()}</span>
+              <span className="text-[13px] font-semibold leading-tight">
+                {getGreeting()} 👋
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-tight">
+                {formatDate()}
+              </span>
             </div>
           </div>
         )}
@@ -62,7 +72,11 @@ export function TopHeader() {
           </div>
         )}
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={toggleDark}>
-          {isDark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+          {isDark ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
         </Button>
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
           <Search className="h-4 w-4 text-muted-foreground" />

@@ -1,9 +1,11 @@
+"use client";
+
 import {
   Home, FileText, DollarSign, BarChart3, ClipboardCheck,
-  Package, Settings, Wallet, Receipt, Moon, Database, ChevronRight, Bot
+  Package, Settings, Wallet, Receipt, Moon, Database, ChevronRight, Bot,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { usePathname } from "next/navigation";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -23,19 +25,19 @@ const menuGroups = [
     label: "FINANCE",
     items: [
       { title: "Penjualan", url: "/finance", icon: FileText },
-      { title: "Expenses", url: "/expenses", icon: DollarSign },
-      { title: "Piutang Vendor", url: "/payables", icon: Receipt },
-      { title: "Petty Cash", url: "/petty-cash", icon: Wallet },
-      { title: "Closing & Setoran", url: "/closing", icon: Moon },
+      { title: "Expenses", url: "/finance/expenses", icon: DollarSign },
+      { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
+      { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
+      { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
     ],
   },
   {
     label: "OPERATIONS",
     items: [
-      { title: "Inventory", url: "/inventory", icon: Package },
-      { title: "Audit", url: "/audit", icon: ClipboardCheck },
-      { title: "Master Data", url: "/master-data", icon: Database },
-      { title: "Settings", url: "/settings", icon: Settings },
+      { title: "Inventory", url: "/operation", icon: Package },
+      { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
+      { title: "Master Data", url: "/operation/master-data", icon: Database },
+      { title: "Settings", url: "/operation/settings", icon: Settings },
     ],
   },
 ];
@@ -43,7 +45,7 @@ const menuGroups = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
+  const pathname = usePathname();
 
   return (
     <Sidebar collapsible="icon">
@@ -58,7 +60,9 @@ export function AppSidebar() {
                 <span className="font-bold text-navy">Rocket</span>
                 <span className="font-bold text-primary ml-0.5">Chicken</span>
               </div>
-              <span className="text-[10px] text-muted-foreground leading-tight">Owner Control Panel</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">
+                Owner Control Panel
+              </span>
             </div>
           )}
         </div>
@@ -66,11 +70,18 @@ export function AppSidebar() {
       <SidebarContent className="pt-3">
         {menuGroups.map((group) => (
           <SidebarGroup key={group.label}>
-            {!collapsed && <SidebarGroupLabel className="label-uppercase px-4 mb-1">{group.label}</SidebarGroupLabel>}
+            {!collapsed && (
+              <SidebarGroupLabel className="label-uppercase px-4 mb-1">
+                {group.label}
+              </SidebarGroupLabel>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  const isActive = item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url);
+                  const isActive =
+                    item.url === "/"
+                      ? pathname === "/"
+                      : pathname === item.url || pathname.startsWith(item.url + "/");
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
@@ -79,16 +90,22 @@ export function AppSidebar() {
                           end={item.url === "/"}
                           className={`group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                             isActive
-                              ? 'bg-accent text-accent-foreground font-semibold'
-                              : 'text-sidebar-foreground hover:bg-secondary'
+                              ? "bg-accent text-accent-foreground font-semibold"
+                              : "text-sidebar-foreground hover:bg-secondary"
                           }`}
                           activeClassName=""
                         >
-                          <item.icon className={`h-[18px] w-[18px] shrink-0 transition-colors ${isActive ? 'text-primary' : ''}`} />
+                          <item.icon
+                            className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                              isActive ? "text-primary" : ""
+                            }`}
+                          />
                           {!collapsed && (
                             <>
                               <span className="flex-1">{item.title}</span>
-                              {isActive && <ChevronRight className="h-3.5 w-3.5 text-primary opacity-60" />}
+                              {isActive && (
+                                <ChevronRight className="h-3.5 w-3.5 text-primary opacity-60" />
+                              )}
                             </>
                           )}
                         </NavLink>

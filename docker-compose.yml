@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  # This is a dummy service. SI Coder script uses Dokploy 'convex' template to provision the real backend when docker-compose.yml exists!
+  # Do not modify.
+  dummy:
+    image: hello-world
