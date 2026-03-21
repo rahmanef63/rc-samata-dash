@@ -2,13 +2,15 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { TabBar, DataTable, CrudDialog, SectionHeader } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Vendor, IncomeChannel, ExpenseCategory } from "@/shared/types";
+import { vendorTypeLabels, channelTypeLabels, expenseCategoryTypeLabels } from "../lib";
 import {
-  mockVendors, mockChannels, mockExpenseCategories,
-  vendorTypeLabels, channelTypeLabels, expenseCategoryTypeLabels,
-} from "../lib";
+  useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor,
+  useIncomeChannels, useCreateIncomeChannel, useUpdateIncomeChannel, useDeleteIncomeChannel,
+  useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory
+} from "../api";
 
 // ── Vendor Tab ──────────────────────────────────────────
 const vendorFields: FieldConfig[] = [
@@ -55,14 +57,33 @@ type Tab = typeof tabs[number];
 export function MasterDataPanel() {
   const [activeTab, setActiveTab] = useState<Tab>("Vendors");
 
-  const vendorCrud = useCrudState<Vendor>(mockVendors);
-  const vendorTable = useTableState(vendorCrud.items, ["name", "type", "phone"]);
+  const vendorsData = useVendors()?.map(v => ({ ...v, id: v._id })) || [];
+  const channelsData = useIncomeChannels()?.map(v => ({ ...v, id: v._id, isSettlementDelayed: Boolean(v.isSettlementDelayed) })) || [];
+  const categoriesData = useExpenseCategories()?.map(v => ({ ...v, id: v._id })) || [];
 
-  const channelCrud = useCrudState<IncomeChannel>(mockChannels);
-  const channelTable = useTableState(channelCrud.items, ["name", "type"]);
+  const vendorMutations = {
+    createMutation: useCreateVendor(),
+    updateMutation: useUpdateVendor(),
+    deleteMutation: useDeleteVendor()
+  };
+  const vendorCrud = useConvexCrudState<Vendor & { _id: string }>(vendorMutations as any);
+  const vendorTable = useTableState(vendorsData, ["name", "type", "phone"]);
 
-  const catCrud = useCrudState<ExpenseCategory>(mockExpenseCategories);
-  const catTable = useTableState(catCrud.items, ["name", "type"]);
+  const channelMutations = {
+    createMutation: useCreateIncomeChannel(),
+    updateMutation: useUpdateIncomeChannel(),
+    deleteMutation: useDeleteIncomeChannel()
+  };
+  const channelCrud = useConvexCrudState<IncomeChannel & { _id: string }>(channelMutations as any);
+  const channelTable = useTableState(channelsData, ["name", "type"]);
+
+  const catMutations = {
+    createMutation: useCreateExpenseCategory(),
+    updateMutation: useUpdateExpenseCategory(),
+    deleteMutation: useDeleteExpenseCategory()
+  };
+  const catCrud = useConvexCrudState<ExpenseCategory & { _id: string }>(catMutations as any);
+  const catTable = useTableState(categoriesData, ["name", "type"]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">

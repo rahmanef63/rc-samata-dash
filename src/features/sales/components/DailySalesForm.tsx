@@ -5,9 +5,12 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
-import { salesChannels, subTabs, mockDailySales, formatRpFull } from "../lib";
+import { salesChannels, subTabs, formatRpFull } from "../lib";
+import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
   { key: "businessDate", label: "Tanggal", type: "date", required: true },
@@ -35,14 +38,35 @@ const columns: Column<DailySale>[] = [
 
 export function DailySalesForm() {
   const [sub, setSub] = useState(0);
-  const crud = useCrudState<DailySale>(mockDailySales);
-  const table = useTableState(crud.items, ["channelName", "businessDate", "referenceNo"]);
 
-  const todaySales = crud.items.filter(i => i.businessDate === "2024-05-24");
+  // Auto-detect a branch ID for demo purposes
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
+
+  const rawSales = useDailySales(currentBranchId || "");
+  const salesData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as (DailySale & { _id: string })[];
+
+  const mutations = {
+    createMutation: useCreateSale(),
+    updateMutation: useUpdateSale(),
+    deleteMutation: useDeleteSale(),
+  };
+
+  const crud = useConvexCrudState<DailySale & { _id: string }>(mutations as any);
+  // Auto-inject branchId for creates
+  const customCrudCreate = async (data: any) => {
+    if(!currentBranchId) return;
+    await crud.onCreate({ ...data, branchId: currentBranchId, netAmount: data.grossAmount - (data.platformFee||0) - (data.promoCost||0) });
+  };
+
+  const table = useTableState(salesData, ["channelName", "businessDate", "referenceNo"]);
+
+  // We simply extract today's dummy date or logic
+  const todaySales = salesData.filter(i => i.businessDate === "2024-05-24" || i.businessDate.startsWith(new Date().toISOString().split('T')[0]));
   const totalGross = todaySales.reduce((s, i) => s + i.grossAmount, 0);
   const totalNet = todaySales.reduce((s, i) => s + i.netAmount, 0);
-  const totalFees = todaySales.reduce((s, i) => s + i.platformFee + i.promoCost, 0);
-  const pendingSettlement = crud.items.filter(i => i.status === "pending_settlement");
+  const totalFees = todaySales.reduce((s, i) => s + (i.platformFee||0) + (i.promoCost||0), 0);
+  const pendingSettlement = salesData.filter(i => i.status === "pending_settlement");
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -122,7 +146,7 @@ export function DailySalesForm() {
           <CrudDialog<DailySale>
             open={crud.isOpen} mode={crud.mode} item={crud.selectedItem}
             fields={fields} entityName="Penjualan" onClose={crud.close}
-            onSubmit={crud.mode === "edit" ? crud.onUpdate : crud.onCreate}
+            onSubmit={crud.mode === "edit" ? crud.onUpdate : customCrudCreate}
             onDelete={crud.onDelete}
           />
         </>
