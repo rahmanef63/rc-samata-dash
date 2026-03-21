@@ -1,9 +1,12 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ROUTE_GROUPS } from "@/config/routes";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { api } from "../../../convex/_generated/api";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -14,6 +17,20 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
+  const { isAuthenticated } = useConvexAuth();
+  const { signOut } = useAuthActions();
+  const router = useRouter();
+
+  // Fetch current user data when authenticated
+  const currentUser = useQuery(
+    api.features.masterData.queries.listBranches,
+    isAuthenticated ? {} : "skip"
+  );
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -89,16 +106,23 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
       {!collapsed && (
-        <div className="mt-auto p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors cursor-pointer">
+        <div className="mt-auto p-4 border-t border-sidebar-border space-y-2">
+          <div className="flex items-center gap-3 p-2 rounded-xl bg-secondary/50">
             <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center ring-2 ring-border">
-              <span className="text-sm text-navy-foreground font-medium">IM</span>
+              <span className="text-sm text-navy-foreground font-medium">RC</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">Ikhwanul Muslim</p>
-              <p className="text-[11px] text-muted-foreground">Owner · Sudirman</p>
+              <p className="text-sm font-semibold truncate">RC Samata</p>
+              <p className="text-[11px] text-muted-foreground">Super Admin</p>
             </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Logout</span>
+          </button>
         </div>
       )}
     </Sidebar>
