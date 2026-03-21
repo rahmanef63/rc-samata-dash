@@ -1,46 +1,14 @@
 "use client";
 
-import {
-  Home, FileText, DollarSign, BarChart3, ClipboardCheck,
-  Package, Settings, Wallet, Receipt, Moon, Database, ChevronRight, Bot,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { usePathname } from "next/navigation";
+import { ROUTE_GROUPS } from "@/config/routes";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   SidebarHeader, useSidebar,
 } from "@/components/ui/sidebar";
-
-const menuGroups = [
-  {
-    label: "MAIN MENU",
-    items: [
-      { title: "Dashboard", url: "/", icon: Home },
-      { title: "Report", url: "/report", icon: BarChart3 },
-      { title: "Chat AI", url: "/chat", icon: Bot },
-    ],
-  },
-  {
-    label: "FINANCE",
-    items: [
-      { title: "Penjualan", url: "/finance", icon: FileText },
-      { title: "Expenses", url: "/finance/expenses", icon: DollarSign },
-      { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
-      { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
-      { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
-    ],
-  },
-  {
-    label: "OPERATIONS",
-    items: [
-      { title: "Inventory", url: "/operation", icon: Package },
-      { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
-      { title: "Master Data", url: "/operation/master-data", icon: Database },
-      { title: "Settings", url: "/operation/settings", icon: Settings },
-    ],
-  },
-];
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -68,7 +36,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent className="pt-3">
-        {menuGroups.map((group) => (
+        {ROUTE_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
             {!collapsed && (
               <SidebarGroupLabel className="label-uppercase px-4 mb-1">
@@ -88,23 +56,25 @@ export function AppSidebar() {
                         <NavLink
                           to={item.url}
                           end={item.url === "/"}
-                          className={`group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                          className={`group flex flex-1 items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                             isActive
                               ? "bg-accent text-accent-foreground font-semibold"
                               : "text-sidebar-foreground hover:bg-secondary"
                           }`}
                           activeClassName=""
                         >
-                          <item.icon
-                            className={`h-[18px] w-[18px] shrink-0 transition-colors ${
-                              isActive ? "text-primary" : ""
-                            }`}
-                          />
+                          {item.icon && (
+                            <item.icon
+                              className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                                isActive ? "text-primary" : ""
+                              }`}
+                            />
+                          )}
                           {!collapsed && (
                             <>
-                              <span className="flex-1">{item.title}</span>
+                              <span className="flex-1 text-left">{item.title}</span>
                               {isActive && (
-                                <ChevronRight className="h-3.5 w-3.5 text-primary opacity-60" />
+                                <ChevronRight className="h-3.5 w-3.5 text-primary opacity-60 ml-auto" />
                               )}
                             </>
                           )}
