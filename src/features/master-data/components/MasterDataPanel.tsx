@@ -103,6 +103,11 @@ export function MasterDataPanel() {
             onAdd={vendorCrud.openCreate}
             onEdit={vendorCrud.openEdit}
             onDelete={vendorCrud.openDelete}
+            onImport={async (items) => {
+              for (const i of items) {
+                if (i.name) await vendorMutations.createMutation(i as any);
+              }
+            }}
             entityName="Vendor"
           />
           <CrudDialog<Vendor>
@@ -128,6 +133,11 @@ export function MasterDataPanel() {
             onAdd={channelCrud.openCreate}
             onEdit={channelCrud.openEdit}
             onDelete={channelCrud.openDelete}
+            onImport={async (items) => {
+              for (const i of items) {
+                if (i.name) await channelMutations.createMutation(i as any);
+              }
+            }}
             entityName="Channel"
           />
           <CrudDialog<IncomeChannel>
@@ -153,6 +163,11 @@ export function MasterDataPanel() {
             onAdd={catCrud.openCreate}
             onEdit={catCrud.openEdit}
             onDelete={catCrud.openDelete}
+            onImport={async (items) => {
+              for (const i of items) {
+                if (i.name) await catMutations.createMutation(i as any);
+              }
+            }}
             entityName="Kategori"
           />
           <CrudDialog<ExpenseCategory>

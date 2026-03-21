@@ -7,6 +7,7 @@ export const masterDataTables = {
     name: v.string(),
     location: v.string(),
     isActive: v.boolean(),
+    uploadedBy: v.optional(v.string()),
   }).index("by_code", ["code"]),
 
   vendors: defineTable({
@@ -21,6 +22,7 @@ export const masterDataTables = {
     phone: v.string(),
     notes: v.string(),
     isActive: v.boolean(),
+    uploadedBy: v.optional(v.string()),
   }).index("by_active", ["isActive"]),
 
   incomeChannels: defineTable({
@@ -36,6 +38,7 @@ export const masterDataTables = {
       v.literal("other")
     ),
     isSettlementDelayed: v.boolean(),
+    uploadedBy: v.optional(v.string()),
   }),
 
   expenseCategories: defineTable({
@@ -50,5 +53,6 @@ export const masterDataTables = {
       v.literal("fee"),
       v.literal("other")
     ),
+    uploadedBy: v.optional(v.string()),
   }),
 };

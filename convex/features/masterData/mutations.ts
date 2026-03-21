@@ -1,12 +1,14 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator } from "../../shared/validators";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 // ─── Branches ───────────────────────────────────────────────
 export const createBranch = mutation({
   args: { code: v.string(), name: v.string(), location: v.string(), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("branches", args);
+    const userId = await getAuthUserId(ctx);
+    return await ctx.db.insert("branches", { ...args, uploadedBy: userId ?? "system" });
   },
 });
 
@@ -30,7 +32,8 @@ export const deleteBranch = mutation({
 export const createVendor = mutation({
   args: { name: v.string(), type: vendorTypeValidator, phone: v.string(), notes: v.string(), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("vendors", args);
+    const userId = await getAuthUserId(ctx);
+    return await ctx.db.insert("vendors", { ...args, uploadedBy: userId ?? "system" });
   },
 });
 
@@ -54,7 +57,8 @@ export const deleteVendor = mutation({
 export const createIncomeChannel = mutation({
   args: { name: v.string(), type: incomeChannelTypeValidator, isSettlementDelayed: v.boolean() },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("incomeChannels", args);
+    const userId = await getAuthUserId(ctx);
+    return await ctx.db.insert("incomeChannels", { ...args, uploadedBy: userId ?? "system" });
   },
 });
 
@@ -78,7 +82,8 @@ export const deleteIncomeChannel = mutation({
 export const createExpenseCategory = mutation({
   args: { name: v.string(), type: expenseCategoryTypeValidator },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("expenseCategories", args);
+    const userId = await getAuthUserId(ctx);
+    return await ctx.db.insert("expenseCategories", { ...args, uploadedBy: userId ?? "system" });
   },
 });
 

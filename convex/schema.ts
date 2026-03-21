@@ -6,6 +6,7 @@
  * NOT this file directly.
  */
 import { defineSchema } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 
 // ─── Import feature schemas ────────────────────────────────
 import { masterDataTables } from "./features/masterData/_schema";
@@ -19,6 +20,7 @@ import { auditTables } from "./features/audit/_schema";
 
 // ─── Merge all feature tables into one schema ───────────────
 export default defineSchema({
+  ...authTables,
   ...masterDataTables,
   ...salesTables,
   ...expensesTables,
