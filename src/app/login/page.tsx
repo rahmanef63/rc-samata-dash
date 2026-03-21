@@ -11,20 +11,26 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      await signIn("password", { email, password, flow: "signIn" });
+      const flow = isSignUp ? "signUp" : "signIn";
+      const params: Record<string, string> = { email, password, flow };
+      if (isSignUp && name) params.name = name;
+
+      await signIn("password", params);
       router.push("/");
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Login gagal. Periksa email dan password.";
+        err instanceof Error ? err.message : "Gagal. Periksa kredensial Anda.";
       setError(message);
     } finally {
       setLoading(false);
@@ -60,12 +66,31 @@ export default function LoginPage() {
               Rocket Chicken
             </h1>
             <p className="text-sm text-white/50 mt-1">
-              Owner Control &amp; Audit System
+              {isSignUp ? "Daftar Akun Baru" : "Owner Control & Audit System"}
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {isSignUp && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="name"
+                  className="block text-xs font-medium text-white/60 uppercase tracking-wider"
+                >
+                  Nama
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nama lengkap"
+                  className="w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#dc2648]/60 focus:border-transparent transition"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label
                 htmlFor="email"
@@ -144,14 +169,21 @@ export default function LoginPage() {
                   Signing in…
                 </span>
               ) : (
-                "Sign In"
+                isSignUp ? "Daftar" : "Sign In"
               )}
             </button>
           </form>
 
-          {/* Footer */}
-          <p className="text-center text-xs text-white/30 mt-6">
-            Hanya untuk pemilik &amp; staff cabang yang terdaftar.
+          {/* Toggle */}
+          <p className="text-center text-xs text-white/40 mt-6">
+            {isSignUp ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(!isSignUp); setError(""); }}
+              className="text-[#f97316] hover:underline font-medium"
+            >
+              {isSignUp ? "Sign In" : "Daftar"}
+            </button>
           </p>
         </div>
 
