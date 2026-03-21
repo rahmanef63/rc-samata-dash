@@ -1,0 +1,82 @@
+/**
+ * Shared validators used across multiple feature schemas.
+ * SSOT for common enum types and reusable field definitions.
+ */
+import { v } from "convex/values";
+
+// ─── Common Status Validators ───────────────────────────────
+export const paymentSourceValidator = v.union(
+  v.literal("owner_direct"),
+  v.literal("petty_cash"),
+  v.literal("payable")
+);
+
+export const approvalStatusValidator = v.union(
+  v.literal("draft"),
+  v.literal("submitted"),
+  v.literal("approved"),
+  v.literal("paid"),
+  v.literal("rejected")
+);
+
+export const paymentMethodValidator = v.union(
+  v.literal("cash"),
+  v.literal("transfer")
+);
+
+// ─── Vendor Type ────────────────────────────────────────────
+export const vendorTypeValidator = v.union(
+  v.literal("food_supplier"),
+  v.literal("utility"),
+  v.literal("service"),
+  v.literal("payroll"),
+  v.literal("misc")
+);
+
+// ─── Income Channel Type ────────────────────────────────────
+export const incomeChannelTypeValidator = v.union(
+  v.literal("cash"),
+  v.literal("transfer"),
+  v.literal("gofood"),
+  v.literal("grabfood"),
+  v.literal("shopeefood"),
+  v.literal("dine_in"),
+  v.literal("take_away"),
+  v.literal("other")
+);
+
+// ─── Expense Category Type ──────────────────────────────────
+export const expenseCategoryTypeValidator = v.union(
+  v.literal("cogs"),
+  v.literal("utility"),
+  v.literal("salary_support"),
+  v.literal("bpjs"),
+  v.literal("maintenance"),
+  v.literal("marketing"),
+  v.literal("fee"),
+  v.literal("other")
+);
+
+// ─── Stock Status ───────────────────────────────────────────
+export const stockStatusValidator = v.union(
+  v.literal("Stable"),
+  v.literal("Low"),
+  v.literal("Critical")
+);
+
+export const stockMovementTypeValidator = v.union(
+  v.literal("stock_in"),
+  v.literal("usage"),
+  v.literal("adjustment"),
+  v.literal("waste")
+);
+
+// ─── Audit Action ───────────────────────────────────────────
+export const auditActionValidator = v.union(
+  v.literal("create"),
+  v.literal("update"),
+  v.literal("delete"),
+  v.literal("approve"),
+  v.literal("reject"),
+  v.literal("pay")
+);
