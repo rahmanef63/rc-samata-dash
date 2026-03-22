@@ -17,6 +17,7 @@ import { pettyCashTables } from "./features/pettyCash/_schema";
 import { closingTables } from "./features/closing/_schema";
 import { inventoryTables } from "./features/inventory/_schema";
 import { auditTables } from "./features/audit/_schema";
+import { reportsTables } from "./features/reports/_schema";
 
 // ─── Merge all feature tables into one schema ───────────────
 export default defineSchema({
@@ -29,4 +30,5 @@ export default defineSchema({
   ...closingTables,
   ...inventoryTables,
   ...auditTables,
+  ...reportsTables,
 });
