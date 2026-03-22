@@ -29,8 +29,24 @@ export default function LoginPage() {
       await signIn("password", params);
       router.push("/");
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Gagal. Periksa kredensial Anda.";
+      const raw = err instanceof Error ? err.message : String(err);
+      const lower = raw.toLowerCase();
+      let message: string;
+      if (lower.includes("connection lost") || lower.includes("network") || lower.includes("fetch")) {
+        message = "Koneksi terputus. Silakan coba lagi.";
+      } else if (lower.includes("invalid account") || lower.includes("no account") || lower.includes("not found")) {
+        message = "Akun tidak ditemukan. Periksa email Anda.";
+      } else if (lower.includes("incorrect password") || lower.includes("wrong password") || lower.includes("invalid password")) {
+        message = "Password salah. Silakan coba lagi.";
+      } else if (lower.includes("already exists") || lower.includes("duplicate") || lower.includes("already registered")) {
+        message = "Email sudah terdaftar. Silakan sign in.";
+      } else if (lower.includes("terlalu pendek") || lower.includes("minimal")) {
+        message = raw; // already in Indonesian from our custom validator
+      } else if (lower.includes("unauthorized") || lower.includes("forbidden")) {
+        message = "Akses ditolak.";
+      } else {
+        message = "Gagal masuk. Periksa kredensial Anda dan coba lagi.";
+      }
       setError(message);
     } finally {
       setLoading(false);
