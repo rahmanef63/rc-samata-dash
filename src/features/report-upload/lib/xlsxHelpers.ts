@@ -16,9 +16,11 @@ export async function parseExcelFile(file: File): Promise<XLSX.WorkBook> {
 export function getSheetRows(wb: XLSX.WorkBook, sheetName: string): RawSheet {
   const sheet = wb.Sheets[sheetName];
   if (!sheet) return [];
+  // raw: true → numeric cells langsung jadi JS number (60000 bukan "60,000")
+  // cellDates: true di XLSX.read() sudah handle Date object
   return XLSX.utils.sheet_to_json<(string | number | Date | null | boolean)[]>(
     sheet,
-    { header: 1, defval: null, raw: false }
+    { header: 1, defval: null, raw: true }
   ) as RawSheet;
 }
 
@@ -68,16 +70,76 @@ export function toDateString(value: unknown): string | null {
 }
 
 /**
- * Parse angka Rupiah dari berbagai format (string "1.234.567" atau number).
+ * Parse angka dari berbagai format string ke number.
+ *
+ * Dengan raw: true, cell numerik sudah jadi JS number — fungsi ini hanya
+ * dipakai untuk cell yang memang berisi teks berformat angka.
+ *
+ * Format yang didukung:
+ *   Indonesian:  "60.000"       → 60000
+ *                "1.234.567"    → 1234567
+ *                "60.000,50"    → 60000.5
+ *   US/mixed:    "60,000"       → 60000
+ *                "60,000.50"    → 60000.5
+ *   Plain:       "60000"        → 60000
  */
 export function toNumber(value: unknown): number {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number") return isNaN(value) ? 0 : value;
+  if (typeof value === "boolean") return 0;
   if (typeof value === "string") {
-    // Hapus titik ribuan dan ganti koma desimal
-    const cleaned = value.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
-    const n = parseFloat(cleaned);
-    return isNaN(n) ? 0 : n;
+    const s = value.trim().replace(/\s/g, "").replace(/Rp\.?/gi, "");
+    if (!s) return 0;
+
+    const hasDot   = s.includes(".");
+    const hasComma = s.includes(",");
+
+    if (hasDot && hasComma) {
+      // Ada keduanya — tentukan mana desimal berdasarkan posisi terakhir
+      // "60.000,50"  → koma terakhir = desimal (Indonesian)
+      // "60,000.50"  → titik terakhir = desimal (US)
+      const lastDot   = s.lastIndexOf(".");
+      const lastComma = s.lastIndexOf(",");
+      if (lastComma > lastDot) {
+        // Indonesian: titik = ribuan, koma = desimal
+        return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+      } else {
+        // US: koma = ribuan, titik = desimal
+        return parseFloat(s.replace(/,/g, "")) || 0;
+      }
+    }
+
+    if (hasDot && !hasComma) {
+      // Hanya titik — cek apakah ribuan atau desimal
+      // Ribuan jika: semua bagian setelah titik punya tepat 3 digit
+      // "60.000"   → ["60","000"]       → 3 digit → ribuan → 60000
+      // "1.234.567"→ ["1","234","567"]  → 3 digit → ribuan → 1234567
+      // "60.5"     → ["60","5"]         → 1 digit → desimal → 60.5
+      const digits = s.replace(/[^0-9.]/g, "");
+      const parts  = digits.split(".");
+      const allThree = parts.slice(1).every((p) => p.length === 3);
+      if (allThree && parts.length > 1) {
+        return parseFloat(digits.replace(/\./g, "")) || 0;
+      }
+      return parseFloat(digits) || 0;
+    }
+
+    if (hasComma && !hasDot) {
+      // Hanya koma — Indonesian (koma = desimal) atau US (koma = ribuan)?
+      // "60,000" → bagian setelah koma = 3 digit → ribuan (US)
+      // "60,5"   → bagian setelah koma < 3 digit → desimal (Indonesian)
+      const digits = s.replace(/[^0-9,]/g, "");
+      const parts  = digits.split(",");
+      if (parts.length === 2 && parts[1].length === 3) {
+        // Ribuan (koma = ribuan separator)
+        return parseFloat(digits.replace(/,/g, "")) || 0;
+      }
+      // Desimal
+      return parseFloat(digits.replace(",", ".")) || 0;
+    }
+
+    // Tidak ada titik/koma — hapus karakter non-numerik
+    return parseFloat(s.replace(/[^0-9-]/g, "")) || 0;
   }
   return 0;
 }
