@@ -65,12 +65,6 @@ export function TopHeader() {
       </div>
 
       <div className="flex items-center gap-1">
-        {!isMobile && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground mr-2 hover:bg-accent transition-colors cursor-pointer">
-            <span>Rocket Chicken - Sudirman Central</span>
-            <ChevronDown className="h-3.5 w-3.5" />
-          </div>
-        )}
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={toggleDark}>
           {isDark ? (
             <Sun className="h-4 w-4 text-muted-foreground" />
