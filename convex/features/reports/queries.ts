@@ -75,3 +75,69 @@ export const getInventoryValuation = query({
       .collect();
   },
 });
+
+export const getFoodCostSummary = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("foodCostSummary")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const getTransferItems = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("transferItems")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const getProductHPP = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("productHPP")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const getCostAnalysis = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("costAnalysis")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const getDailyCashFlow = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("dailyCashFlow")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const getEmployeeIncentives = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("employeeIncentives")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});

@@ -14,6 +14,12 @@ import { parseLeftOver, type LeftOverItem } from "@/features/report-upload/parse
 import { parseLaporanKasPeriode, type DailyCashSummaryItem } from "@/features/report-upload/parsers/parseLaporanKasPeriode";
 import { parseSalesControl, type SalesControlItem } from "@/features/report-upload/parsers/parseSalesControl";
 import { parsePembelianKredit, type CreditPurchaseItem } from "@/features/report-upload/parsers/parsePembelianKredit";
+import { parseIkhtisarFC, type FoodCostSummaryItem } from "@/features/report-upload/parsers/parseIkhtisarFC";
+import { parseTransferTOTI, type TransferItem } from "@/features/report-upload/parsers/parseTransferTOTI";
+import { parseHPPProduk, type ProductHPPItem } from "@/features/report-upload/parsers/parseHPPProduk";
+import { parseCostAnalysis, type CostAnalysisItem } from "@/features/report-upload/parsers/parseCostAnalysis";
+import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/parsers/parseLapCF";
+import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview } from "@/features/report-upload/components/ImportPreview";
 import { formatRpFull } from "@/shared/lib";
@@ -30,6 +36,12 @@ type ParsedData = {
   kasPeriode: DailyCashSummaryItem[];
   salesControl: SalesControlItem[];
   pembelianKredit: CreditPurchaseItem[];
+  ikhtisarFC: FoodCostSummaryItem[];
+  transferTOTI: TransferItem[];
+  hppProduk: ProductHPPItem[];
+  costAnalysis: CostAnalysisItem[];
+  cashFlow: DailyCashFlowItem[];
+  insentif: IncentiveItem[];
   periodStart: string;
   periodEnd: string;
   fileName: string;
@@ -82,6 +94,12 @@ export default function LaporanUploadPage() {
   const importKasPeriode  = useMutation(api.features.reports.mutations.importDailyCashSummaryBatch);
   const importSalesCtrl   = useMutation(api.features.reports.mutations.importSalesControlBatch);
   const importKredit      = useMutation(api.features.reports.mutations.importCreditPurchasesBatch);
+  const importFCSummary   = useMutation(api.features.reports.mutations.importFoodCostSummaryBatch);
+  const importTransfer    = useMutation(api.features.reports.mutations.importTransferItemsBatch);
+  const importHPP         = useMutation(api.features.reports.mutations.importProductHPPBatch);
+  const importCostAn      = useMutation(api.features.reports.mutations.importCostAnalysisBatch);
+  const importCashFlow    = useMutation(api.features.reports.mutations.importDailyCashFlowBatch);
+  const importIncentive   = useMutation(api.features.reports.mutations.importEmployeeIncentivesBatch);
   const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
   const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
 
@@ -102,6 +120,12 @@ export default function LaporanUploadPage() {
         kasPeriode:      parseLaporanKasPeriode(wb),
         salesControl:    parseSalesControl(wb, start),
         pembelianKredit: parsePembelianKredit(wb),
+        ikhtisarFC:      parseIkhtisarFC(wb),
+        transferTOTI:    parseTransferTOTI(wb),
+        hppProduk:       parseHPPProduk(wb),
+        costAnalysis:    parseCostAnalysis(wb),
+        cashFlow:        parseLapCF(wb),
+        insentif:        parseInsentif(wb),
         periodStart:     start,
         periodEnd:       end,
         fileName:        file.name,
@@ -152,9 +176,19 @@ export default function LaporanUploadPage() {
       (parsed.leftover.length > 0 ? 1 : 0) +
       (parsed.kasPeriode.length > 0 ? 1 : 0) +
       (parsed.salesControl.length > 0 ? 1 : 0) +
-      (parsed.pembelianKredit.length > 0 ? 1 : 0) + 1;
+      (parsed.pembelianKredit.length > 0 ? 1 : 0) +
+      (parsed.ikhtisarFC.length > 0 ? 1 : 0) +
+      (parsed.transferTOTI.length > 0 ? 1 : 0) +
+      (parsed.hppProduk.length > 0 ? 1 : 0) +
+      (parsed.costAnalysis.length > 0 ? 1 : 0) +
+      (parsed.cashFlow.length > 0 ? 1 : 0) +
+      (parsed.insentif.length > 0 ? 1 : 0) + 1;
     let current = 0;
-    const counts = { expense: 0, sales: 0, vendor: 0, inventory: 0, leftover: 0, kasPeriode: 0, salesControl: 0, creditPurchase: 0 };
+    const counts = {
+      expense: 0, sales: 0, vendor: 0, inventory: 0, leftover: 0,
+      kasPeriode: 0, salesControl: 0, creditPurchase: 0,
+      fcSummary: 0, transfer: 0, hpp: 0, costAnalysis: 0, cashFlow: 0, incentive: 0,
+    };
 
     try {
       setProgress({ current: ++current, total, label: "Membuat record laporan..." });
@@ -200,17 +234,53 @@ export default function LaporanUploadPage() {
         counts.creditPurchase = await importKredit({ reportId, branchId, items: parsed.pembelianKredit });
       }
 
+      if (parsed.ikhtisarFC.length > 0) {
+        setProgress({ current: ++current, total, label: "Ikhtisar food cost..." });
+        counts.fcSummary = await importFCSummary({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.ikhtisarFC });
+      }
+
+      if (parsed.transferTOTI.length > 0) {
+        setProgress({ current: ++current, total, label: "Transfer TO-TI..." });
+        counts.transfer = await importTransfer({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.transferTOTI });
+      }
+
+      if (parsed.hppProduk.length > 0) {
+        setProgress({ current: ++current, total, label: "HPP produk..." });
+        counts.hpp = await importHPP({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.hppProduk });
+      }
+
+      if (parsed.costAnalysis.length > 0) {
+        setProgress({ current: ++current, total, label: "Cost analysis..." });
+        counts.costAnalysis = await importCostAn({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.costAnalysis });
+      }
+
+      if (parsed.cashFlow.length > 0) {
+        setProgress({ current: ++current, total, label: "Cash flow..." });
+        counts.cashFlow = await importCashFlow({ reportId, branchId, items: parsed.cashFlow });
+      }
+
+      if (parsed.insentif.length > 0) {
+        setProgress({ current: ++current, total, label: "Insentif karyawan..." });
+        counts.incentive = await importIncentive({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.insentif });
+      }
+
       setProgress({ current: total, total, label: "Menyelesaikan..." });
       await finalizeReport({
         reportId, status: "processed",
-        expenseCount:      counts.expense,
-        salesCount:        counts.sales,
-        vendorCount:       counts.vendor,
-        inventoryCount:    counts.inventory,
-        leftoverCount:     counts.leftover,
-        kasPeriodeCount:   counts.kasPeriode,
-        salesControlCount: counts.salesControl,
+        expenseCount:        counts.expense,
+        salesCount:          counts.sales,
+        vendorCount:         counts.vendor,
+        inventoryCount:      counts.inventory,
+        leftoverCount:       counts.leftover,
+        kasPeriodeCount:     counts.kasPeriode,
+        salesControlCount:   counts.salesControl,
         creditPurchaseCount: counts.creditPurchase,
+        foodCostSummaryCount: counts.fcSummary,
+        transferCount:       counts.transfer,
+        hppCount:            counts.hpp,
+        costAnalysisCount:   counts.costAnalysis,
+        cashFlowCount:       counts.cashFlow,
+        incentiveCount:      counts.incentive,
       });
 
       setResult(counts);
@@ -235,7 +305,9 @@ export default function LaporanUploadPage() {
   const totalParsed = parsed
     ? parsed.lpkk.length + parsed.penjualan.length + parsed.platformSales.length +
       parsed.vendor.length + parsed.weeklyFc.length + parsed.leftover.length +
-      parsed.kasPeriode.length + parsed.salesControl.length + parsed.pembelianKredit.length
+      parsed.kasPeriode.length + parsed.salesControl.length + parsed.pembelianKredit.length +
+      parsed.ikhtisarFC.length + parsed.transferTOTI.length + parsed.hppProduk.length +
+      parsed.costAnalysis.length + parsed.cashFlow.length + parsed.insentif.length
     : 0;
 
   return (
@@ -243,7 +315,7 @@ export default function LaporanUploadPage() {
       <div>
         <h1 className="text-xl font-bold">Upload Laporan Mingguan</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload file Excel "NEW LAP" — otomatis parse 9 sheet ke database.
+          Upload file Excel "NEW LAP" — otomatis parse 15 sheet ke database.
         </p>
       </div>
 
@@ -302,6 +374,12 @@ export default function LaporanUploadPage() {
               { label: "Vendor", count: parsed.vendor.length, color: "text-teal-600" },
               { label: "Food Cost", count: parsed.weeklyFc.length, color: "text-green-600" },
               { label: "Beli Kredit", count: parsed.pembelianKredit.length, color: "text-yellow-600" },
+              { label: "Ikhtisar FC", count: parsed.ikhtisarFC.length, color: "text-emerald-600" },
+              { label: "Transfer", count: parsed.transferTOTI.length, color: "text-cyan-600" },
+              { label: "HPP", count: parsed.hppProduk.length, color: "text-indigo-600" },
+              { label: "Cost Anls", count: parsed.costAnalysis.length, color: "text-pink-600" },
+              { label: "Cash Flow", count: parsed.cashFlow.length, color: "text-lime-600" },
+              { label: "Insentif", count: parsed.insentif.length, color: "text-amber-600" },
             ].map((s) => (
               <div key={s.label} className="rounded-xl border border-border p-2 text-center">
                 <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
@@ -360,6 +438,12 @@ export default function LaporanUploadPage() {
               { label: "Kas Periode", val: result.kasPeriode },
               { label: "Sales Control", val: result.salesControl },
               { label: "Beli Kredit", val: result.creditPurchase },
+              { label: "Ikhtisar FC", val: result.fcSummary },
+              { label: "Transfer", val: result.transfer },
+              { label: "HPP", val: result.hpp },
+              { label: "Cost Analysis", val: result.costAnalysis },
+              { label: "Cash Flow", val: result.cashFlow },
+              { label: "Insentif", val: result.incentive },
             ].map((r) => (
               <div key={r.label} className="text-center">
                 <p className="text-2xl font-bold text-green-700 dark:text-green-400">{r.val}</p>

@@ -278,7 +278,204 @@ export const importCreditPurchasesBatch = mutation({
   },
 });
 
-// ─── 10. Finalize report ─────────────────────────────────────
+// ─── 10. Import IKHTISAR FOOD COST → foodCostSummary ─────────
+
+const foodCostSummaryItemValidator = v.object({
+  category: v.string(),
+  openingValue: v.number(),
+  purchaseValue: v.number(),
+  transferOutValue: v.number(),
+  transferInValue: v.number(),
+  closingValue: v.number(),
+  usageValue: v.number(),
+  salesRevenue: v.optional(v.number()),
+  foodCostPct: v.optional(v.number()),
+});
+
+export const importFoodCostSummaryBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    items: v.array(foodCostSummaryItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      await ctx.db.insert("foodCostSummary", { ...item, periodStart, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 11. Import TO - TI → transferItems ──────────────────────
+
+const transferItemValidator = v.object({
+  direction: v.union(v.literal("out"), v.literal("in")),
+  category: v.string(),
+  itemName: v.string(),
+  qty: v.number(),
+  unit: v.optional(v.string()),
+  totalValue: v.number(),
+});
+
+export const importTransferItemsBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    items: v.array(transferItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.qty <= 0 && item.totalValue <= 0) continue;
+      await ctx.db.insert("transferItems", { ...item, periodStart, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 12. Import HPP PRODUK → productHPP ─────────────────────
+
+const hppIngredientValidator = v.object({
+  name: v.string(),
+  qty: v.number(),
+  unit: v.string(),
+  unitCost: v.number(),
+  subtotal: v.number(),
+});
+
+const productHPPItemValidator = v.object({
+  productName: v.string(),
+  pricingClass: v.union(
+    v.literal("standard"),
+    v.literal("kelas2"),
+    v.literal("kelas3a"),
+    v.literal("kelas3b"),
+    v.literal("kelas4"),
+  ),
+  totalHPP: v.number(),
+  sellingPrice: v.optional(v.number()),
+  ingredients: v.optional(v.array(hppIngredientValidator)),
+});
+
+export const importProductHPPBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    items: v.array(productHPPItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.totalHPP <= 0) continue;
+      await ctx.db.insert("productHPP", { ...item, periodStart, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 13. Import COST ANALYSIS → costAnalysis ─────────────────
+
+const costAnalysisItemValidator = v.object({
+  itemName: v.string(),
+  unit: v.optional(v.string()),
+  openingQty: v.number(),
+  openingValue: v.number(),
+  purchaseQty: v.number(),
+  purchaseValue: v.number(),
+  usageQty: v.number(),
+  usageValue: v.number(),
+  closingQty: v.number(),
+  closingValue: v.number(),
+  variance: v.number(),
+});
+
+export const importCostAnalysisBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    items: v.array(costAnalysisItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      await ctx.db.insert("costAnalysis", { ...item, periodStart, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 14. Import LAP. CF → dailyCashFlow ──────────────────────
+
+const dailyCashFlowItemValidator = v.object({
+  businessDate: v.string(),
+  openingBalance: v.number(),
+  salesInflow: v.number(),
+  otherInflow: v.number(),
+  expenseOutflow: v.number(),
+  otherOutflow: v.number(),
+  closingBalance: v.number(),
+});
+
+export const importDailyCashFlowBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(dailyCashFlowItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.openingBalance === 0 && item.salesInflow === 0 && item.closingBalance === 0) continue;
+      await ctx.db.insert("dailyCashFlow", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 15. Import INSENTIF → employeeIncentives ────────────────
+
+const incentiveItemValidator = v.object({
+  employeeName: v.string(),
+  incentiveType: v.string(),
+  amount: v.number(),
+  notes: v.optional(v.string()),
+});
+
+export const importEmployeeIncentivesBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    items: v.array(incentiveItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.amount <= 0) continue;
+      await ctx.db.insert("employeeIncentives", { ...item, periodStart, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 16. Finalize report ─────────────────────────────────────
 
 export const finalizeWeeklyReport = mutation({
   args: {
@@ -292,6 +489,12 @@ export const finalizeWeeklyReport = mutation({
     kasPeriodeCount: v.optional(v.number()),
     salesControlCount: v.optional(v.number()),
     creditPurchaseCount: v.optional(v.number()),
+    foodCostSummaryCount: v.optional(v.number()),
+    transferCount: v.optional(v.number()),
+    hppCount: v.optional(v.number()),
+    costAnalysisCount: v.optional(v.number()),
+    cashFlowCount: v.optional(v.number()),
+    incentiveCount: v.optional(v.number()),
   },
   handler: async (ctx, { reportId, ...data }) => {
     await requireAuth(ctx);
@@ -309,6 +512,8 @@ export const deleteWeeklyReport = mutation({
     const tables = [
       "productSales", "vendorPurchases", "inventoryValuation",
       "leftoverItems", "dailyCashSummary", "salesControl", "creditPurchases",
+      "foodCostSummary", "transferItems", "productHPP",
+      "costAnalysis", "dailyCashFlow", "employeeIncentives",
     ] as const;
     for (const table of tables) {
       const rows = await ctx.db

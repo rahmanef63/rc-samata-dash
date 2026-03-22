@@ -20,6 +20,13 @@ export const reportsTables = {
     kasPeriodeCount: v.optional(v.number()),
     salesControlCount: v.optional(v.number()),
     creditPurchaseCount: v.optional(v.number()),
+    // Phase 2 sheets
+    foodCostSummaryCount: v.optional(v.number()),
+    transferCount: v.optional(v.number()),
+    hppCount: v.optional(v.number()),
+    costAnalysisCount: v.optional(v.number()),
+    cashFlowCount: v.optional(v.number()),
+    incentiveCount: v.optional(v.number()),
   })
     .index("by_branch", ["branchId"])
     .index("by_branch_period", ["branchId", "periodStart"]),
@@ -143,4 +150,129 @@ export const reportsTables = {
   })
     .index("by_report", ["reportId"])
     .index("by_branch_date", ["branchId", "purchaseDate"]),
+
+  /**
+   * Ikhtisar food cost per kategori — dari sheet IKHTISAR FOOD COST.
+   * Satu record = satu kategori bahan (ayam, es, minyak, dll).
+   */
+  foodCostSummary: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    category: v.string(),
+    openingValue: v.number(),
+    purchaseValue: v.number(),
+    transferOutValue: v.number(),
+    transferInValue: v.number(),
+    closingValue: v.number(),
+    usageValue: v.number(),
+    salesRevenue: v.optional(v.number()),
+    foodCostPct: v.optional(v.number()),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_period", ["branchId", "periodStart"]),
+
+  /**
+   * Transfer Out / Transfer In — dari sheet TO - TI.
+   * Perkedel, catering, staff meal, free items, dll.
+   */
+  transferItems: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    direction: v.union(v.literal("out"), v.literal("in")),
+    category: v.string(),
+    itemName: v.string(),
+    qty: v.number(),
+    unit: v.optional(v.string()),
+    totalValue: v.number(),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_period", ["branchId", "periodStart"]),
+
+  /**
+   * HPP per produk — dari sheet HITUNGAN HPP PRODUK + FOOD COST ITEM KELAS.
+   * Satu record = satu produk dengan daftar ingredients.
+   */
+  productHPP: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    productName: v.string(),
+    pricingClass: v.union(
+      v.literal("standard"),
+      v.literal("kelas2"),
+      v.literal("kelas3a"),
+      v.literal("kelas3b"),
+      v.literal("kelas4"),
+    ),
+    totalHPP: v.number(),
+    sellingPrice: v.optional(v.number()),
+    ingredients: v.optional(v.array(v.object({
+      name: v.string(),
+      qty: v.number(),
+      unit: v.string(),
+      unitCost: v.number(),
+      subtotal: v.number(),
+    }))),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_product", ["branchId", "productName"])
+    .index("by_report_class", ["reportId", "pricingClass"]),
+
+  /**
+   * Cost analysis per item — dari sheet COST ANALYSIS.
+   * Opening, purchase, usage, closing, variance.
+   */
+  costAnalysis: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    itemName: v.string(),
+    unit: v.optional(v.string()),
+    openingQty: v.number(),
+    openingValue: v.number(),
+    purchaseQty: v.number(),
+    purchaseValue: v.number(),
+    usageQty: v.number(),
+    usageValue: v.number(),
+    closingQty: v.number(),
+    closingValue: v.number(),
+    variance: v.number(),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_period", ["branchId", "periodStart"]),
+
+  /**
+   * Arus kas harian — dari sheet LAP. CF.
+   * Satu record = satu hari.
+   */
+  dailyCashFlow: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    businessDate: v.string(),
+    openingBalance: v.number(),
+    salesInflow: v.number(),
+    otherInflow: v.number(),
+    expenseOutflow: v.number(),
+    otherOutflow: v.number(),
+    closingBalance: v.number(),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_date", ["branchId", "businessDate"]),
+
+  /**
+   * Insentif karyawan — dari sheet INSENTIF.
+   */
+  employeeIncentives: defineTable({
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+    employeeName: v.string(),
+    incentiveType: v.string(),
+    amount: v.number(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_branch_period", ["branchId", "periodStart"]),
 };

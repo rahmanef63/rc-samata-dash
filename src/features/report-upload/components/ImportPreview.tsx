@@ -9,6 +9,12 @@ import type { LeftOverItem } from "../parsers/parseLeftOver";
 import type { DailyCashSummaryItem } from "../parsers/parseLaporanKasPeriode";
 import type { SalesControlItem } from "../parsers/parseSalesControl";
 import type { CreditPurchaseItem } from "../parsers/parsePembelianKredit";
+import type { FoodCostSummaryItem } from "../parsers/parseIkhtisarFC";
+import type { TransferItem } from "../parsers/parseTransferTOTI";
+import type { ProductHPPItem } from "../parsers/parseHPPProduk";
+import type { CostAnalysisItem } from "../parsers/parseCostAnalysis";
+import type { DailyCashFlowItem } from "../parsers/parseLapCF";
+import type { IncentiveItem } from "../parsers/parseInsentif";
 
 type ParsedData = {
   lpkk: LPKKItem[];
@@ -20,6 +26,12 @@ type ParsedData = {
   kasPeriode: DailyCashSummaryItem[];
   salesControl: SalesControlItem[];
   pembelianKredit: CreditPurchaseItem[];
+  ikhtisarFC: FoodCostSummaryItem[];
+  transferTOTI: TransferItem[];
+  hppProduk: ProductHPPItem[];
+  costAnalysis: CostAnalysisItem[];
+  cashFlow: DailyCashFlowItem[];
+  insentif: IncentiveItem[];
 };
 
 type Props = {
@@ -38,6 +50,12 @@ const TABS = [
   { key: "vendor",        label: "Vendor",       countKey: "vendor" },
   { key: "weeklyFc",      label: "Food Cost",    countKey: "weeklyFc" },
   { key: "kredit",        label: "Beli Kredit",  countKey: "pembelianKredit" },
+  { key: "ikhtisarFC",    label: "Ikhtisar FC",  countKey: "ikhtisarFC" },
+  { key: "transfer",      label: "Transfer",     countKey: "transferTOTI" },
+  { key: "hpp",           label: "HPP",          countKey: "hppProduk" },
+  { key: "costAnalysis",  label: "Cost Anls",    countKey: "costAnalysis" },
+  { key: "cashFlow",      label: "Cash Flow",    countKey: "cashFlow" },
+  { key: "insentif",      label: "Insentif",     countKey: "insentif" },
 ] as const;
 
 export function ImportPreview({ data, activeTab, onTabChange }: Props) {
@@ -75,6 +93,12 @@ export function ImportPreview({ data, activeTab, onTabChange }: Props) {
         {activeTab === "vendor"       && <VendorTable items={data.vendor} />}
         {activeTab === "weeklyFc"     && <FCTable items={data.weeklyFc} />}
         {activeTab === "kredit"       && <KreditTable items={data.pembelianKredit} />}
+        {activeTab === "ikhtisarFC"   && <IkhtisarFCTable items={data.ikhtisarFC} />}
+        {activeTab === "transfer"     && <TransferTable items={data.transferTOTI} />}
+        {activeTab === "hpp"          && <HPPTable items={data.hppProduk} />}
+        {activeTab === "costAnalysis" && <CostAnalysisTable items={data.costAnalysis} />}
+        {activeTab === "cashFlow"     && <CashFlowTable items={data.cashFlow} />}
+        {activeTab === "insentif"     && <InsentifTable items={data.insentif} />}
       </div>
     </div>
   );
@@ -254,6 +278,127 @@ function KreditTable({ items }: { items: CreditPurchaseItem[] }) {
           <Td className="text-right font-mono">{formatRpFull(item.unitPrice)}</Td>
           <Td className="text-right font-mono text-destructive">{formatRpFull(item.totalAmount)}</Td>
           <Td className="text-muted-foreground">{item.dueDate ?? "-"}</Td>
+        </Tr>
+      ))}
+    </TableWrapper>
+  );
+}
+
+function IkhtisarFCTable({ items }: { items: FoodCostSummaryItem[] }) {
+  return (
+    <TableWrapper headers={["Kategori", "Opening", "Pembelian", "TO", "TI", "Closing", "Pemakaian", "FC %"]} empty={items.length === 0}>
+      {items.map((item, i) => (
+        <Tr key={i}>
+          <Td className="font-medium">{item.category}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.openingValue)}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.purchaseValue)}</Td>
+          <Td className="text-right font-mono text-destructive">{formatRpFull(item.transferOutValue)}</Td>
+          <Td className="text-right font-mono text-green-600">{formatRpFull(item.transferInValue)}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.closingValue)}</Td>
+          <Td className="text-right font-mono text-primary">{formatRpFull(item.usageValue)}</Td>
+          <Td className="text-right font-semibold">{item.foodCostPct ? `${(item.foodCostPct * 100).toFixed(1)}%` : "-"}</Td>
+        </Tr>
+      ))}
+    </TableWrapper>
+  );
+}
+
+function TransferTable({ items }: { items: TransferItem[] }) {
+  return (
+    <TableWrapper headers={["Arah", "Kategori", "Item", "Qty", "Unit", "Total"]} empty={items.length === 0}>
+      {items.map((item, i) => (
+        <Tr key={i}>
+          <Td>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              item.direction === "out" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+            }`}>{item.direction === "out" ? "OUT" : "IN"}</span>
+          </Td>
+          <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
+          <Td className="font-medium">{item.itemName}</Td>
+          <Td className="text-right">{item.qty}</Td>
+          <Td>{item.unit ?? "-"}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.totalValue)}</Td>
+        </Tr>
+      ))}
+    </TableWrapper>
+  );
+}
+
+function HPPTable({ items }: { items: ProductHPPItem[] }) {
+  const SHOW = 80;
+  return (
+    <TableWrapper headers={["Produk", "Kelas", "HPP", "Harga Jual", "Margin", "Bahan"]} empty={items.length === 0}>
+      {items.slice(0, SHOW).map((item, i) => {
+        const margin = item.sellingPrice ? item.sellingPrice - item.totalHPP : undefined;
+        const marginPct = item.sellingPrice && item.sellingPrice > 0
+          ? ((item.sellingPrice - item.totalHPP) / item.sellingPrice * 100)
+          : undefined;
+        return (
+          <Tr key={i}>
+            <Td className="font-medium">{item.productName}</Td>
+            <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.pricingClass}</span></Td>
+            <Td className="text-right font-mono text-destructive">{formatRpFull(item.totalHPP)}</Td>
+            <Td className="text-right font-mono">{item.sellingPrice ? formatRpFull(item.sellingPrice) : "-"}</Td>
+            <Td className={`text-right font-mono font-semibold ${marginPct !== undefined ? (marginPct >= 35 ? "text-green-600" : marginPct >= 20 ? "text-yellow-600" : "text-red-600") : ""}`}>
+              {marginPct !== undefined ? `${marginPct.toFixed(1)}%` : "-"}
+            </Td>
+            <Td className="text-right text-muted-foreground">{item.ingredients?.length ?? 0}</Td>
+          </Tr>
+        );
+      })}
+      <MoreRows shown={SHOW} total={items.length} cols={6} />
+    </TableWrapper>
+  );
+}
+
+function CostAnalysisTable({ items }: { items: CostAnalysisItem[] }) {
+  const SHOW = 80;
+  return (
+    <TableWrapper headers={["Item", "Open Qty", "Beli Qty", "Pakai Qty", "Close Qty", "Variance"]} empty={items.length === 0}>
+      {items.slice(0, SHOW).map((item, i) => (
+        <Tr key={i}>
+          <Td className="font-medium">{item.itemName}</Td>
+          <Td className="text-right">{item.openingQty.toFixed(1)}</Td>
+          <Td className="text-right">{item.purchaseQty.toFixed(1)}</Td>
+          <Td className="text-right text-orange-600">{item.usageQty.toFixed(1)}</Td>
+          <Td className="text-right">{item.closingQty.toFixed(1)}</Td>
+          <Td className={`text-right font-mono font-semibold ${item.variance > 0 ? "text-red-600" : item.variance < 0 ? "text-green-600" : ""}`}>
+            {formatRpFull(item.variance)}
+          </Td>
+        </Tr>
+      ))}
+      <MoreRows shown={SHOW} total={items.length} cols={6} />
+    </TableWrapper>
+  );
+}
+
+function CashFlowTable({ items }: { items: DailyCashFlowItem[] }) {
+  return (
+    <TableWrapper headers={["Tanggal", "Saldo Awal", "Sales", "Lain Masuk", "Pengeluaran", "Lain Keluar", "Saldo Akhir"]} empty={items.length === 0}>
+      {items.map((item, i) => (
+        <Tr key={i}>
+          <Td className="text-muted-foreground">{item.businessDate}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.openingBalance)}</Td>
+          <Td className="text-right font-mono text-green-600">{formatRpFull(item.salesInflow)}</Td>
+          <Td className="text-right font-mono text-green-600">{formatRpFull(item.otherInflow)}</Td>
+          <Td className="text-right font-mono text-destructive">{formatRpFull(item.expenseOutflow)}</Td>
+          <Td className="text-right font-mono text-destructive">{formatRpFull(item.otherOutflow)}</Td>
+          <Td className="text-right font-mono text-primary font-semibold">{formatRpFull(item.closingBalance)}</Td>
+        </Tr>
+      ))}
+    </TableWrapper>
+  );
+}
+
+function InsentifTable({ items }: { items: IncentiveItem[] }) {
+  return (
+    <TableWrapper headers={["Nama", "Jenis", "Jumlah", "Catatan"]} empty={items.length === 0}>
+      {items.map((item, i) => (
+        <Tr key={i}>
+          <Td className="font-medium">{item.employeeName}</Td>
+          <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">{item.incentiveType}</span></Td>
+          <Td className="text-right font-mono text-primary">{formatRpFull(item.amount)}</Td>
+          <Td className="text-muted-foreground max-w-[120px] truncate">{item.notes ?? "-"}</Td>
         </Tr>
       ))}
     </TableWrapper>
