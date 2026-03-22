@@ -32,6 +32,7 @@ export type ProductSaleItem = {
   amount: number;
   unitPrice: number;
   foodCostItem?: number;
+  channel?: string;
 };
 
 const HEADER_ROW = 6;   // baris tanggal ada di sini

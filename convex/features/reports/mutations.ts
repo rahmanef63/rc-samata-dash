@@ -2,16 +2,12 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
-// ─── Tipe data untuk batch import ───────────────────────────
+// ─── Validators ──────────────────────────────────────────────
 
 const lpkkItemValidator = v.object({
   expenseDate: v.string(),
-  categoryType: v.union(
-    v.literal("cogs"),
-    v.literal("utility"),
-    v.literal("other")
-  ),
-  categoryLabel: v.string(), // "Bahan Ayam", "Transport", dll
+  categoryType: v.union(v.literal("cogs"), v.literal("utility"), v.literal("other")),
+  categoryLabel: v.string(),
   description: v.string(),
   amount: v.number(),
   referenceNo: v.optional(v.string()),
@@ -24,6 +20,7 @@ const productSaleItemValidator = v.object({
   amount: v.number(),
   unitPrice: v.number(),
   foodCostItem: v.optional(v.number()),
+  channel: v.optional(v.string()),
 });
 
 const vendorPurchaseItemValidator = v.object({
@@ -44,6 +41,43 @@ const inventoryValuationItemValidator = v.object({
   unit: v.string(),
   unitPrice: v.number(),
   totalValue: v.number(),
+});
+
+const leftoverItemValidator = v.object({
+  businessDate: v.string(),
+  itemName: v.string(),
+  qty: v.number(),
+});
+
+const dailyCashSummaryItemValidator = v.object({
+  businessDate: v.string(),
+  grossSales: v.number(),
+  komisiGofood: v.number(),
+  komisiGrabfood: v.number(),
+  komisiShopeefood: v.number(),
+  koreksi: v.number(),
+  discount: v.number(),
+  netSales: v.number(),
+});
+
+const salesControlItemValidator = v.object({
+  businessDate: v.string(),
+  netSales: v.number(),
+  customerCount: v.number(),
+  spendingPower: v.number(),
+  targetSales: v.number(),
+  achievementPct: v.number(),
+});
+
+const creditPurchaseItemValidator = v.object({
+  purchaseDate: v.string(),
+  supplierName: v.string(),
+  itemName: v.string(),
+  invoiceNo: v.optional(v.string()),
+  qty: v.number(),
+  unitPrice: v.number(),
+  totalAmount: v.number(),
+  dueDate: v.optional(v.string()),
 });
 
 // ─── 1. Buat header report ───────────────────────────────────
@@ -76,23 +110,16 @@ export const importLPKKBatch = mutation({
   },
   handler: async (ctx, { reportId, branchId, items }) => {
     await requireAuth(ctx);
-
-    // Ambil semua kategori expense sekali
     const categories = await ctx.db.query("expenseCategories").collect();
-
-    // Cari kategori berdasarkan type, fallback ke type "other"
     const findCategory = (type: "cogs" | "utility" | "other") =>
       categories.find((c) => c.type === type) ??
       categories.find((c) => c.type === "other") ??
       categories[0];
-
     let count = 0;
     for (const item of items) {
       if (item.amount <= 0) continue;
-
       const cat = findCategory(item.categoryType);
       if (!cat) continue;
-
       await ctx.db.insert("expenses", {
         expenseDate: item.expenseDate,
         categoryId: cat._id,
@@ -106,12 +133,11 @@ export const importLPKKBatch = mutation({
       });
       count++;
     }
-
     return count;
   },
 });
 
-// ─── 3. Import LAP. PENJUALAN → productSales ────────────────
+// ─── 3. Import LAP. PENJUALAN (semua channel) → productSales ─
 
 export const importProductSalesBatch = mutation({
   args: {
@@ -123,7 +149,7 @@ export const importProductSalesBatch = mutation({
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
-      if (item.qty <= 0 && item.amount <= 0) continue;
+      if (item.qty <= 0) continue;
       await ctx.db.insert("productSales", { ...item, reportId, branchId });
       count++;
     }
@@ -144,12 +170,7 @@ export const importVendorPurchasesBatch = mutation({
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
-      await ctx.db.insert("vendorPurchases", {
-        ...item,
-        weekStart,
-        reportId,
-        branchId,
-      });
+      await ctx.db.insert("vendorPurchases", { ...item, weekStart, reportId, branchId });
       count++;
     }
     return count;
@@ -170,19 +191,94 @@ export const importInventoryValuationBatch = mutation({
     let count = 0;
     for (const item of items) {
       if (item.totalValue <= 0) continue;
-      await ctx.db.insert("inventoryValuation", {
-        ...item,
-        valuationDate,
-        reportId,
-        branchId,
-      });
+      await ctx.db.insert("inventoryValuation", { ...item, valuationDate, reportId, branchId });
       count++;
     }
     return count;
   },
 });
 
-// ─── 6. Finalize report (update status & counts) ────────────
+// ─── 6. Import LEFT OVER → leftoverItems ────────────────────
+
+export const importLeftOverBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(leftoverItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.qty <= 0) continue;
+      await ctx.db.insert("leftoverItems", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 7. Import LAPORAN KAS PERIODE → dailyCashSummary ───────
+
+export const importDailyCashSummaryBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(dailyCashSummaryItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.grossSales <= 0) continue;
+      await ctx.db.insert("dailyCashSummary", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 8. Import SALES CONTROL → salesControl ─────────────────
+
+export const importSalesControlBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(salesControlItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.netSales <= 0) continue;
+      await ctx.db.insert("salesControl", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 9. Import PEMBELIAN KREDIT → creditPurchases ───────────
+
+export const importCreditPurchasesBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(creditPurchaseItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    for (const item of items) {
+      if (item.totalAmount <= 0) continue;
+      await ctx.db.insert("creditPurchases", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 10. Finalize report ─────────────────────────────────────
 
 export const finalizeWeeklyReport = mutation({
   args: {
@@ -192,6 +288,10 @@ export const finalizeWeeklyReport = mutation({
     salesCount: v.optional(v.number()),
     vendorCount: v.optional(v.number()),
     inventoryCount: v.optional(v.number()),
+    leftoverCount: v.optional(v.number()),
+    kasPeriodeCount: v.optional(v.number()),
+    salesControlCount: v.optional(v.number()),
+    creditPurchaseCount: v.optional(v.number()),
   },
   handler: async (ctx, { reportId, ...data }) => {
     await requireAuth(ctx);
@@ -200,15 +300,16 @@ export const finalizeWeeklyReport = mutation({
   },
 });
 
-// ─── 7. Hapus report beserta semua data terkait ──────────────
+// ─── 11. Hapus report + semua data terkait ───────────────────
 
 export const deleteWeeklyReport = mutation({
   args: { reportId: v.id("weeklyReports") },
   handler: async (ctx, { reportId }) => {
     await requireAuth(ctx);
-
-    // Hapus semua data anak
-    const tables = ["productSales", "vendorPurchases", "inventoryValuation"] as const;
+    const tables = [
+      "productSales", "vendorPurchases", "inventoryValuation",
+      "leftoverItems", "dailyCashSummary", "salesControl", "creditPurchases",
+    ] as const;
     for (const table of tables) {
       const rows = await ctx.db
         .query(table)
@@ -216,11 +317,6 @@ export const deleteWeeklyReport = mutation({
         .collect();
       for (const row of rows) await ctx.db.delete(row._id);
     }
-
-    // Hapus expenses yang terkait (by matching uploadedAt window? Tidak bisa.)
-    // Expenses dari LPKK tidak punya reportId, jadi kita skip cascade-delete expenses.
-    // User bisa hapus manual dari halaman expenses jika perlu.
-
     await ctx.db.delete(reportId);
     return null;
   },

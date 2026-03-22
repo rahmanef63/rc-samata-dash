@@ -22,6 +22,27 @@ export const getWeeklyReport = query({
   },
 });
 
+/**
+ * Cek apakah sudah ada report dengan periode yang sama (untuk validasi duplikat).
+ * Dua periode dianggap duplikat jika periodStart sama.
+ */
+export const checkDuplicatePeriod = query({
+  args: {
+    branchId: v.id("branches"),
+    periodStart: v.string(),
+  },
+  handler: async (ctx, { branchId, periodStart }) => {
+    await requireAuth(ctx);
+    const existing = await ctx.db
+      .query("weeklyReports")
+      .withIndex("by_branch_period", (q) =>
+        q.eq("branchId", branchId).eq("periodStart", periodStart)
+      )
+      .first();
+    return existing ?? null;
+  },
+});
+
 export const getProductSales = query({
   args: { reportId: v.id("weeklyReports") },
   handler: async (ctx, { reportId }) => {

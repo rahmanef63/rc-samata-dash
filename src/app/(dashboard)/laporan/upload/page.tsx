@@ -7,61 +7,55 @@ import { toast } from "sonner";
 import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
 import { parseLPKK, type LPKKItem } from "@/features/report-upload/parsers/parseLPKK";
 import { parsePenjualan, type ProductSaleItem } from "@/features/report-upload/parsers/parsePenjualan";
+import { parsePlatformSales } from "@/features/report-upload/parsers/parsePlatformSales";
 import { parseVendor, type VendorPurchaseItem } from "@/features/report-upload/parsers/parseVendor";
 import { parseWeeklyFC, type InventoryValuationItem } from "@/features/report-upload/parsers/parseWeeklyFC";
+import { parseLeftOver, type LeftOverItem } from "@/features/report-upload/parsers/parseLeftOver";
+import { parseLaporanKasPeriode, type DailyCashSummaryItem } from "@/features/report-upload/parsers/parseLaporanKasPeriode";
+import { parseSalesControl, type SalesControlItem } from "@/features/report-upload/parsers/parseSalesControl";
+import { parsePembelianKredit, type CreditPurchaseItem } from "@/features/report-upload/parsers/parsePembelianKredit";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview } from "@/features/report-upload/components/ImportPreview";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2 } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle } from "lucide-react";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
   lpkk: LPKKItem[];
-  penjualan: ProductSaleItem[];
+  penjualan: ProductSaleItem[];         // LAP. PENJUALAN (all channels combined)
+  platformSales: ProductSaleItem[];     // Grab, GoFood, Shopee, Tambahan
   vendor: VendorPurchaseItem[];
   weeklyFc: InventoryValuationItem[];
+  leftover: LeftOverItem[];
+  kasPeriode: DailyCashSummaryItem[];
+  salesControl: SalesControlItem[];
+  pembelianKredit: CreditPurchaseItem[];
   periodStart: string;
   periodEnd: string;
   fileName: string;
 };
 
-type ImportStep =
-  | "idle"
-  | "parsing"
-  | "preview"
-  | "importing"
-  | "done"
-  | "error";
+type ImportStep = "idle" | "parsing" | "preview" | "importing" | "done" | "error";
 
 const CHUNK_SIZE = 50;
-
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 }
 
-// Ekstrak periode dari nama file: "NEW LAP 1-7 JAN 2025.xlsx" → {start, end}
 function extractPeriod(fileName: string): { start: string; end: string } {
   const name = fileName.toUpperCase();
   const monthMap: Record<string, string> = {
-    JAN: "01", FEB: "02", MAR: "03", APR: "04",
-    MEI: "05", MAY: "05", JUN: "06", JUL: "07",
-    AGU: "08", AUG: "08", SEP: "09", OKT: "10",
-    OCT: "10", NOV: "11", DES: "12", DEC: "12",
+    JAN: "01", FEB: "02", MAR: "03", APR: "04", MEI: "05", MAY: "05",
+    JUN: "06", JUL: "07", AGU: "08", AUG: "08", SEP: "09",
+    OKT: "10", OCT: "10", NOV: "11", DES: "12", DEC: "12",
   };
-
-  // Cari pola "1-7 JAN 2025" atau "22-31 JAN 2026"
   const match = name.match(/(\d+)-(\d+)\s+([A-Z]+)\s+(\d{4})/);
   if (!match) return { start: "", end: "" };
-
   const [, d1, d2, mon, year] = match;
   const m = monthMap[mon] ?? "01";
-  return {
-    start: `${year}-${m}-${d1.padStart(2, "0")}`,
-    end:   `${year}-${m}-${d2.padStart(2, "0")}`,
-  };
+  return { start: `${year}-${m}-${d1.padStart(2, "0")}`, end: `${year}-${m}-${d2.padStart(2, "0")}` };
 }
 
 export default function LaporanUploadPage() {
@@ -70,8 +64,8 @@ export default function LaporanUploadPage() {
   const [activeTab, setActiveTab] = useState("lpkk");
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
   const [result, setResult] = useState<Record<string, number> | null>(null);
+  const [duplicateReport, setDuplicateReport] = useState<{ _id: Id<"weeklyReports">; fileName: string; periodStart: string } | null>(null);
 
-  // Convex
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
   const recentReports = useQuery(
@@ -79,101 +73,144 @@ export default function LaporanUploadPage() {
     branchId ? { branchId } : "skip"
   );
 
-  const createReport = useMutation(api.features.reports.mutations.createWeeklyReport);
-  const importLPKK = useMutation(api.features.reports.mutations.importLPKKBatch);
-  const importSales = useMutation(api.features.reports.mutations.importProductSalesBatch);
-  const importVendor = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
-  const importInventory = useMutation(api.features.reports.mutations.importInventoryValuationBatch);
-  const finalizeReport = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
-  const deleteReport = useMutation(api.features.reports.mutations.deleteWeeklyReport);
+  const createReport      = useMutation(api.features.reports.mutations.createWeeklyReport);
+  const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
+  const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
+  const importVendor      = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
+  const importInventory   = useMutation(api.features.reports.mutations.importInventoryValuationBatch);
+  const importLeftOver    = useMutation(api.features.reports.mutations.importLeftOverBatch);
+  const importKasPeriode  = useMutation(api.features.reports.mutations.importDailyCashSummaryBatch);
+  const importSalesCtrl   = useMutation(api.features.reports.mutations.importSalesControlBatch);
+  const importKredit      = useMutation(api.features.reports.mutations.importCreditPurchasesBatch);
+  const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
+  const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
+
+  // ─── Parse file ─────────────────────────────────────────────
 
   const handleFileSelect = useCallback(async (file: File) => {
     setStep("parsing");
     try {
       const wb = await parseExcelFile(file);
-      const lpkk = parseLPKK(wb);
-      const penjualan = parsePenjualan(wb);
-      const vendor = parseVendor(wb);
-      const weeklyFc = parseWeeklyFC(wb);
       const { start, end } = extractPeriod(file.name);
-
-      setParsed({ lpkk, penjualan, vendor, weeklyFc, periodStart: start, periodEnd: end, fileName: file.name });
+      const data: ParsedData = {
+        lpkk:            parseLPKK(wb),
+        penjualan:       parsePenjualan(wb),
+        platformSales:   parsePlatformSales(wb),
+        vendor:          parseVendor(wb),
+        weeklyFc:        parseWeeklyFC(wb),
+        leftover:        parseLeftOver(wb),
+        kasPeriode:      parseLaporanKasPeriode(wb),
+        salesControl:    parseSalesControl(wb, start),
+        pembelianKredit: parsePembelianKredit(wb),
+        periodStart:     start,
+        periodEnd:       end,
+        fileName:        file.name,
+      };
+      setParsed(data);
       setStep("preview");
-      toast.success(`File berhasil dibaca: ${lpkk.length} expense, ${penjualan.length} penjualan`);
+      const total = Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
+      toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet`);
     } catch (err) {
       console.error(err);
-      toast.error("Gagal membaca file. Pastikan format file benar.");
+      toast.error("Gagal membaca file.");
       setStep("idle");
     }
   }, []);
 
-  const handleImport = async () => {
+  // ─── Cek duplikat sebelum import ────────────────────────────
+
+  const checkAndImport = async () => {
+    if (!parsed || !branchId) return;
+    // Cek duplikat via query langsung
+    const existing = recentReports?.find((r) => r.periodStart === parsed.periodStart);
+    if (existing) {
+      setDuplicateReport({ _id: existing._id, fileName: existing.fileName, periodStart: existing.periodStart });
+      return;
+    }
+    await runImport();
+  };
+
+  const handleReplaceAndImport = async () => {
+    if (!duplicateReport) return;
+    await deleteReport({ reportId: duplicateReport._id });
+    setDuplicateReport(null);
+    await runImport();
+  };
+
+  // ─── Jalankan import ─────────────────────────────────────────
+
+  const runImport = async () => {
     if (!parsed || !branchId) return;
     setStep("importing");
 
-    const lpkkChunks = chunkArray(parsed.lpkk, CHUNK_SIZE);
-    const salesChunks = chunkArray(parsed.penjualan, CHUNK_SIZE);
-    const total = 1 + lpkkChunks.length + salesChunks.length + 1 + 1;
+    const allSales = [...parsed.penjualan, ...parsed.platformSales];
+    const lpkkChunks  = chunkArray(parsed.lpkk, CHUNK_SIZE);
+    const salesChunks = chunkArray(allSales, CHUNK_SIZE);
+    const total = 1 + lpkkChunks.length + salesChunks.length +
+      (parsed.vendor.length > 0 ? 1 : 0) +
+      (parsed.weeklyFc.length > 0 ? 1 : 0) +
+      (parsed.leftover.length > 0 ? 1 : 0) +
+      (parsed.kasPeriode.length > 0 ? 1 : 0) +
+      (parsed.salesControl.length > 0 ? 1 : 0) +
+      (parsed.pembelianKredit.length > 0 ? 1 : 0) + 1;
     let current = 0;
-    const counts = { expense: 0, sales: 0, vendor: 0, inventory: 0 };
+    const counts = { expense: 0, sales: 0, vendor: 0, inventory: 0, leftover: 0, kasPeriode: 0, salesControl: 0, creditPurchase: 0 };
 
     try {
-      // 1. Buat header report
       setProgress({ current: ++current, total, label: "Membuat record laporan..." });
-      const reportId = await createReport({
-        branchId,
-        fileName: parsed.fileName,
-        periodStart: parsed.periodStart,
-        periodEnd: parsed.periodEnd,
-      });
+      const reportId = await createReport({ branchId, fileName: parsed.fileName, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd });
 
-      // 2. Import LPKK (expenses) — per chunk
       for (const chunk of lpkkChunks) {
-        setProgress({ current: ++current, total, label: `Import kas kecil (${counts.expense + chunk.length}/${parsed.lpkk.length})...` });
-        const n = await importLPKK({ reportId, branchId, items: chunk });
-        counts.expense += n;
+        setProgress({ current: ++current, total, label: `Kas kecil (${counts.expense + chunk.length}/${parsed.lpkk.length})...` });
+        counts.expense += await importLPKK({ reportId, branchId, items: chunk });
       }
 
-      // 3. Import penjualan — per chunk
       for (const chunk of salesChunks) {
-        setProgress({ current: ++current, total, label: `Import penjualan (${counts.sales + chunk.length}/${parsed.penjualan.length})...` });
-        const n = await importSales({ reportId, branchId, items: chunk });
-        counts.sales += n;
+        setProgress({ current: ++current, total, label: `Penjualan (${counts.sales + chunk.length}/${allSales.length})...` });
+        counts.sales += await importSales({ reportId, branchId, items: chunk });
       }
 
-      // 4. Import vendor
       if (parsed.vendor.length > 0) {
-        setProgress({ current: ++current, total, label: "Import data vendor/stok..." });
-        const n = await importVendor({
-          reportId,
-          branchId,
-          weekStart: parsed.periodStart,
-          items: parsed.vendor,
-        });
-        counts.vendor += n;
+        setProgress({ current: ++current, total, label: "Vendor/stok..." });
+        counts.vendor = await importVendor({ reportId, branchId, weekStart: parsed.periodStart, items: parsed.vendor });
       }
 
-      // 5. Import inventory valuation
       if (parsed.weeklyFc.length > 0) {
-        setProgress({ current: ++current, total, label: "Import valuasi inventory..." });
-        const n = await importInventory({
-          reportId,
-          branchId,
-          valuationDate: parsed.periodEnd,
-          items: parsed.weeklyFc,
-        });
-        counts.inventory += n;
+        setProgress({ current: ++current, total, label: "Food cost..." });
+        counts.inventory = await importInventory({ reportId, branchId, valuationDate: parsed.periodEnd, items: parsed.weeklyFc });
       }
 
-      // 6. Finalize
+      if (parsed.leftover.length > 0) {
+        setProgress({ current: ++current, total, label: "Left over..." });
+        counts.leftover = await importLeftOver({ reportId, branchId, items: parsed.leftover });
+      }
+
+      if (parsed.kasPeriode.length > 0) {
+        setProgress({ current: ++current, total, label: "Laporan kas periode..." });
+        counts.kasPeriode = await importKasPeriode({ reportId, branchId, items: parsed.kasPeriode });
+      }
+
+      if (parsed.salesControl.length > 0) {
+        setProgress({ current: ++current, total, label: "Sales control..." });
+        counts.salesControl = await importSalesCtrl({ reportId, branchId, items: parsed.salesControl });
+      }
+
+      if (parsed.pembelianKredit.length > 0) {
+        setProgress({ current: ++current, total, label: "Pembelian kredit..." });
+        counts.creditPurchase = await importKredit({ reportId, branchId, items: parsed.pembelianKredit });
+      }
+
       setProgress({ current: total, total, label: "Menyelesaikan..." });
       await finalizeReport({
-        reportId,
-        status: "processed",
-        expenseCount: counts.expense,
-        salesCount: counts.sales,
-        vendorCount: counts.vendor,
-        inventoryCount: counts.inventory,
+        reportId, status: "processed",
+        expenseCount:      counts.expense,
+        salesCount:        counts.sales,
+        vendorCount:       counts.vendor,
+        inventoryCount:    counts.inventory,
+        leftoverCount:     counts.leftover,
+        kasPeriodeCount:   counts.kasPeriode,
+        salesControlCount: counts.salesControl,
+        creditPurchaseCount: counts.creditPurchase,
       });
 
       setResult(counts);
@@ -181,7 +218,7 @@ export default function LaporanUploadPage() {
       toast.success("Import berhasil!");
     } catch (err) {
       console.error(err);
-      toast.error("Terjadi error saat import. Cek console untuk detail.");
+      toast.error("Error saat import. Cek console.");
       setStep("error");
     }
   };
@@ -190,56 +227,85 @@ export default function LaporanUploadPage() {
     setStep("idle");
     setParsed(null);
     setResult(null);
+    setDuplicateReport(null);
     setProgress({ current: 0, total: 0, label: "" });
   };
+
+  // ─── Total record ────────────────────────────────────────────
+  const totalParsed = parsed
+    ? parsed.lpkk.length + parsed.penjualan.length + parsed.platformSales.length +
+      parsed.vendor.length + parsed.weeklyFc.length + parsed.leftover.length +
+      parsed.kasPeriode.length + parsed.salesControl.length + parsed.pembelianKredit.length
+    : 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 p-4">
       <div>
         <h1 className="text-xl font-bold">Upload Laporan Mingguan</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload file Excel "NEW LAP" untuk mengisi data expense, penjualan, stok, dan food cost secara otomatis.
+          Upload file Excel "NEW LAP" — otomatis parse 9 sheet ke database.
         </p>
       </div>
 
-      {/* ─── Step: Idle / Drop ─── */}
+      {/* ─── Idle ─── */}
       {(step === "idle" || step === "parsing") && (
         <UploadDropzone onFileSelect={handleFileSelect} isLoading={step === "parsing"} />
       )}
-
       {step === "parsing" && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Membaca file Excel...
+          <Loader2 className="h-4 w-4 animate-spin" />Membaca file Excel...
         </div>
       )}
 
-      {/* ─── Step: Preview ─── */}
-      {step === "preview" && parsed && (
+      {/* ─── Duplicate Warning Modal ─── */}
+      {duplicateReport && (
+        <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <p className="font-semibold">Laporan periode ini sudah ada!</p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            File <strong>{duplicateReport.fileName}</strong> dengan periode mulai{" "}
+            <strong>{duplicateReport.periodStart}</strong> sudah pernah diupload.
+            Timpa data lama atau batalkan?
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setDuplicateReport(null)} className="px-4 py-2 rounded-xl border border-border text-sm">
+              Batal
+            </button>
+            <button
+              onClick={handleReplaceAndImport}
+              className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold"
+            >
+              Timpa & Import Ulang
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Preview ─── */}
+      {step === "preview" && parsed && !duplicateReport && (
         <div className="space-y-4">
-          {/* Period info */}
           <div className="rounded-xl border border-border p-4 bg-muted/20 flex flex-wrap gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground text-xs">File</span>
-              <p className="font-medium">{parsed.fileName}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-xs">Periode</span>
-              <p className="font-medium">{parsed.periodStart} → {parsed.periodEnd}</p>
-            </div>
+            <div><span className="text-muted-foreground text-xs">File</span><p className="font-medium">{parsed.fileName}</p></div>
+            <div><span className="text-muted-foreground text-xs">Periode</span><p className="font-medium">{parsed.periodStart} → {parsed.periodEnd}</p></div>
           </div>
 
-          {/* Summary counts */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Summary cards */}
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {[
               { label: "Kas Kecil", count: parsed.lpkk.length, color: "text-orange-600" },
-              { label: "Penjualan", count: parsed.penjualan.length, color: "text-primary" },
-              { label: "Vendor", count: parsed.vendor.length, color: "text-blue-600" },
+              { label: "Penjualan", count: parsed.penjualan.length + parsed.platformSales.length, color: "text-primary" },
+              { label: "Left Over", count: parsed.leftover.length, color: "text-red-500" },
+              { label: "Kas Periode", count: parsed.kasPeriode.length, color: "text-blue-600" },
+              { label: "Sales Ctrl", count: parsed.salesControl.length, color: "text-purple-600" },
+              { label: "Vendor", count: parsed.vendor.length, color: "text-teal-600" },
               { label: "Food Cost", count: parsed.weeklyFc.length, color: "text-green-600" },
+              { label: "Beli Kredit", count: parsed.pembelianKredit.length, color: "text-yellow-600" },
             ].map((s) => (
-              <div key={s.label} className="rounded-xl border border-border p-3 text-center">
-                <p className={`text-2xl font-bold ${s.color}`}>{s.count}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
+              <div key={s.label} className="rounded-xl border border-border p-2 text-center">
+                <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
               </div>
             ))}
           </div>
@@ -247,25 +313,20 @@ export default function LaporanUploadPage() {
           <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} />
 
           <div className="flex gap-3">
+            <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">Batal</button>
             <button
-              onClick={reset}
-              className="px-4 py-2 rounded-xl border border-border text-sm hover:bg-muted transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={!branchId}
+              onClick={checkAndImport}
+              disabled={!branchId || totalParsed === 0}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
-              Import {parsed.lpkk.length + parsed.penjualan.length + parsed.vendor.length + parsed.weeklyFc.length} Record
+              Import {totalParsed} Record
             </button>
           </div>
         </div>
       )}
 
-      {/* ─── Step: Importing ─── */}
+      {/* ─── Importing ─── */}
       {step === "importing" && (
         <div className="rounded-xl border border-border p-8 space-y-4">
           <div className="flex items-center gap-3">
@@ -278,13 +339,11 @@ export default function LaporanUploadPage() {
               style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
             />
           </div>
-          <p className="text-xs text-muted-foreground text-right">
-            {progress.current} / {progress.total}
-          </p>
+          <p className="text-xs text-muted-foreground text-right">{progress.current} / {progress.total}</p>
         </div>
       )}
 
-      {/* ─── Step: Done ─── */}
+      {/* ─── Done ─── */}
       {step === "done" && result && (
         <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-6 space-y-4">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -293,10 +352,14 @@ export default function LaporanUploadPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Expense disimpan", val: result.expense },
-              { label: "Penjualan disimpan", val: result.sales },
-              { label: "Vendor disimpan", val: result.vendor },
-              { label: "Inv. valuasi", val: result.inventory },
+              { label: "Expense", val: result.expense },
+              { label: "Penjualan", val: result.sales },
+              { label: "Vendor", val: result.vendor },
+              { label: "Food Cost", val: result.inventory },
+              { label: "Left Over", val: result.leftover },
+              { label: "Kas Periode", val: result.kasPeriode },
+              { label: "Sales Control", val: result.salesControl },
+              { label: "Beli Kredit", val: result.creditPurchase },
             ].map((r) => (
               <div key={r.label} className="text-center">
                 <p className="text-2xl font-bold text-green-700 dark:text-green-400">{r.val}</p>
@@ -304,56 +367,43 @@ export default function LaporanUploadPage() {
               </div>
             ))}
           </div>
-          <button
-            onClick={reset}
-            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
-          >
+          <button onClick={reset} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
             Upload File Lainnya
           </button>
         </div>
       )}
 
-      {/* ─── Step: Error ─── */}
+      {/* ─── Error ─── */}
       {step === "error" && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 space-y-3">
           <div className="flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5" />
-            <p className="font-semibold">Import Gagal</p>
+            <AlertCircle className="h-5 w-5" /><p className="font-semibold">Import Gagal</p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Terjadi error saat menyimpan data. Data yang sudah tersimpan mungkin sebagian.
-            Cek console browser untuk detail error.
-          </p>
-          <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">
-            Coba Lagi
-          </button>
+          <p className="text-sm text-muted-foreground">Terjadi error saat menyimpan data. Cek console untuk detail.</p>
+          <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">Coba Lagi</button>
         </div>
       )}
 
       {/* ─── Riwayat Upload ─── */}
       {recentReports && recentReports.length > 0 && step === "idle" && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Riwayat Upload
-          </h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Riwayat Upload</h2>
           <div className="space-y-2">
             {recentReports.map((r) => (
-              <div
-                key={r._id}
-                className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/20 transition-colors"
-              >
+              <div key={r._id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/20 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{r.fileName}</p>
                   <p className="text-xs text-muted-foreground">
                     {r.periodStart} → {r.periodEnd}
-                    {" · "}
-                    {r.expenseCount ?? 0} expense, {r.salesCount ?? 0} penjualan
+                    {" · "}{r.expenseCount ?? 0} expense
+                    {" · "}{r.salesCount ?? 0} penjualan
+                    {r.leftoverCount ? ` · ${r.leftoverCount} leftover` : ""}
+                    {r.kasPeriodeCount ? ` · ${r.kasPeriodeCount} kas` : ""}
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                   r.status === "processed" ? "bg-green-100 text-green-700" :
-                  r.status === "error" ? "bg-red-100 text-red-700" :
-                  "bg-yellow-100 text-yellow-700"
+                  r.status === "error" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
                 }`}>
                   {r.status}
                 </span>
