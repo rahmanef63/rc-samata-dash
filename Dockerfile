@@ -18,8 +18,10 @@ COPY . .
 # Next.js telemetry
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Disable Convex backend URL check during build (since we are using dummy URL)
-ENV NEXT_PUBLIC_CONVEX_URL=https://dummy-for-build.convex.cloud
+# NEXT_PUBLIC_* vars are inlined at build time — pass the real URL as a build arg.
+# In Dokploy: set Build Arg NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
+ARG NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
+ENV NEXT_PUBLIC_CONVEX_URL=$NEXT_PUBLIC_CONVEX_URL
 
 RUN corepack enable pnpm && pnpm run build
 

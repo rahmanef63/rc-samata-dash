@@ -1,6 +1,7 @@
 "use client";
 
-import { ConvexReactClient, ConvexHttpClient } from "convex/react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexHttpClient } from "convex/browser";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { type ReactNode, useState } from "react";
 
