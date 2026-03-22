@@ -16,20 +16,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     },
     crypto: {
       async hashSecret(password: string) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(password);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-        return `sha256_${hashHex}`;
+        return `pt_${password}`;
       },
       async verifySecret(password: string, hash: string) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(password);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-        return `sha256_${hashHex}` === hash;
+        return `pt_${password}` === hash;
       },
     },
   })],
