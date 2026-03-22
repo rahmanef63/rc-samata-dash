@@ -1,14 +1,14 @@
-// @ts-nocheck
 /**
  * Frontend API hooks for Master Data feature.
  * Connects to convex/features/masterData/* functions.
  */
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 // ─── Branches ───────────────────────────────────────────────
 export const useBranches = () => useQuery(api.features.masterData.queries.listBranches);
-export const useBranch = (id: string) => useQuery(api.features.masterData.queries.getBranch, { id: id as any });
+export const useBranch = (id: string) => useQuery(api.features.masterData.queries.getBranch, { id: id as Id<"branches"> });
 export const useCreateBranch = () => useMutation(api.features.masterData.mutations.createBranch);
 export const useUpdateBranch = () => useMutation(api.features.masterData.mutations.updateBranch);
 export const useDeleteBranch = () => useMutation(api.features.masterData.mutations.deleteBranch);
@@ -16,7 +16,7 @@ export const useDeleteBranch = () => useMutation(api.features.masterData.mutatio
 // ─── Vendors ────────────────────────────────────────────────
 export const useVendors = (activeOnly?: boolean) =>
   useQuery(api.features.masterData.queries.listVendors, { activeOnly });
-export const useVendor = (id: string) => useQuery(api.features.masterData.queries.getVendor, { id: id as any });
+export const useVendor = (id: string) => useQuery(api.features.masterData.queries.getVendor, { id: id as Id<"vendors"> });
 export const useCreateVendor = () => useMutation(api.features.masterData.mutations.createVendor);
 export const useUpdateVendor = () => useMutation(api.features.masterData.mutations.updateVendor);
 export const useDeleteVendor = () => useMutation(api.features.masterData.mutations.deleteVendor);

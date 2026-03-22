@@ -1,37 +1,14 @@
 import { motion } from "framer-motion";
 import { SectionHeader, DataTable, CrudDialog, ProgressBar } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Expense } from "@/shared/types";
-import { mockExpenses, paymentSourceLabels } from "../lib";
+import { paymentSourceLabels } from "../lib";
 import { formatRpFull } from "@/shared/lib";
-
-const fields: FieldConfig[] = [
-  { key: "description", label: "Deskripsi", required: true },
-  { key: "categoryName", label: "Kategori", type: "select", options: [
-    { label: "Bahan Baku", value: "Bahan Baku" },
-    { label: "Utilitas", value: "Utilitas" },
-    { label: "BPJS", value: "BPJS" },
-    { label: "Maintenance", value: "Maintenance" },
-    { label: "Lain-lain", value: "Lain-lain" },
-  ]},
-  { key: "amount", label: "Jumlah (Rp)", type: "number", required: true },
-  { key: "vendorName", label: "Vendor" },
-  { key: "paymentSource", label: "Sumber Pembayaran", type: "select", options: [
-    { label: "Owner Direct", value: "owner_direct" },
-    { label: "Petty Cash", value: "petty_cash" },
-    { label: "Piutang / Hutang", value: "payable" },
-  ]},
-  { key: "status", label: "Status", type: "select", options: [
-    { label: "Draft", value: "draft" },
-    { label: "Submitted", value: "submitted" },
-    { label: "Approved", value: "approved" },
-    { label: "Paid", value: "paid" },
-    { label: "Rejected", value: "rejected" },
-  ]},
-  { key: "expenseDate", label: "Tanggal", type: "date" },
-];
+import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 const columns: Column<Expense>[] = [
   { key: "expenseDate", label: "Tanggal", className: "text-xs" },
@@ -45,40 +22,80 @@ const columns: Column<Expense>[] = [
 ];
 
 export function ExpensesOverview() {
-  const crud = useCrudState<Expense>(mockExpenses);
-  const table = useTableState(crud.items, ["description", "categoryName", "vendorName", "status"]);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
 
-  const totalExpenses = crud.items.reduce((s, i) => s + i.amount, 0);
-  const byCategory = crud.items.reduce((acc, e) => {
+  const rawCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
+  const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
+
+  const rawExpenses = useExpenses(currentBranchId || "");
+  const expensesData = (rawExpenses || []).map(e => ({ ...e, id: e._id })) as unknown as Expense[];
+
+  const mutations = {
+    createMutation: useCreateExpense(),
+    updateMutation: useUpdateExpense(),
+    deleteMutation: useDeleteExpense(),
+  };
+  const crud = useConvexCrudState<Expense>(mutations as any);
+  const table = useTableState(expensesData, ["description", "categoryName", "vendorName", "status"]);
+
+  const categoryOptions = (rawCategories || []).map(c => ({ label: c.name, value: c.name }));
+  const vendorOptions = (rawVendors || []).map(v => ({ label: v.name, value: v.name }));
+
+  const fields: FieldConfig[] = [
+    { key: "description", label: "Deskripsi", required: true },
+    { key: "categoryName", label: "Kategori", type: "select", options: categoryOptions.length > 0 ? categoryOptions : [
+      { label: "Bahan Baku", value: "Bahan Baku" },
+      { label: "Utilitas", value: "Utilitas" },
+      { label: "BPJS", value: "BPJS" },
+      { label: "Maintenance", value: "Maintenance" },
+      { label: "Lain-lain", value: "Lain-lain" },
+    ]},
+    { key: "amount", label: "Jumlah (Rp)", type: "number", required: true },
+    { key: "vendorName", label: "Vendor", type: "select", options: vendorOptions.length > 0 ? vendorOptions : [] },
+    { key: "paymentSource", label: "Sumber Pembayaran", type: "select", options: [
+      { label: "Owner Direct", value: "owner_direct" },
+      { label: "Petty Cash", value: "petty_cash" },
+      { label: "Piutang / Hutang", value: "payable" },
+    ]},
+    { key: "status", label: "Status", type: "select", options: [
+      { label: "Draft", value: "draft" },
+      { label: "Submitted", value: "submitted" },
+      { label: "Approved", value: "approved" },
+      { label: "Paid", value: "paid" },
+      { label: "Rejected", value: "rejected" },
+    ]},
+    { key: "expenseDate", label: "Tanggal", type: "date" },
+  ];
+
+  const customCreate = async (data: any) => {
+    if (!currentBranchId) return;
+    const category = rawCategories?.find(c => c.name === data.categoryName);
+    const vendor = rawVendors?.find(v => v.name === data.vendorName);
+    await crud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      categoryId: category?._id ?? currentBranchId, // fallback to avoid null
+      vendorId: vendor?._id ?? undefined,
+      vendorName: vendor?.name ?? data.vendorName ?? undefined,
+      hasAttachment: false,
+    });
+  };
+
+  const totalExpenses = expensesData.reduce((s, i) => s + i.amount, 0);
+  const byCategory = expensesData.reduce((acc, e) => {
     acc[e.categoryName] = (acc[e.categoryName] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
   const categoryBreakdown = Object.entries(byCategory)
-    .map(([label, amount]) => ({ label: label.toUpperCase(), amount: formatRpFull(amount), percentage: Math.round((amount / totalExpenses) * 100) }))
+    .map(([label, amount]) => ({ label: label.toUpperCase(), amount: formatRpFull(amount), percentage: totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0 }))
     .sort((a, b) => b.percentage - a.percentage);
 
-  const bySource = crud.items.reduce((acc, e) => {
+  const bySource = expensesData.reduce((acc, e) => {
     const src = paymentSourceLabels[e.paymentSource] || e.paymentSource;
     acc[src] = (acc[src] || 0) + e.amount;
     return acc;
   }, {} as Record<string, number>);
-
-  const handleImport = (items: Partial<Expense>[]) => {
-    const rows = items.map((it, i) => ({
-      id: `imp-${Date.now()}-${i}`,
-      expenseDate: it.expenseDate || "",
-      categoryId: it.categoryId || "",
-      categoryName: it.categoryName || "Lain-lain",
-      vendorId: it.vendorId || null,
-      vendorName: it.vendorName || null,
-      amount: Number(it.amount) || 0,
-      description: it.description || "",
-      paymentSource: (it.paymentSource as Expense["paymentSource"]) || "owner_direct",
-      status: (it.status as Expense["status"]) || "draft",
-      hasAttachment: false,
-    }));
-    crud.setItems(prev => [...prev, ...rows]);
-  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -88,7 +105,7 @@ export function ExpensesOverview() {
           <p className="text-sm text-muted-foreground">Total Pengeluaran Bulan Ini</p>
         </div>
         <p className="text-2xl font-bold font-mono-data tracking-tight mb-4">{formatRpFull(totalExpenses)}</p>
-        
+
         {/* By Category */}
         {categoryBreakdown.map((cat) => (
           <div key={cat.label} className="mb-3">
@@ -124,13 +141,12 @@ export function ExpensesOverview() {
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
         onDelete={crud.openDelete}
-        onImport={handleImport}
         entityName="Pengeluaran"
       />
       <CrudDialog<Expense>
         open={crud.isOpen} mode={crud.mode} item={crud.selectedItem}
         fields={fields} entityName="Pengeluaran" onClose={crud.close}
-        onSubmit={crud.mode === "edit" ? crud.onUpdate : crud.onCreate}
+        onSubmit={crud.mode === "edit" ? crud.onUpdate : customCreate}
         onDelete={crud.onDelete}
       />
     </motion.div>

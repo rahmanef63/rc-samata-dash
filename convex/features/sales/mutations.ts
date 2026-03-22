@@ -1,5 +1,7 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
+import { insertAuditLog } from "../../shared/helpers";
 
 export const create = mutation({
   args: {
@@ -17,7 +19,18 @@ export const create = mutation({
     branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("dailySales", args);
+    const userId = await requireAuth(ctx);
+    if (args.grossAmount < 0) throw new Error("grossAmount must be >= 0");
+    if (args.platformFee < 0) throw new Error("platformFee must be >= 0");
+    if (args.promoCost < 0) throw new Error("promoCost must be >= 0");
+    if (args.netAmount < 0) throw new Error("netAmount must be >= 0");
+    const id = await ctx.db.insert("dailySales", args);
+    await insertAuditLog(ctx, {
+      entityType: "dailySales", entityId: id, action: "create",
+      description: `Created sale ${args.businessDate} - ${args.channelName}`,
+      actedBy: userId, branchId: args.branchId,
+    });
+    return id;
   },
 });
 
@@ -38,7 +51,17 @@ export const update = mutation({
     branchId: v.id("branches"),
   },
   handler: async (ctx, { id, ...data }) => {
+    const userId = await requireAuth(ctx);
+    if (data.grossAmount < 0) throw new Error("grossAmount must be >= 0");
+    if (data.platformFee < 0) throw new Error("platformFee must be >= 0");
+    if (data.promoCost < 0) throw new Error("promoCost must be >= 0");
+    if (data.netAmount < 0) throw new Error("netAmount must be >= 0");
     await ctx.db.patch(id, data);
+    await insertAuditLog(ctx, {
+      entityType: "dailySales", entityId: id, action: "update",
+      description: `Updated sale ${data.businessDate}`,
+      actedBy: userId, branchId: data.branchId,
+    });
     return id;
   },
 });
@@ -46,7 +69,15 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("dailySales") },
   handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.get(args.id);
+    if (!existing) throw new Error("Record not found");
     await ctx.db.delete(args.id);
+    await insertAuditLog(ctx, {
+      entityType: "dailySales", entityId: args.id, action: "delete",
+      description: `Deleted sale ${existing.businessDate}`,
+      actedBy: userId, branchId: existing.branchId,
+    });
     return null;
   },
 });

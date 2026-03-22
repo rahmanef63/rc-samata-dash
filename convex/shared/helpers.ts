@@ -15,7 +15,7 @@ export async function insertAuditLog(
     action: "create" | "update" | "delete" | "approve" | "reject" | "pay";
     description: string;
     actedBy: string;
-    branchId: Id<"branches">;
+    branchId?: Id<"branches">;
   }
 ) {
   await ctx.db.insert("auditLogs", {

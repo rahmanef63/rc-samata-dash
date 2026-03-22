@@ -1,12 +1,12 @@
-// @ts-nocheck
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 export const usePettyCashRequests = (branchId: string) =>
-  useQuery(api.features.pettyCash.queries.listByBranch, { branchId: branchId as any });
+  useQuery(api.features.pettyCash.queries.listByBranch, { branchId: branchId as Id<"branches"> });
 
 export const usePettyCashRequest = (id: string) =>
-  useQuery(api.features.pettyCash.queries.getById, { id: id as any });
+  useQuery(api.features.pettyCash.queries.getById, { id: id as Id<"pettyCashRequests"> });
 
 export const usePettyCashRequestsByStatus = (status: "requested" | "approved" | "rejected" | "disbursed" | "closed") =>
   useQuery(api.features.pettyCash.queries.listByStatus, { status });

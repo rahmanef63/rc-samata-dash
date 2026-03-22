@@ -1,9 +1,11 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
 
 export const getClosingByDate = query({
   args: { branchId: v.id("branches"), businessDate: v.string() },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     return await ctx.db.query("dailyClosings")
       .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId).eq("businessDate", args.businessDate))
       .unique();
@@ -13,6 +15,7 @@ export const getClosingByDate = query({
 export const listClosings = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     return await ctx.db.query("dailyClosings")
       .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId))
       .order("desc")
@@ -23,6 +26,7 @@ export const listClosings = query({
 export const listTransfers = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     return await ctx.db.query("ownerTransfers")
       .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
       .order("desc")

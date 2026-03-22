@@ -1,14 +1,17 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, Check, Clock } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DailyClosing, OwnerTransfer } from "@/shared/types";
-import { mockClosings, mockTransfers, purposeLabels } from "../lib";
+import { purposeLabels } from "../lib";
 import { formatRpFull } from "@/shared/lib";
 import { useState } from "react";
 import { TabBar } from "@/shared/components";
+import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useDeleteTransfer } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 const closingFields: FieldConfig[] = [
   { key: "businessDate", label: "Tanggal", type: "date", required: true },
@@ -72,15 +75,65 @@ type SubTab = typeof subTabs[number];
 export function DailyClosingPanel() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daily Closing");
 
-  const closingCrud = useCrudState<DailyClosing>(mockClosings);
-  const closingTable = useTableState(closingCrud.items, ["businessDate", "status"]);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
 
-  const transferCrud = useCrudState<OwnerTransfer>(mockTransfers);
-  const transferTable = useTableState(transferCrud.items, ["transferDate", "referenceNo", "purpose"]);
+  const rawClosings = useListClosings(currentBranchId || "");
+  const closingsData = (rawClosings || []).map(c => ({ ...c, id: c._id })) as unknown as DailyClosing[];
 
-  const todayClosing = closingCrud.items.find(c => c.businessDate === "2024-05-24");
-  const totalTransferToOwner = transferCrud.items.filter(t => t.direction === "branch_to_owner").reduce((s, t) => s + t.amount, 0);
-  const totalTransferFromOwner = transferCrud.items.filter(t => t.direction === "owner_to_branch").reduce((s, t) => s + t.amount, 0);
+  const rawTransfers = useListTransfers(currentBranchId || "");
+  const transfersData = (rawTransfers || []).map(t => ({ ...t, id: t._id })) as unknown as OwnerTransfer[];
+
+  const closingMutations = {
+    createMutation: useCreateClosing(),
+    updateMutation: useUpdateClosing(),
+    deleteMutation: async () => {},
+  };
+  const closingCrud = useConvexCrudState<DailyClosing>(closingMutations as any);
+  const closingTable = useTableState(closingsData, ["businessDate", "status"]);
+
+  const transferMutations = {
+    createMutation: useCreateTransfer(),
+    updateMutation: async () => {},
+    deleteMutation: useDeleteTransfer(),
+  };
+  const transferCrud = useConvexCrudState<OwnerTransfer>(transferMutations as any);
+  const transferTable = useTableState(transfersData, ["transferDate", "referenceNo", "purpose"]);
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const todayClosing = closingsData.find(c => c.businessDate === today);
+  const totalTransferToOwner = transfersData.filter(t => t.direction === "branch_to_owner").reduce((s, t) => s + t.amount, 0);
+  const totalTransferFromOwner = transfersData.filter(t => t.direction === "owner_to_branch").reduce((s, t) => s + t.amount, 0);
+
+  const customCreateClosing = async (data: any) => {
+    if (!currentBranchId) return;
+    const openingCash = Number(data.openingCash) || 0;
+    const cashSales = Number(data.cashSales) || 0;
+    const nonCashSales = Number(data.nonCashSales) || 0;
+    const expensesPaidCash = Number(data.expensesPaidCash) || 0;
+    const actualCash = Number(data.actualCash) || 0;
+    const expectedCash = openingCash + cashSales - expensesPaidCash;
+    const difference = actualCash - expectedCash;
+    await closingCrud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      openingCash, cashSales, nonCashSales, expensesPaidCash, actualCash,
+      expectedCash, difference,
+      submittedBy: "owner",
+      submittedAt: new Date().toISOString(),
+    });
+  };
+
+  const customCreateTransfer = async (data: any) => {
+    if (!currentBranchId) return;
+    await transferCrud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      amount: Number(data.amount) || 0,
+      referenceNo: data.referenceNo || "",
+      status: "pending",
+    });
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -88,7 +141,6 @@ export function DailyClosingPanel() {
 
       {activeTab === "Daily Closing" && (
         <>
-          {/* Today's Closing Status */}
           {todayClosing && (
             <div className={`rounded-xl p-4 border ${todayClosing.difference === 0 ? "bg-success/5 border-success/20" : "bg-destructive/5 border-destructive/20"}`}>
               <div className="flex items-center gap-2 mb-2">
@@ -136,7 +188,7 @@ export function DailyClosingPanel() {
           <CrudDialog<DailyClosing>
             open={closingCrud.isOpen} mode={closingCrud.mode} item={closingCrud.selectedItem}
             fields={closingFields} entityName="Daily Closing" onClose={closingCrud.close}
-            onSubmit={closingCrud.mode === "edit" ? closingCrud.onUpdate : closingCrud.onCreate}
+            onSubmit={closingCrud.mode === "edit" ? closingCrud.onUpdate : customCreateClosing}
             onDelete={closingCrud.onDelete}
           />
         </>
@@ -144,7 +196,6 @@ export function DailyClosingPanel() {
 
       {activeTab === "Transfer Owner" && (
         <>
-          {/* Transfer Summary */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-success/10 rounded-xl p-4 border border-success/20">
               <p className="label-uppercase mb-1">TOTAL KE OWNER</p>
@@ -173,7 +224,7 @@ export function DailyClosingPanel() {
           <CrudDialog<OwnerTransfer>
             open={transferCrud.isOpen} mode={transferCrud.mode} item={transferCrud.selectedItem}
             fields={transferFields} entityName="Transfer" onClose={transferCrud.close}
-            onSubmit={transferCrud.mode === "edit" ? transferCrud.onUpdate : transferCrud.onCreate}
+            onSubmit={transferCrud.mode === "edit" ? transferCrud.onUpdate : customCreateTransfer}
             onDelete={transferCrud.onDelete}
           />
         </>

@@ -1,15 +1,15 @@
-// @ts-nocheck
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 export const useExpenses = (branchId: string) =>
-  useQuery(api.features.expenses.queries.listByBranch, { branchId: branchId as any });
+  useQuery(api.features.expenses.queries.listByBranch, { branchId: branchId as Id<"branches"> });
 
 export const useExpense = (id: string) =>
-  useQuery(api.features.expenses.queries.getById, { id: id as any });
+  useQuery(api.features.expenses.queries.getById, { id: id as Id<"expenses"> });
 
 export const useExpenseLineItems = (expenseId: string) =>
-  useQuery(api.features.expenses.queries.listLineItems, { expenseId: expenseId as any });
+  useQuery(api.features.expenses.queries.listLineItems, { expenseId: expenseId as Id<"expenses"> });
 
 export const useExpensesByStatus = (status: "draft" | "submitted" | "approved" | "paid" | "rejected") =>
   useQuery(api.features.expenses.queries.listByStatus, { status });

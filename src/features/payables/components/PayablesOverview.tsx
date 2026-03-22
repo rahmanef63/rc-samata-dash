@@ -2,11 +2,13 @@ import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Payable } from "@/shared/types";
-import { mockPayables } from "../lib";
 import { formatRpFull } from "@/shared/lib";
+import { usePayables, useCreatePayable, useUpdatePayable, useDeletePayable } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
   { key: "vendorName", label: "Vendor", required: true },
@@ -29,7 +31,7 @@ const columns: Column<Payable>[] = [
   { key: "amount", label: "Total", className: "text-right font-mono-data", render: (v) => formatRpFull(v) },
   { key: "paidAmount", label: "Dibayar", className: "text-right font-mono-data", render: (v) => <span className="text-success">{formatRpFull(v)}</span> },
   { key: "dueDate", label: "Jatuh Tempo", className: "text-xs" },
-  { key: "agingDays", label: "Aging", render: (v, item) => {
+  { key: "agingDays", label: "Aging", render: (v) => {
     const color = v === 0 ? "text-success" : v <= 7 ? "text-foreground" : v <= 14 ? "text-warning" : "text-destructive";
     return <span className={`text-xs font-mono-data font-medium ${color}`}>{v} hari</span>;
   }},
@@ -37,18 +39,46 @@ const columns: Column<Payable>[] = [
 ];
 
 export function PayablesOverview() {
-  const crud = useCrudState<Payable>(mockPayables);
-  const table = useTableState(crud.items, ["vendorName", "description", "status"]);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
 
-  const totalOutstanding = crud.items.filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount - i.paidAmount), 0);
-  const overdue = crud.items.filter(i => i.status === "overdue");
+  const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 
-  // Aging buckets
+  const rawPayables = usePayables(currentBranchId || "");
+  const payablesData = (rawPayables || []).map(p => ({
+    ...p,
+    id: p._id,
+    agingDays: p.dueDate ? Math.max(0, Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000)) : 0,
+  })) as unknown as Payable[];
+
+  const mutations = {
+    createMutation: useCreatePayable(),
+    updateMutation: useUpdatePayable(),
+    deleteMutation: useDeletePayable(),
+  };
+  const crud = useConvexCrudState<Payable>(mutations as any);
+  const table = useTableState(payablesData, ["vendorName", "description", "status"]);
+
+  const customCreate = async (data: any) => {
+    if (!currentBranchId) return;
+    const vendor = rawVendors?.find(v => v.name === data.vendorName);
+    await crud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      vendorId: vendor?._id ?? currentBranchId,
+      paidAmount: Number(data.paidAmount) || 0,
+      amount: Number(data.amount) || 0,
+    });
+  };
+
+  const totalOutstanding = payablesData.filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount - i.paidAmount), 0);
+  const overdue = payablesData.filter(i => i.status === "overdue");
+
   const aging = {
-    "0-7 hari": crud.items.filter(i => i.status !== "paid" && i.agingDays <= 7).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
-    "8-14 hari": crud.items.filter(i => i.status !== "paid" && i.agingDays > 7 && i.agingDays <= 14).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
-    "15-30 hari": crud.items.filter(i => i.status !== "paid" && i.agingDays > 14 && i.agingDays <= 30).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
-    "30+ hari": crud.items.filter(i => i.status !== "paid" && i.agingDays > 30).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
+    "0-7 hari": payablesData.filter(i => i.status !== "paid" && i.agingDays <= 7).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
+    "8-14 hari": payablesData.filter(i => i.status !== "paid" && i.agingDays > 7 && i.agingDays <= 14).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
+    "15-30 hari": payablesData.filter(i => i.status !== "paid" && i.agingDays > 14 && i.agingDays <= 30).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
+    "30+ hari": payablesData.filter(i => i.status !== "paid" && i.agingDays > 30).reduce((s, i) => s + (i.amount - i.paidAmount), 0),
   };
 
   return (
@@ -109,7 +139,7 @@ export function PayablesOverview() {
       <CrudDialog<Payable>
         open={crud.isOpen} mode={crud.mode} item={crud.selectedItem}
         fields={fields} entityName="Piutang" onClose={crud.close}
-        onSubmit={crud.mode === "edit" ? crud.onUpdate : crud.onCreate}
+        onSubmit={crud.mode === "edit" ? crud.onUpdate : customCreate}
         onDelete={crud.onDelete}
       />
     </motion.div>

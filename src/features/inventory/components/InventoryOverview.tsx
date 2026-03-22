@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader, DataTable, CrudDialog, TabBar } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import type { StockItem, StockMovement } from "@/shared/types";
-import { stockItems, stockMovements, movementTypeLabels } from "../lib";
+import { movementTypeLabels } from "../lib";
+import { useStockItems, useCreateStockItem, useUpdateStockItem, useDeleteStockItem, useRecordMovement, useAllStockMovements } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 // Stock Items
 const itemFields: FieldConfig[] = [
@@ -55,14 +58,57 @@ type SubTab = typeof subTabs[number];
 export function InventoryOverview() {
   const [activeTab, setActiveTab] = useState<SubTab>("Stock Items");
 
-  const itemCrud = useCrudState<StockItem>(stockItems);
-  const itemTable = useTableState(itemCrud.items, ["name", "status"]);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
 
-  const moveCrud = useCrudState<StockMovement>(stockMovements);
-  const moveTable = useTableState(moveCrud.items, ["itemName", "type", "notes"]);
+  const rawItems = useStockItems(currentBranchId || "");
+  const itemsData = (rawItems || []).map(i => ({ ...i, id: i._id })) as unknown as StockItem[];
 
-  const lowStockItems = itemCrud.items.filter(i => i.status === "Low" || i.status === "Critical");
-  const totalWaste = moveCrud.items.filter(m => m.type === "waste").reduce((s, m) => s + m.qty, 0);
+  const rawMovements = useAllStockMovements(currentBranchId || "");
+  const movementsData = (rawMovements || []).map(m => ({ ...m, id: m._id })) as unknown as StockMovement[];
+
+  const itemMutations = {
+    createMutation: useCreateStockItem(),
+    updateMutation: useUpdateStockItem(),
+    deleteMutation: useDeleteStockItem(),
+  };
+  const itemCrud = useConvexCrudState<StockItem>(itemMutations as any);
+  const itemTable = useTableState(itemsData, ["name", "status"]);
+
+  const recordMovementMutation = useRecordMovement();
+  const moveCrud = useConvexCrudState<StockMovement>({
+    createMutation: async (data: any) => {
+      if (!currentBranchId) return;
+      const item = rawItems?.find(i => i.name === data.itemName);
+      if (!item) return;
+      await recordMovementMutation({
+        itemId: item._id,
+        itemName: item.name,
+        type: data.type || "stock_in",
+        qty: Number(data.qty) || 0,
+        unit: data.unit || item.unit,
+        date: data.date || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
+        notes: data.notes || "",
+        branchId: currentBranchId,
+      });
+    },
+    updateMutation: async () => {},
+    deleteMutation: async () => {},
+  });
+  const moveTable = useTableState(movementsData, ["itemName", "type", "notes"]);
+
+  const customCreateItem = async (data: any) => {
+    if (!currentBranchId) return;
+    const currentQty = Number(data.currentQty) || 0;
+    const minQty = Number(data.minQty) || 0;
+    const status = currentQty <= 0 ? "Critical" as const : currentQty <= minQty ? "Low" as const : "Stable" as const;
+    await itemCrud.onCreate({ ...data, branchId: currentBranchId, currentQty, minQty, status });
+  };
+
+  const lowStockItems = itemsData.filter(i => i.status === "Low" || i.status === "Critical");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const totalWaste = movementsData.filter(m => m.type === "waste").reduce((s, m) => s + m.qty, 0);
+  const todayMovements = movementsData.filter(m => m.date === today).length;
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -70,7 +116,6 @@ export function InventoryOverview() {
 
       {activeTab === "Stock Items" && (
         <>
-          {/* Low Stock Alert */}
           {lowStockItems.length > 0 && (
             <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -101,7 +146,7 @@ export function InventoryOverview() {
           <CrudDialog<StockItem>
             open={itemCrud.isOpen} mode={itemCrud.mode} item={itemCrud.selectedItem}
             fields={itemFields} entityName="Item Stok" onClose={itemCrud.close}
-            onSubmit={itemCrud.mode === "edit" ? itemCrud.onUpdate : itemCrud.onCreate}
+            onSubmit={itemCrud.mode === "edit" ? itemCrud.onUpdate : customCreateItem}
             onDelete={itemCrud.onDelete}
           />
         </>
@@ -116,7 +161,7 @@ export function InventoryOverview() {
             </div>
             <div className="bg-card rounded-xl shadow-card p-3">
               <p className="label-uppercase mb-1">MOVEMENTS HARI INI</p>
-              <p className="text-lg font-bold font-mono-data">{moveCrud.items.filter(m => m.date === "2024-05-24").length}</p>
+              <p className="text-lg font-bold font-mono-data">{todayMovements}</p>
             </div>
           </div>
 

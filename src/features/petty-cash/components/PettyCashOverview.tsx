@@ -2,11 +2,13 @@ import { motion } from "framer-motion";
 import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { PettyCashRequest } from "@/shared/types";
-import { mockPettyCashRequests, pettyCashBalance } from "../lib";
 import { formatRpFull } from "@/shared/lib";
+import { usePettyCashRequests, useCreatePettyCashRequest, useUpdatePettyCashRequest, useDeletePettyCashRequest } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
   { key: "requestedBy", label: "Diminta Oleh", required: true },
@@ -50,24 +52,49 @@ const columns: Column<PettyCashRequest>[] = [
 ];
 
 export function PettyCashOverview() {
-  const crud = useCrudState<PettyCashRequest>(mockPettyCashRequests);
-  const table = useTableState(crud.items, ["requestedBy", "purposeCategory", "notes", "status"]);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const currentBranchId = branches?.[0]?._id;
 
-  const pending = crud.items.filter(i => i.status === "requested");
-  const disbursed = crud.items.filter(i => i.status === "disbursed");
+  const rawRequests = usePettyCashRequests(currentBranchId || "");
+  const requestsData = (rawRequests || []).map(r => ({ ...r, id: r._id })) as unknown as PettyCashRequest[];
+
+  const mutations = {
+    createMutation: useCreatePettyCashRequest(),
+    updateMutation: useUpdatePettyCashRequest(),
+    deleteMutation: useDeletePettyCashRequest(),
+  };
+  const crud = useConvexCrudState<PettyCashRequest>(mutations as any);
+  const table = useTableState(requestsData, ["requestedBy", "purposeCategory", "notes", "status"]);
+
+  const customCreate = async (data: any) => {
+    if (!currentBranchId) return;
+    await crud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      approvedAmount: data.approvedAmount || 0,
+      actualAmount: data.actualAmount || 0,
+      hasAttachment: false,
+    });
+  };
+
+  const pending = requestsData.filter(i => i.status === "requested");
+  const disbursed = requestsData.filter(i => i.status === "disbursed");
+  const totalDisbursed = requestsData.filter(i => ["disbursed", "closed"].includes(i.status)).reduce((s, i) => s + i.approvedAmount, 0);
+  const totalUsed = requestsData.filter(i => i.status === "closed").reduce((s, i) => s + i.actualAmount, 0);
+  const remaining = totalDisbursed - totalUsed;
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       {/* Balance Card */}
       <div className="bg-primary rounded-2xl p-5 text-primary-foreground">
         <p className="text-xs opacity-80 mb-1">Saldo Petty Cash Aktif</p>
-        <p className="text-3xl font-bold font-mono-data tracking-tight">{formatRpFull(pettyCashBalance.remaining)}</p>
+        <p className="text-3xl font-bold font-mono-data tracking-tight">{formatRpFull(remaining)}</p>
         <div className="flex items-center gap-4 mt-3">
           <div className="flex items-center gap-1 text-xs opacity-80">
-            <ArrowDownRight className="h-3 w-3" /> Masuk: {formatRpFull(pettyCashBalance.totalDisbursed)}
+            <ArrowDownRight className="h-3 w-3" /> Masuk: {formatRpFull(totalDisbursed)}
           </div>
           <div className="flex items-center gap-1 text-xs opacity-80">
-            <ArrowUpRight className="h-3 w-3" /> Dipakai: {formatRpFull(pettyCashBalance.totalUsed)}
+            <ArrowUpRight className="h-3 w-3" /> Dipakai: {formatRpFull(totalUsed)}
           </div>
         </div>
       </div>
@@ -126,7 +153,7 @@ export function PettyCashOverview() {
       <CrudDialog<PettyCashRequest>
         open={crud.isOpen} mode={crud.mode} item={crud.selectedItem}
         fields={fields} entityName="Petty Cash" onClose={crud.close}
-        onSubmit={crud.mode === "edit" ? crud.onUpdate : crud.onCreate}
+        onSubmit={crud.mode === "edit" ? crud.onUpdate : customCreate}
         onDelete={crud.onDelete}
       />
     </motion.div>

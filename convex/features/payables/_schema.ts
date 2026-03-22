@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 export const payablesTables = {
   payables: defineTable({
-    expenseId: v.id("expenses"),
+    expenseId: v.optional(v.id("expenses")),
     vendorId: v.id("vendors"),
     vendorName: v.string(),
     invoiceDate: v.string(),

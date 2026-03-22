@@ -1,6 +1,8 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { paymentSourceValidator, approvalStatusValidator } from "../../shared/validators";
+import { requireAuth } from "../../shared/auth";
+import { insertAuditLog } from "../../shared/helpers";
 
 export const create = mutation({
   args: {
@@ -17,7 +19,15 @@ export const create = mutation({
     branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("expenses", args);
+    const userId = await requireAuth(ctx);
+    if (args.amount <= 0) throw new Error("amount must be > 0");
+    const id = await ctx.db.insert("expenses", args);
+    await insertAuditLog(ctx, {
+      entityType: "expenses", entityId: id, action: "create",
+      description: `Created expense ${args.categoryName} - Rp${args.amount}`,
+      actedBy: userId, branchId: args.branchId,
+    });
+    return id;
   },
 });
 
@@ -37,7 +47,14 @@ export const update = mutation({
     branchId: v.id("branches"),
   },
   handler: async (ctx, { id, ...data }) => {
+    const userId = await requireAuth(ctx);
+    if (data.amount <= 0) throw new Error("amount must be > 0");
     await ctx.db.patch(id, data);
+    await insertAuditLog(ctx, {
+      entityType: "expenses", entityId: id, action: "update",
+      description: `Updated expense ${data.categoryName}`,
+      actedBy: userId, branchId: data.branchId,
+    });
     return id;
   },
 });
@@ -45,7 +62,23 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("expenses") },
   handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.get(args.id);
+    if (!existing) throw new Error("Record not found");
+    // Cascade delete line items
+    const lineItems = await ctx.db
+      .query("expenseLineItems")
+      .withIndex("by_expense", (q) => q.eq("expenseId", args.id))
+      .collect();
+    for (const li of lineItems) {
+      await ctx.db.delete(li._id);
+    }
     await ctx.db.delete(args.id);
+    await insertAuditLog(ctx, {
+      entityType: "expenses", entityId: args.id, action: "delete",
+      description: `Deleted expense ${existing.categoryName} (${lineItems.length} line items)`,
+      actedBy: userId, branchId: existing.branchId,
+    });
     return null;
   },
 });
@@ -61,6 +94,9 @@ export const addLineItem = mutation({
     subtotal: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    if (args.qty <= 0) throw new Error("qty must be > 0");
+    if (args.unitPrice < 0) throw new Error("unitPrice must be >= 0");
     return await ctx.db.insert("expenseLineItems", args);
   },
 });
@@ -68,6 +104,7 @@ export const addLineItem = mutation({
 export const removeLineItem = mutation({
   args: { id: v.id("expenseLineItems") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     await ctx.db.delete(args.id);
     return null;
   },
