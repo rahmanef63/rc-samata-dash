@@ -57,13 +57,16 @@ export const reportsTables = {
     branchId: v.id("branches"),
     weekStart: v.string(),
     commodityName: v.string(),
+    section: v.optional(v.string()),
     openingQty: v.number(),
     openingValue: v.number(),
     purchaseQty: v.number(),
     purchaseValue: v.number(),
     usageQty: v.number(),
+    usageValue: v.optional(v.number()),
     closingQty: v.number(),
     closingValue: v.number(),
+    prevWeekValue: v.optional(v.number()),
   })
     .index("by_report", ["reportId"])
     .index("by_branch_week", ["branchId", "weekStart"]),

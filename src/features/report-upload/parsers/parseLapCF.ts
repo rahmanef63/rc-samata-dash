@@ -1,11 +1,11 @@
 /**
  * Parser sheet "LAP. CF" — Laporan Cash Flow harian.
  *
- * Struktur mirip LAPORAN KAS PERIODE:
- *   - Row tertentu: tanggal (7 kolom = 7 hari)
- *   - Row label-based: SALDO AWAL, PENJUALAN/PEMASUKAN, PENGELUARAN, SALDO AKHIR
- *
- * Output: satu record per hari dengan opening balance, inflow, outflow, closing balance.
+ * Struktur bervariasi antar file — kolom bisa bergeser. Deteksi dinamis:
+ *   "SALDO AWAL PER"   → date nearby, value = largest number in row
+ *   "Sales tanggal,"    → date nearby, amount = number after date
+ *   "Belanja tanggal,"  → date nearby, amount = number after date
+ *   "SALDO AKHIR PER"  → value = largest number in row
  */
 
 import { getSheetRows, toNumber, toDateString } from "../lib/xlsxHelpers";
@@ -21,6 +21,44 @@ export type DailyCashFlowItem = {
   closingBalance: number;
 };
 
+/** Find the first valid date (non-1899/1900) in a row */
+function findDate(row: (string | number | Date | null | boolean)[]): string | null {
+  for (const cell of row) {
+    const d = toDateString(cell);
+    if (d && !d.startsWith("1899") && !d.startsWith("1900")) return d;
+  }
+  return null;
+}
+
+/** Find the largest number in a row (used for totals like SALDO AWAL/AKHIR) */
+function findLargestNumber(row: (string | number | Date | null | boolean)[]): number {
+  let max = 0;
+  for (const cell of row) {
+    const v = toNumber(cell);
+    if (v > max) max = v;
+  }
+  return max;
+}
+
+/** Find a meaningful amount in a row — the last numeric value > 0, excluding date serials */
+function findAmount(row: (string | number | Date | null | boolean)[]): number {
+  // Look for "Rp" marker and take the value after it
+  for (let c = 0; c < row.length; c++) {
+    const cell = String(row[c] ?? "").toUpperCase().trim();
+    if (cell === "RP" || cell === "RP.") {
+      const val = toNumber(row[c + 1]);
+      if (val > 0) return val;
+    }
+  }
+  // Fallback: return the largest positive number
+  return findLargestNumber(row);
+}
+
+/** Check if any cell in the row contains a substring (case-insensitive) */
+function rowContains(row: (string | number | Date | null | boolean)[], text: string): boolean {
+  return row.some((cell) => String(cell ?? "").toUpperCase().includes(text.toUpperCase()));
+}
+
 export function parseLapCF(wb: XLSX.WorkBook): DailyCashFlowItem[] {
   const sheetName = wb.SheetNames.find((n) => {
     const up = n.toUpperCase().replace(/\s+/g, " ").trim();
@@ -30,109 +68,111 @@ export function parseLapCF(wb: XLSX.WorkBook): DailyCashFlowItem[] {
   if (!sheetName) return [];
 
   const rows = getSheetRows(wb, sheetName);
-  const result: DailyCashFlowItem[] = [];
 
-  // Find date row first
-  let dateRowIdx = -1;
-  let dateColStart = -1;
-  let dateColEnd = -1;
-  const dates: (string | null)[] = [];
+  const salesByDate: Record<string, number> = {};
+  const expenseByDate: Record<string, number> = {};
+  let openingBalance = 0;
+  let closingBalance = 0;
+  let totalOtherInflow = 0;
+  const dateOrder: string[] = [];
 
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+  let inOtherIncome = false;
+
+  for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    for (let c = 1; c < Math.min(row.length, 15); c++) {
-      const d = toDateString(row[c]);
-      if (d) {
-        if (dateRowIdx < 0) {
-          dateRowIdx = i;
-          dateColStart = c;
-        }
-        dateColEnd = c;
-        dates.push(d);
-      } else if (dateRowIdx === i && dates.length > 0) {
-        // Stop collecting dates if we hit a non-date in the same row
-        break;
-      }
-    }
-    if (dates.length > 0 && dateRowIdx !== i) break;
-  }
+    if (!row || row.every((c) => c == null)) continue;
 
-  if (dates.length === 0) return [];
+    // Skip notes/comments (e.g., "NB. UNTUK SALDO AKHIR...")
+    const firstCell = String(row[0] ?? row[1] ?? row[2] ?? "").toUpperCase().trim();
+    if (firstCell.startsWith("NB") || firstCell.startsWith("CATATAN") || firstCell.startsWith("NOTE")) continue;
 
-  const numDays = dates.length;
+    // Check all cells for labels
+    const isSaldoAwal = rowContains(row, "SALDO AWAL");
+    const isSaldoAkhir = rowContains(row, "SALDO AKHIR");
+    const hasSalesTanggal = rowContains(row, "SALES TANGGAL");
+    const hasBelanjaTanggal = rowContains(row, "BELANJA TANGGAL");
+    const isPenerimaan = rowContains(row, "PENERIMAAN") && !rowContains(row, "TOTAL");
+    const isPengeluaran = rowContains(row, "PENGELUARAN") && !rowContains(row, "TOTAL");
+    const isTotalPenerimaan = rowContains(row, "TOTAL") && rowContains(row, "PENERIMAAN");
 
-  // Initialize daily records
-  const daily: Record<string, {
-    openingBalance: number; salesInflow: number; otherInflow: number;
-    expenseOutflow: number; otherOutflow: number; closingBalance: number;
-  }> = {};
-  for (const d of dates) {
-    if (d) {
-      daily[d] = {
-        openingBalance: 0, salesInflow: 0, otherInflow: 0,
-        expenseOutflow: 0, otherOutflow: 0, closingBalance: 0,
-      };
-    }
-  }
-
-  // Parse label rows
-  for (let i = dateRowIdx + 1; i < rows.length; i++) {
-    const row = rows[i];
-    const label = String(row[0] ?? row[1] ?? "").toUpperCase().trim();
-    if (!label) continue;
-
-    // Determine what this row represents
-    let field: keyof typeof daily[string] | null = null;
-
-    if (label.includes("SALDO AWAL") || label.includes("OPENING")) {
-      field = "openingBalance";
-    } else if (label.includes("SALDO AKHIR") || label.includes("CLOSING")) {
-      field = "closingBalance";
-    } else if (label.includes("PENJUALAN") || label.includes("SALES") || label.includes("PEMASUKAN")) {
-      field = "salesInflow";
-    } else if (label.includes("PENGELUARAN") || label.includes("EXPENSE") || label.includes("BIAYA")) {
-      field = "expenseOutflow";
-    } else if (label.includes("LAIN") && label.includes("MASUK")) {
-      field = "otherInflow";
-    } else if (label.includes("LAIN") && (label.includes("KELUAR") || label.includes("OUT"))) {
-      field = "otherOutflow";
-    } else if (label.includes("TRANSFER") || label.includes("SETORAN")) {
-      field = "otherOutflow";
-    } else if (label.includes("TOTAL") || label.includes("JUMLAH")) {
+    if (isSaldoAwal) {
+      openingBalance = findLargestNumber(row);
       continue;
     }
 
-    if (!field) continue;
+    if (isSaldoAkhir) {
+      closingBalance = findLargestNumber(row);
+      continue;
+    }
 
-    // Extract values from date columns
-    for (let d = 0; d < numDays; d++) {
-      const colIdx = dateColStart + d;
-      const val = toNumber(row[colIdx]);
-      const date = dates[d];
-      if (date && daily[date]) {
-        daily[date][field] = val;
+    if (hasSalesTanggal) {
+      const d = findDate(row);
+      if (!d) continue;
+      const amount = findAmount(row);
+      if (amount <= 0) continue;
+      salesByDate[d] = (salesByDate[d] ?? 0) + amount;
+      if (!dateOrder.includes(d)) dateOrder.push(d);
+      inOtherIncome = false;
+      continue;
+    }
+
+    if (hasBelanjaTanggal) {
+      const d = findDate(row);
+      if (!d) continue;
+      const amount = findAmount(row);
+      if (amount <= 0) continue;
+      expenseByDate[d] = (expenseByDate[d] ?? 0) + amount;
+      if (!dateOrder.includes(d)) dateOrder.push(d);
+      inOtherIncome = false;
+      continue;
+    }
+
+    // Track "Penerimaan lain-lain" section
+    if (isPenerimaan && rowContains(row, "LAIN")) {
+      inOtherIncome = true;
+      continue;
+    }
+    if (isPengeluaran || isTotalPenerimaan) {
+      inOtherIncome = false;
+      continue;
+    }
+
+    // Collect other income items
+    if (inOtherIncome) {
+      const amount = findAmount(row);
+      if (amount > 0) {
+        totalOtherInflow += amount;
       }
     }
   }
 
-  // Build result array
-  for (const d of dates) {
-    if (!d || !daily[d]) continue;
-    const rec = daily[d];
+  if (dateOrder.length === 0) return [];
 
-    // Compute closing if not found: opening + inflow - outflow
-    if (rec.closingBalance === 0 && rec.openingBalance > 0) {
-      rec.closingBalance = rec.openingBalance + rec.salesInflow + rec.otherInflow
-        - rec.expenseOutflow - rec.otherOutflow;
-    }
+  // Build daily records
+  const result: DailyCashFlowItem[] = [];
+  const numDays = dateOrder.length;
+  let runningBalance = openingBalance;
 
-    // Skip days with no data
-    if (rec.openingBalance === 0 && rec.salesInflow === 0 && rec.closingBalance === 0) continue;
+  for (let i = 0; i < numDays; i++) {
+    const d = dateOrder[i];
+    const sales = salesByDate[d] ?? 0;
+    const expense = expenseByDate[d] ?? 0;
+    const otherInflow = i === 0 ? totalOtherInflow : 0;
+
+    const dayOpening = runningBalance;
+    const dayClosing = dayOpening + sales + otherInflow - expense;
 
     result.push({
       businessDate: d,
-      ...rec,
+      openingBalance: dayOpening,
+      salesInflow: sales,
+      otherInflow,
+      expenseOutflow: expense,
+      otherOutflow: 0,
+      closingBalance: i === numDays - 1 ? closingBalance : dayClosing,
     });
+
+    runningBalance = dayClosing;
   }
 
   return result;

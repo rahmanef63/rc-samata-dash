@@ -26,9 +26,9 @@ export type DailyCashSummaryItem = {
   netSales: number;
 };
 
-const DATE_ROW     = 5;  // row 6 (0-based index)
-const DATA_COL_START = 2;
-const DATA_COL_END   = 8;
+const DATE_ROW     = 4;  // row 4 (0-based): tanggal di kolom 1–7
+const DATA_COL_START = 1;
+const DATA_COL_END   = 7;
 
 export function parseLaporanKasPeriode(wb: XLSX.WorkBook): DailyCashSummaryItem[] {
   const sheetName = wb.SheetNames.find((n) =>
@@ -51,7 +51,7 @@ export function parseLaporanKasPeriode(wb: XLSX.WorkBook): DailyCashSummaryItem[
 
   for (let i = 6; i < rows.length; i++) {
     const row = rows[i];
-    const label = String(row[1] ?? "").trim().toUpperCase();
+    const label = String(row[0] ?? "").trim().toUpperCase();
     if (!label) continue;
 
     const vals: number[] = [];
@@ -60,9 +60,9 @@ export function parseLaporanKasPeriode(wb: XLSX.WorkBook): DailyCashSummaryItem[
     }
 
     if (label.includes("KOTOR"))                          rowMap["gross"]      = vals;
-    else if (label.includes("GOFOOD") || label.includes("GO FOOD")) rowMap["gofood"]    = vals;
-    else if (label.includes("GRAB"))                      rowMap["grabfood"]   = vals;
-    else if (label.includes("SHOPEE"))                    rowMap["shopeefood"] = vals;
+    else if (label.includes("KOMISI") && (label.includes("GOFOOD") || label.includes("GO FOOD"))) rowMap["gofood"]    = vals;
+    else if (label.includes("KOMISI") && label.includes("GRAB"))    rowMap["grabfood"]   = vals;
+    else if (label.includes("KOMISI") && label.includes("SHOPEE"))  rowMap["shopeefood"] = vals;
     else if (label.includes("KOREKSI"))                   rowMap["koreksi"]    = vals;
     else if (label.includes("DISCOUNT") || label.includes("DISKON")) rowMap["discount"]  = vals;
     else if (label.includes("BERSIH") || label.includes("NET SALES") || label.includes("NETT")) rowMap["net"] = vals;

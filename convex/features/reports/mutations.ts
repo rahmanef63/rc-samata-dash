@@ -25,13 +25,16 @@ const productSaleItemValidator = v.object({
 
 const vendorPurchaseItemValidator = v.object({
   commodityName: v.string(),
+  section: v.optional(v.string()),
   openingQty: v.number(),
   openingValue: v.number(),
   purchaseQty: v.number(),
   purchaseValue: v.number(),
   usageQty: v.number(),
+  usageValue: v.optional(v.number()),
   closingQty: v.number(),
   closingValue: v.number(),
+  prevWeekValue: v.optional(v.number()),
 });
 
 const inventoryValuationItemValidator = v.object({

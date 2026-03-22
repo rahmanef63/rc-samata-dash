@@ -1,14 +1,13 @@
 /**
  * Parser sheet "TO - TI" — Transfer Out / Transfer In.
  *
- * Struktur:
- *   Section "TRANSFER OUT" lalu section "TRANSFER IN"
- *   Di bawah masing-masing section:
- *     - Sub-kategori (PERKEDEL, CATERING, STAFF MEAL, FREE ITEMS, dll)
- *     - Item rows: nama item, qty, unit, total value
+ * Struktur: 6 side-by-side sections at column offsets 0, 5, 10, 15, 20, 25.
+ *   Row 0: Section titles (e.g., "TO / TI   PERKEDEL", "TO CATTERING STAFF", etc.)
+ *   Row 4: Column headers (NAMA BAHAN/PRODUCT, QTY, HARGA BELI/JUAL, TOTAL)
+ *   Rows 5+: Item data
+ *   Each section has 4 columns: name, qty, price, total
  *
- * Parser mendeteksi direction dari label "TRANSFER OUT" / "TRANSFER IN",
- * lalu mengumpulkan item rows di bawahnya.
+ * Also checks for standalone sheets: "TO-TI PERKEDEL", "TO CATTERING STAFF"
  */
 
 import { getSheetRows, toNumber } from "../lib/xlsxHelpers";
@@ -23,98 +22,134 @@ export type TransferItem = {
   totalValue: number;
 };
 
-export function parseTransferTOTI(wb: XLSX.WorkBook): TransferItem[] {
-  const sheetName = wb.SheetNames.find((n) => {
-    const up = n.toUpperCase().replace(/\s+/g, " ").trim();
-    return up.includes("TO - TI") || up.includes("TO-TI") || up === "TO TI";
-  });
-  if (!sheetName) return [];
+function classifyDirection(sectionTitle: string): "out" | "in" {
+  const up = sectionTitle.toUpperCase();
+  // "TI" alone = transfer in, but "TO / TI" is mixed (treat as out for perkedel ingredients)
+  if (up.includes("TO") && !up.includes("TI")) return "out";
+  if (up.includes("TI") && !up.includes("TO")) return "in";
+  // Mixed "TO / TI" sections — these are production transfers (out)
+  return "out";
+}
 
-  const rows = getSheetRows(wb, sheetName);
+function extractCategory(sectionTitle: string): string {
+  const up = sectionTitle.toUpperCase().trim();
+  // Extract the meaningful part after "TO / TI" or "TO"
+  const cleaned = up
+    .replace(/TO\s*\/\s*TI\s*/g, "")
+    .replace(/^TO\s+/g, "")
+    .replace(/^TI\s+/g, "")
+    .trim();
+  return cleaned || "UMUM";
+}
+
+function parseSideBySideSections(rows: (string | number | Date | null | boolean)[][]): TransferItem[] {
   const result: TransferItem[] = [];
 
-  let currentDirection: "out" | "in" | null = null;
-  let currentCategory = "UMUM";
+  // Detect section positions from row 0 (titles) or row 4 (headers)
+  const titleRow = rows[0] ?? [];
+  const headerRow = rows[4] ?? [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const firstCell = String(row[0] ?? "").toUpperCase().trim();
-    const secondCell = String(row[1] ?? "").toUpperCase().trim();
-    const label = firstCell || secondCell;
-
-    // Detect direction sections
-    if (label.includes("TRANSFER OUT") || label.includes("TRANSFER KELUAR")) {
-      currentDirection = "out";
-      currentCategory = "UMUM";
-      continue;
+  // Find section start columns — look for non-empty cells in row 0
+  const sections: { col: number; title: string }[] = [];
+  for (let c = 0; c < titleRow.length; c++) {
+    const cell = String(titleRow[c] ?? "").trim();
+    if (cell.length > 2 && (cell.toUpperCase().includes("TO") || cell.toUpperCase().includes("TI") || cell.toUpperCase().includes("FREE"))) {
+      sections.push({ col: c, title: cell });
     }
-    if (label.includes("TRANSFER IN") || label.includes("TRANSFER MASUK")) {
-      currentDirection = "in";
-      currentCategory = "UMUM";
-      continue;
-    }
+  }
 
-    if (!currentDirection) continue;
-
-    // Stop at totals
-    if (label.includes("TOTAL") || label.includes("JUMLAH")) {
-      // If it's a section total (e.g. "TOTAL TRANSFER OUT"), skip but keep going
-      if (label.includes("TRANSFER")) {
-        currentDirection = null;
-        continue;
-      }
-      continue;
-    }
-
-    // Detect sub-category headers (bold rows with no numeric data)
-    const CATEGORIES = [
-      "PERKEDEL", "CATERING", "STAFF MEAL", "STAFF", "FREE ITEM", "FREE",
-      "PROMO", "SAMPLING", "COMPLIMENT", "DONASI", "LAIN", "AYAM",
-    ];
-    const isCategory = CATEGORIES.some((c) => label.includes(c));
-    const hasNumeric = row.slice(2).some((v) => toNumber(v) > 0);
-
-    if (isCategory && !hasNumeric) {
-      currentCategory = String(row[0] ?? row[1] ?? "").trim();
-      continue;
-    }
-
-    // Parse item row
-    const itemName = String(row[1] ?? row[0] ?? "").trim();
-    if (!itemName) continue;
-
-    // Find qty and value columns — typically cols 2-5
-    let qty = 0;
-    let unit = "";
-    let totalValue = 0;
-
-    // Try common column positions
-    for (let c = 2; c < Math.min(row.length, 10); c++) {
-      const val = toNumber(row[c]);
-      const cellStr = String(row[c] ?? "").trim();
-
-      if (typeof row[c] === "string" && cellStr.match(/^[a-zA-Z]+$/)) {
-        unit = cellStr; // e.g., "pcs", "kg", "porsi"
-      } else if (val > 0) {
-        if (qty === 0) {
-          qty = val;
-        } else {
-          totalValue = val;
-          break;
-        }
+  // Fallback: if no sections found in row 0, check known positions
+  if (sections.length === 0) {
+    // Try header row to find "NAMA" columns
+    for (let c = 0; c < headerRow.length; c++) {
+      const cell = String(headerRow[c] ?? "").toUpperCase().trim();
+      if (cell.includes("NAMA")) {
+        sections.push({ col: c, title: `Section ${sections.length + 1}` });
       }
     }
+  }
 
-    if (qty <= 0 && totalValue <= 0) continue;
+  if (sections.length === 0) return result;
 
-    result.push({
-      direction: currentDirection,
-      category: currentCategory || "UMUM",
-      itemName,
-      qty,
-      unit: unit || undefined,
-      totalValue,
-    });
+  // Parse each section
+  for (const section of sections) {
+    const { col, title } = section;
+    const direction = classifyDirection(title);
+    const category = extractCategory(title);
+
+    // Items start at row 5, columns: col+0=name, col+1=qty, col+2=price, col+3=total
+    for (let r = 5; r < rows.length; r++) {
+      const row = rows[r];
+      const name = String(row[col] ?? "").trim();
+      if (!name) continue;
+
+      const upper = name.toUpperCase();
+      if (upper.includes("SUB TOTAL") || upper.includes("TOTAL") ||
+          upper.includes("FOOD COST") || upper.includes("PARAF") ||
+          upper.includes("BUAT BERAPA") || upper.includes("JADI") ||
+          upper.includes("CATATAN") || upper.includes("TOLONG") ||
+          upper.includes("NB.") || upper.startsWith("(")) continue;
+
+      const qty = toNumber(row[col + 1]);
+      const price = toNumber(row[col + 2]);
+      const total = toNumber(row[col + 3]);
+
+      // Skip rows with no numeric data
+      if (qty === 0 && price === 0 && total === 0) continue;
+
+      result.push({
+        direction,
+        category,
+        itemName: name,
+        qty,
+        totalValue: total > 0 ? total : qty * price,
+      });
+    }
+  }
+
+  return result;
+}
+
+export function parseTransferTOTI(wb: XLSX.WorkBook): TransferItem[] {
+  const result: TransferItem[] = [];
+
+  // Main "TO - TI" sheet
+  const mainSheet = wb.SheetNames.find((n) => {
+    const up = n.toUpperCase().replace(/\s+/g, " ").trim();
+    return up === "TO - TI" || up === "TO-TI" || up === "TO TI";
+  });
+
+  if (mainSheet) {
+    const rows = getSheetRows(wb, mainSheet);
+    result.push(...parseSideBySideSections(rows));
+  }
+
+  // Also check standalone sheets
+  const standaloneSheets = wb.SheetNames.filter((n) => {
+    const up = n.toUpperCase().replace(/\s+/g, " ").trim();
+    return (up.includes("TO-TI") || up.includes("TO - TI") || up.includes("TO CATTERING")) &&
+           up !== (mainSheet ?? "").toUpperCase().replace(/\s+/g, " ").trim();
+  });
+
+  for (const sn of standaloneSheets) {
+    const rows = getSheetRows(wb, sn);
+    const items = parseSideBySideSections(rows);
+    // If standalone sheet didn't parse well, try sequential approach
+    if (items.length === 0) {
+      const direction = sn.toUpperCase().includes("TI") && !sn.toUpperCase().includes("TO") ? "in" as const : "out" as const;
+      const category = extractCategory(sn);
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const name = String(row[0] ?? row[1] ?? "").trim();
+        if (!name || name.toUpperCase().includes("TOTAL")) continue;
+        const qty = toNumber(row[1]) || toNumber(row[2]);
+        const total = toNumber(row[3]) || toNumber(row[2]);
+        if (qty === 0 && total === 0) continue;
+        result.push({ direction, category, itemName: name, qty, totalValue: total });
+      }
+    } else {
+      result.push(...items);
+    }
   }
 
   return result;
