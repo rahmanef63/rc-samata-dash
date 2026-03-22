@@ -22,7 +22,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           "raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]
         );
         const hashBuffer = await crypto.subtle.deriveBits(
-          { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+          { name: "PBKDF2", salt, iterations: 10000, hash: "SHA-256" },
           keyMaterial, 256
         );
         const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
@@ -48,7 +48,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           "raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]
         );
         const hashBuffer = await crypto.subtle.deriveBits(
-          { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+          { name: "PBKDF2", salt, iterations: 10000, hash: "SHA-256" },
           keyMaterial, 256
         );
         const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
