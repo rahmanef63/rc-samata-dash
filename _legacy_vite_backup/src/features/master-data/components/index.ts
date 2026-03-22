@@ -1,1 +1,0 @@
-export { MasterDataPanel } from "./MasterDataPanel";
