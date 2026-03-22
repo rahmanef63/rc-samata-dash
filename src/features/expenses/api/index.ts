@@ -3,16 +3,16 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export const useExpenses = (branchId: string) =>
-  useQuery(api.features.expenses.queries.listByBranch, { branchId: branchId as Id<"branches"> });
+  useQuery(api.features.expenses.queries.listByBranch, branchId ? { branchId: branchId as Id<"branches"> } : "skip");
 
 export const useExpense = (id: string) =>
-  useQuery(api.features.expenses.queries.getById, { id: id as Id<"expenses"> });
+  useQuery(api.features.expenses.queries.getById, id ? { id: id as Id<"expenses"> } : "skip");
 
 export const useExpenseLineItems = (expenseId: string) =>
-  useQuery(api.features.expenses.queries.listLineItems, { expenseId: expenseId as Id<"expenses"> });
+  useQuery(api.features.expenses.queries.listLineItems, expenseId ? { expenseId: expenseId as Id<"expenses"> } : "skip");
 
 export const useExpensesByStatus = (status: "draft" | "submitted" | "approved" | "paid" | "rejected") =>
-  useQuery(api.features.expenses.queries.listByStatus, { status });
+  useQuery(api.features.expenses.queries.listByStatus, status ? { status } : "skip");
 
 export const useCreateExpense = () => useMutation(api.features.expenses.mutations.create);
 export const useUpdateExpense = () => useMutation(api.features.expenses.mutations.update);
