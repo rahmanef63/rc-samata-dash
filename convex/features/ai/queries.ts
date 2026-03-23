@@ -1,6 +1,8 @@
 import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 
+// ─── Provider Queries ───────────────────────────────────────
+
 /** List all providers (masks API key for client safety) */
 export const listProviders = query({
   args: {},
@@ -48,6 +50,50 @@ export const getActiveProviderWithKey = internalQuery({
   },
 });
 
+// ─── Tool Queries ───────────────────────────────────────────
+
+/** List all tools */
+export const listTools = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("aiTools").collect();
+  },
+});
+
+/** List enabled tools */
+export const listEnabledTools = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("aiTools")
+      .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
+      .collect();
+  },
+});
+
+// ─── Instruction Queries ────────────────────────────────────
+
+/** List all custom instructions */
+export const listInstructions = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("aiCustomInstructions").collect();
+  },
+});
+
+/** Get the active instruction */
+export const getActiveInstruction = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("aiCustomInstructions")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first();
+  },
+});
+
+// ─── Chat Queries ───────────────────────────────────────────
+
 /** List chat sessions */
 export const listChatSessions = query({
   args: {},
@@ -68,5 +114,35 @@ export const getChatMessages = query({
       .query("aiChatMessages")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect();
+  },
+});
+
+/** Get full AI config (provider + tools + instruction) for chat init */
+export const getAiConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const provider = await ctx.db
+      .query("aiProviders")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first();
+
+    const instruction = await ctx.db
+      .query("aiCustomInstructions")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first();
+
+    const tools = await ctx.db
+      .query("aiTools")
+      .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
+      .collect();
+
+    return {
+      provider: provider ? {
+        ...provider,
+        apiKey: provider.apiKey ? `${provider.apiKey.slice(0, 8)}...${provider.apiKey.slice(-4)}` : "",
+      } : null,
+      instruction,
+      tools,
+    };
   },
 });

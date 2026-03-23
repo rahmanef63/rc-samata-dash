@@ -4,14 +4,17 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { Bot, Send, Plus, Loader2, AlertCircle, MessageSquare, Trash2, Settings } from "lucide-react";
+import {
+  Bot, Send, Plus, Loader2, AlertCircle, MessageSquare, Trash2, Settings,
+  History, X, ChevronLeft, ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAiChat } from "@/features/ai/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-const SYSTEM_PROMPT = `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
+const FALLBACK_SYSTEM_PROMPT = `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
 Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow, HPP, dan laporan keuangan.
 Jawab dalam Bahasa Indonesia yang profesional dan ringkas. Gunakan angka dan data jika relevan.`;
 
@@ -26,13 +29,21 @@ export default function ChatPage() {
   const router = useRouter();
   const [sessionId, setSessionId] = useState<Id<"aiChatSessions"> | null>(null);
   const [input, setInput] = useState("");
+  const [showMobileHistory, setShowMobileHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const sessions = useQuery(api.features.ai.queries.listChatSessions);
-  const activeProvider = useQuery(api.features.ai.queries.getActiveProvider);
+  const aiConfig = useQuery(api.features.ai.queries.getAiConfig);
   const createSession = useMutation(api.features.ai.mutations.createChatSession);
   const deleteSession = useMutation(api.features.ai.mutations.deleteChatSession);
+
+  const activeProvider = aiConfig?.provider ?? null;
+  const activeInstruction = aiConfig?.instruction ?? null;
+  const enabledTools = aiConfig?.tools ?? [];
+
+  // Build system prompt from active instruction + enabled tools
+  const systemPrompt = activeInstruction?.content || FALLBACK_SYSTEM_PROMPT;
 
   const { messages, isLoading, error, clearError, sendMessage } = useAiChat(sessionId);
 
@@ -44,56 +55,12 @@ export default function ChatPage() {
   }, [messages, isLoading]);
 
   const handleNewSession = useCallback(async () => {
-    const id = await createSession({ systemPrompt: SYSTEM_PROMPT });
+    const id = await createSession({ systemPrompt });
     setSessionId(id);
     setInput("");
+    setShowMobileHistory(false);
     inputRef.current?.focus();
-  }, [createSession]);
-
-  const handleSend = useCallback(async () => {
-    if (!input.trim() || isLoading) return;
-
-    // Auto-create session if none
-    let sid = sessionId;
-    if (!sid) {
-      sid = await createSession({ systemPrompt: SYSTEM_PROMPT });
-      setSessionId(sid);
-    }
-
-    const msg = input;
-    setInput("");
-    // sendMessage uses the sessionId from closure, but we just set it
-    // So we need to call it after state updates
-    setTimeout(async () => {
-      await sendMessage(msg, SYSTEM_PROMPT);
-    }, 0);
-  }, [input, isLoading, sessionId, createSession, sendMessage]);
-
-  // Actually - the sendMessage uses the sessionId from the hook,
-  // which reads from state. Let me fix this by using a ref approach.
-  // For simplicity, the useAiChat hook takes sessionId as arg.
-  // Once setSessionId fires, the hook will get the new sessionId on next render.
-  // But we need to send before re-render. Let me restructure.
-
-  const handleSendDirect = useCallback(async () => {
-    if (!input.trim() || isLoading) return;
-
-    let sid = sessionId;
-    if (!sid) {
-      sid = await createSession({ systemPrompt: SYSTEM_PROMPT });
-      setSessionId(sid);
-    }
-
-    const msg = input;
-    setInput("");
-
-    if (sid === sessionId) {
-      // Session already existed, send directly
-      await sendMessage(msg, SYSTEM_PROMPT);
-    }
-    // If session was just created, the component will re-render with new sessionId
-    // and we lose the message. Store it and send on next effect.
-  }, [input, isLoading, sessionId, createSession, sendMessage]);
+  }, [createSession, systemPrompt]);
 
   // Pending message for newly created sessions
   const pendingMsgRef = useRef<string | null>(null);
@@ -110,24 +77,23 @@ export default function ChatPage() {
     setInput("");
 
     if (!sessionId) {
-      // Create session first, send message after re-render
       pendingMsgRef.current = msg;
-      const sid = await createSession({ systemPrompt: SYSTEM_PROMPT });
+      const sid = await createSession({ systemPrompt });
       setSessionId(sid);
       return;
     }
 
-    await sendMessage(msg, SYSTEM_PROMPT);
-  }, [input, isLoading, activeProvider, sessionId, createSession, sendMessage]);
+    await sendMessage(msg, systemPrompt);
+  }, [input, isLoading, activeProvider, sessionId, createSession, sendMessage, systemPrompt]);
 
   // Send pending message after session is created
   useEffect(() => {
     if (sessionId && pendingMsgRef.current) {
       const msg = pendingMsgRef.current;
       pendingMsgRef.current = null;
-      sendMessage(msg, SYSTEM_PROMPT);
+      sendMessage(msg, systemPrompt);
     }
-  }, [sessionId, sendMessage]);
+  }, [sessionId, sendMessage, systemPrompt]);
 
   const handleDeleteSession = async (sid: Id<"aiChatSessions">) => {
     await deleteSession({ sessionId: sid });
@@ -142,11 +108,28 @@ export default function ChatPage() {
     inputRef.current?.focus();
   };
 
+  const handleSelectSession = (sid: Id<"aiChatSessions">) => {
+    setSessionId(sid);
+    setShowMobileHistory(false);
+  };
+
+  // Navigate to adjacent sessions
+  const currentIndex = sessions?.findIndex((s) => s._id === sessionId) ?? -1;
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex >= 0 && currentIndex < (sessions?.length ?? 0) - 1;
+
+  const goPrev = () => {
+    if (canGoPrev && sessions) setSessionId(sessions[currentIndex - 1]._id);
+  };
+  const goNext = () => {
+    if (canGoNext && sessions) setSessionId(sessions[currentIndex + 1]._id);
+  };
+
   const noProvider = !activeProvider;
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem-4rem)] md:h-[calc(100dvh-3.5rem)]">
-      {/* Sidebar - Session List (desktop only) */}
+      {/* Sidebar - Session List (desktop) */}
       <div className="hidden md:flex flex-col w-64 border-r border-border bg-card/50">
         <div className="p-3 border-b border-border">
           <Button size="sm" className="w-full rounded-lg" onClick={handleNewSession}>
@@ -178,7 +161,81 @@ export default function ChatPage() {
             <p className="text-xs text-muted-foreground text-center py-4">Belum ada chat</p>
           )}
         </div>
+        {/* Desktop: enabled tools indicator */}
+        {enabledTools.length > 0 && (
+          <div className="p-3 border-t border-border">
+            <p className="text-[10px] text-muted-foreground">
+              {enabledTools.length} skills aktif
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Mobile History Drawer */}
+      <AnimatePresence>
+        {showMobileHistory && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-40 md:hidden"
+              onClick={() => setShowMobileHistory(false)}
+            />
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 bottom-0 w-72 bg-card z-50 md:hidden flex flex-col shadow-xl"
+            >
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <History className="h-4 w-4" /> Riwayat Chat
+                </h2>
+                <button onClick={() => setShowMobileHistory(false)}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+              <div className="p-3">
+                <Button size="sm" className="w-full rounded-lg" onClick={handleNewSession}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Chat Baru
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {sessions?.map((s: { _id: Id<"aiChatSessions">; title: string; createdAt: string }) => (
+                  <div
+                    key={s._id}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors ${
+                      sessionId === s._id
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "hover:bg-muted text-muted-foreground"
+                    }`}
+                    onClick={() => handleSelectSession(s._id)}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="truncate block">{s.title}</span>
+                      <span className="text-[10px] opacity-60">
+                        {new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                      </span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSession(s._id); }}
+                      className="text-destructive hover:text-destructive shrink-0"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {sessions?.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Belum ada chat</p>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -215,9 +272,16 @@ export default function ChatPage() {
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Tanya apapun tentang bisnis — omzet, expense, stok, dan insight lainnya.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Tanya apapun tentang bisnis — omzet, expense, stok, dan insight lainnya.
+                    </p>
+                    {enabledTools.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground/60">
+                        {enabledTools.length} skills aktif: {enabledTools.map((t) => t.name).join(", ")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </motion.div>
 
@@ -307,8 +371,44 @@ export default function ChatPage() {
         {/* Input Bar */}
         <div className="border-t border-border bg-card/80 p-3 safe-area-bottom">
           <div className="flex items-center gap-2 max-w-3xl mx-auto">
-            <div className="md:hidden">
-              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10" onClick={handleNewSession}>
+            {/* Mobile: History + New Chat + Nav buttons */}
+            <div className="flex items-center gap-1 md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl h-10 w-10"
+                onClick={() => setShowMobileHistory(true)}
+                title="Riwayat chat"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl h-9 w-9"
+                onClick={goPrev}
+                disabled={!canGoPrev}
+                title="Chat sebelumnya"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl h-9 w-9"
+                onClick={goNext}
+                disabled={!canGoNext}
+                title="Chat berikutnya"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl h-10 w-10"
+                onClick={handleNewSession}
+                title="Chat baru"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -338,6 +438,7 @@ export default function ChatPage() {
           {activeProvider && (
             <p className="text-[10px] text-muted-foreground text-center mt-1.5">
               {activeProvider.displayName} · {activeProvider.defaultModel}
+              {activeInstruction ? ` · ${activeInstruction.name}` : ""}
             </p>
           )}
         </div>

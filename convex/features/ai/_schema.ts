@@ -1,7 +1,8 @@
 /**
- * AI Provider & Chat schema
+ * AI Provider, Chat, Tools, Instructions & Embedding schema
  *
- * Stores AI provider configurations (API keys, models) and chat history.
+ * Stores AI provider configurations (API keys, models), chat history,
+ * tools/skills definitions, custom instructions, and embedding config.
  * API keys are stored server-side and never exposed to the client via public queries.
  */
 import { defineTable } from "convex/server";
@@ -15,6 +16,13 @@ export const aiProviderValidator = v.union(
   v.literal("custom")
 );
 
+export const aiToolCategoryValidator = v.union(
+  v.literal("data"),
+  v.literal("memory"),
+  v.literal("calculation"),
+  v.literal("utility")
+);
+
 export const aiTables = {
   aiProviders: defineTable({
     provider: aiProviderValidator,
@@ -24,17 +32,49 @@ export const aiTables = {
     defaultModel: v.string(),
     isActive: v.boolean(),
     customHeaders: v.optional(v.string()), // JSON string of extra headers
+    // Embedding config — auto-enabled for OpenRouter
+    embeddingModel: v.optional(v.string()),
+    embeddingBaseUrl: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
     .index("by_provider", ["provider"])
     .index("by_active", ["isActive"]),
 
+  /** Tools/skills the AI can reference in responses */
+  aiTools: defineTable({
+    toolId: v.string(),            // "laporan_query", "memory_recall", etc.
+    name: v.string(),              // Display name: "Query Laporan"
+    description: v.string(),       // What it does
+    category: aiToolCategoryValidator,
+    syntaxGuide: v.string(),       // How the AI should use this skill
+    isBuiltIn: v.boolean(),        // System default vs user-created
+    isEnabled: v.boolean(),        // Active/inactive toggle
+    parameters: v.optional(v.string()), // JSON schema for params
+    createdAt: v.string(),
+  })
+    .index("by_toolId", ["toolId"])
+    .index("by_enabled", ["isEnabled"]),
+
+  /** Custom instructions — default + user-defined */
+  aiCustomInstructions: defineTable({
+    name: v.string(),              // "Default RC Samata", "Custom"
+    content: v.string(),           // The instruction text
+    isDefault: v.boolean(),        // Is this the system default
+    isActive: v.boolean(),         // Currently active instruction
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_active", ["isActive"])
+    .index("by_default", ["isDefault"]),
+
   aiChatSessions: defineTable({
     title: v.string(),
     providerId: v.optional(v.id("aiProviders")),
     model: v.optional(v.string()),
     systemPrompt: v.optional(v.string()),
+    customInstructionId: v.optional(v.id("aiCustomInstructions")),
+    enabledToolIds: v.optional(v.array(v.string())),
     createdAt: v.string(),
     updatedAt: v.string(),
   }).index("by_created", ["createdAt"]),
