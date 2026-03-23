@@ -71,6 +71,15 @@ export const stockMovementTypeValidator = v.union(
   v.literal("waste")
 );
 
+// ─── Petty Cash Category ────────────────────────────────────
+export const pettyCashCategoryValidator = v.union(
+  v.literal("Utilitas"),
+  v.literal("Bahan Baku"),
+  v.literal("Maintenance"),
+  v.literal("Transfer Owner"),
+  v.literal("Lain-lain")
+);
+
 // ─── Audit Action ───────────────────────────────────────────
 export const auditActionValidator = v.union(
   v.literal("create"),

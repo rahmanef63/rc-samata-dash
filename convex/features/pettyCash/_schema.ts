@@ -1,11 +1,12 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { pettyCashCategoryValidator } from "../../shared/validators";
 
 export const pettyCashTables = {
   pettyCashRequests: defineTable({
     requestDate: v.string(),
     requestedBy: v.string(),
-    purposeCategory: v.string(),
+    purposeCategory: pettyCashCategoryValidator,
     requestedAmount: v.number(),
     approvedAmount: v.number(),
     actualAmount: v.number(),

@@ -2,12 +2,13 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { pettyCashCategoryValidator } from "../../shared/validators";
 
 export const create = mutation({
   args: {
     requestDate: v.string(),
     requestedBy: v.string(),
-    purposeCategory: v.string(),
+    purposeCategory: pettyCashCategoryValidator,
     requestedAmount: v.number(),
     approvedAmount: v.number(),
     actualAmount: v.number(),

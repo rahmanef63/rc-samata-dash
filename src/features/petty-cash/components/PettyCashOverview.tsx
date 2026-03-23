@@ -19,6 +19,7 @@ const fields: FieldConfig[] = [
     { label: "Utilitas", value: "Utilitas" },
     { label: "Bahan Baku", value: "Bahan Baku" },
     { label: "Maintenance", value: "Maintenance" },
+    { label: "Transfer Owner", value: "Transfer Owner" },
     { label: "Lain-lain", value: "Lain-lain" },
   ]},
   { key: "requestedAmount", label: "Jumlah Request (Rp)", type: "number", required: true },
