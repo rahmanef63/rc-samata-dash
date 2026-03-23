@@ -9,6 +9,10 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as features_ai__schema from "../features/ai/_schema.js";
+import type * as features_ai_actions from "../features/ai/actions.js";
+import type * as features_ai_mutations from "../features/ai/mutations.js";
+import type * as features_ai_queries from "../features/ai/queries.js";
 import type * as features_audit__schema from "../features/audit/_schema.js";
 import type * as features_audit_mutations from "../features/audit/mutations.js";
 import type * as features_audit_queries from "../features/audit/queries.js";
@@ -52,6 +56,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  "features/ai/_schema": typeof features_ai__schema;
+  "features/ai/actions": typeof features_ai_actions;
+  "features/ai/mutations": typeof features_ai_mutations;
+  "features/ai/queries": typeof features_ai_queries;
   "features/audit/_schema": typeof features_audit__schema;
   "features/audit/mutations": typeof features_audit_mutations;
   "features/audit/queries": typeof features_audit_queries;

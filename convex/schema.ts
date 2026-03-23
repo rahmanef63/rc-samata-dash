@@ -18,6 +18,7 @@ import { closingTables } from "./features/closing/_schema";
 import { inventoryTables } from "./features/inventory/_schema";
 import { auditTables } from "./features/audit/_schema";
 import { reportsTables } from "./features/reports/_schema";
+import { aiTables } from "./features/ai/_schema";
 
 // ─── Merge all feature tables into one schema ───────────────
 export default defineSchema({
@@ -31,4 +32,5 @@ export default defineSchema({
   ...inventoryTables,
   ...auditTables,
   ...reportsTables,
+  ...aiTables,
 });
