@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useRef, useCallback } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, Upload, Download, GripVertical, Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";

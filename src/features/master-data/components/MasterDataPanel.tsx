@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { TabBar, DataTable, CrudDialog, SectionHeader } from "@/shared/components";

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, FileSpreadsheet, X } from "lucide-react";
+import { toast } from "sonner";
 
 type Props = {
   onFileSelect: (file: File) => void;
@@ -15,7 +16,7 @@ export function UploadDropzone({ onFileSelect, isLoading }: Props) {
 
   const handleFile = (file: File) => {
     if (!file.name.endsWith(".xlsx")) {
-      alert("Hanya file .xlsx yang didukung.");
+      toast.error("Hanya file .xlsx yang didukung.");
       return;
     }
     setSelectedFile(file);
@@ -25,7 +26,11 @@ export function UploadDropzone({ onFileSelect, isLoading }: Props) {
   return (
     <div className="space-y-4">
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Upload file Excel"
         onClick={() => !isLoading && inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); !isLoading && inputRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {

@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import { AreaChartCard, TransactionRow, SectionHeader, ViewAllButton } from "@/shared/components";

@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";

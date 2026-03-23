@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { ChevronRight, Globe, Moon, Shield, LogOut, Settings as SettingsIcon, Bell } from "lucide-react";
 import { Switch } from "@/components/ui/switch";

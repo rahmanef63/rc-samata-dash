@@ -1,3 +1,5 @@
+"use client";
+
 import { DollarSign, Wallet, AlertTriangle, TrendingUp, Receipt, Moon, Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
