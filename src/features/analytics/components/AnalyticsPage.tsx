@@ -11,8 +11,9 @@ import {
   DollarSign, TrendingDown, Percent, AlertTriangle,
   Users, Target, ShoppingCart, Trash2, Loader2,
 } from "lucide-react";
+import { ReportDataBrowser } from "./ReportDataBrowser";
 
-const TABS = ["Overview", "Profitabilitas", "Efisiensi Beli", "Waste", "Arus Kas"] as const;
+const TABS = ["Overview", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Waste", "Arus Kas"] as const;
 type Tab = typeof TABS[number];
 
 export default function AnalyticsPage() {
@@ -77,6 +78,7 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {activeTab === "Overview" && <OverviewTab reportId={reportId} />}
+          {activeTab === "Data Browser" && <ReportDataBrowser reportId={reportId} />}
           {activeTab === "Profitabilitas" && <ProfitabilityTab reportId={reportId} />}
           {activeTab === "Efisiensi Beli" && <PurchaseTab reportId={reportId} />}
           {activeTab === "Waste" && <WasteTab reportId={reportId} />}
