@@ -80,7 +80,7 @@ export function DataTable<T extends Record<string, any>>({
       if (file.name.endsWith(".json")) { items = await importFromJson<Partial<T>>(file); }
       else { const cols = columns.map((c) => ({ key: c.key, label: c.label })); items = await importFromCsv<T>(file, cols); }
       onImport?.(items);
-    } catch { console.error("Import failed"); }
+    } catch { /* import parse failed — silently ignore bad file */ }
     e.target.value = "";
   };
 
@@ -103,7 +103,7 @@ export function DataTable<T extends Record<string, any>>({
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder={`Cari ${entityName.toLowerCase()}...`} value={search} onChange={(e) => onSearchChange(e.target.value)} className="pl-9 h-10 text-sm rounded-xl" />
+          <Input placeholder={`Cari ${entityName.toLowerCase()}...`} value={search} onChange={(e) => onSearchChange(e.target.value)} className="pl-9 h-10 text-sm rounded-xl" aria-label={`Cari ${entityName.toLowerCase()}`} />
         </div>
         <div className="flex items-center gap-2">
           {onImport && (

@@ -54,6 +54,21 @@ function fmtN(n: number, decimals = 0): string {
 export function ReportDataBrowser({ reportId }: { reportId: Id<"weeklyReports"> }) {
   const [activeTable, setActiveTable] = useState<TableKey>("sales");
   const [search, setSearch] = useState("");
+  const [columnFilter, setColumnFilter] = useState<string | null>(null);
+
+  const switchTable = (key: TableKey) => {
+    setActiveTable(key);
+    setSearch("");
+    setColumnFilter(null);
+  };
+
+  // Filter chips config per table
+  const filterChips: Record<string, { label: string; options: { value: string; label: string }[] }> = {
+    sales: { label: "Channel", options: channelOptions },
+    transfer: { label: "Arah", options: directionOptions },
+  };
+
+  const currentFilters = filterChips[activeTable];
 
   return (
     <div className="space-y-4">
@@ -62,7 +77,7 @@ export function ReportDataBrowser({ reportId }: { reportId: Id<"weeklyReports"> 
         {DATA_TABLES.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setActiveTable(t.key); setSearch(""); }}
+            onClick={() => switchTable(t.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
               activeTable === t.key
                 ? "bg-primary text-primary-foreground"
@@ -75,27 +90,54 @@ export function ReportDataBrowser({ reportId }: { reportId: Id<"weeklyReports"> 
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Cari item..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 h-9 text-sm rounded-lg"
-        />
+      {/* Search + Filter row */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Cari item..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9 text-sm rounded-lg"
+          />
+        </div>
+
+        {/* Column filter chips */}
+        {currentFilters && (
+          <div className="flex items-center gap-1 overflow-x-auto">
+            <button
+              onClick={() => setColumnFilter(null)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                !columnFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Semua
+            </button>
+            {currentFilters.options.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setColumnFilter(columnFilter === opt.value ? null : opt.value)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  columnFilter === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Table content */}
       <div className="bg-card rounded-xl shadow-card overflow-hidden border border-border">
-        {activeTable === "sales" && <SalesTable reportId={reportId} search={search} />}
+        {activeTable === "sales" && <SalesTable reportId={reportId} search={search} channelFilter={columnFilter} />}
         {activeTable === "vendor" && <VendorTable reportId={reportId} search={search} />}
         {activeTable === "cashSummary" && <CashSummaryTable reportId={reportId} search={search} />}
         {activeTable === "cashFlow" && <CashFlowTable reportId={reportId} search={search} />}
         {activeTable === "costAnalysis" && <CostAnalysisTable reportId={reportId} search={search} />}
         {activeTable === "inventory" && <InventoryTable reportId={reportId} search={search} />}
         {activeTable === "hpp" && <HPPTable reportId={reportId} search={search} />}
-        {activeTable === "transfer" && <TransferTable reportId={reportId} search={search} />}
+        {activeTable === "transfer" && <TransferTable reportId={reportId} search={search} directionFilter={columnFilter} />}
         {activeTable === "incentive" && <IncentiveTable reportId={reportId} search={search} />}
         {activeTable === "fcSummary" && <FCSummaryTable reportId={reportId} search={search} />}
       </div>
@@ -146,13 +188,15 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 
 // ─── Product Sales Table ───────────────────────────────────
 
-function SalesTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
+function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyReports">; search: string; channelFilter?: string | null }) {
   const data = useQuery(api.features.reports.queries.getProductSales, { reportId });
   if (!data) return <TableLoading />;
 
-  const filtered = data.filter((s) =>
-    !search || s.productName.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = data.filter((s) => {
+    if (search && !s.productName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (channelFilter && (s.channel ?? "all") !== channelFilter) return false;
+    return true;
+  });
 
   if (filtered.length === 0) return <TableEmpty tableName="penjualan" />;
 
@@ -521,12 +565,15 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
 
 // ─── Transfer TO/TI Table ──────────────────────────────────
 
-function TransferTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
+function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"weeklyReports">; search: string; directionFilter?: string | null }) {
   const data = useQuery(api.features.reports.queries.getTransferItems, { reportId });
   if (!data) return <TableLoading />;
 
-  const filtered = data.filter((t) =>
-    !search || t.itemName.toLowerCase().includes(search.toLowerCase()),
+  const filtered = data.filter((t) => {
+    if (search && !t.itemName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (directionFilter && t.direction !== directionFilter) return false;
+    return true;
+  }
   );
   if (filtered.length === 0) return <TableEmpty tableName="transfer" />;
 

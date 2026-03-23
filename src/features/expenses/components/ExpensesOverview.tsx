@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, ProgressBar } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
@@ -69,7 +70,7 @@ export function ExpensesOverview() {
   ];
 
   const customCreate = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const category = rawCategories?.find(c => c.name === data.categoryName);
     const vendor = rawVendors?.find(v => v.name === data.vendorName);
     await crud.onCreate({

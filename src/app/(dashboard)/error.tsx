@@ -10,9 +10,9 @@ export default function DashboardError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    console.error("Dashboard error:", error);
-  }, [error]);
+  // Error is already captured by Next.js error boundary
+  // In production, integrate with error reporting service (e.g. Sentry)
+  useEffect(() => { /* error captured: */ void error; }, [error]);
 
   return (
     <div className="flex items-center justify-center min-h-[50vh] px-4">

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
@@ -60,7 +61,7 @@ export function PayablesOverview() {
   const table = useTableState(payablesData, ["vendorName", "description", "status"]);
 
   const customCreate = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const vendor = rawVendors?.find(v => v.name === data.vendorName);
     await crud.onCreate({
       ...data,

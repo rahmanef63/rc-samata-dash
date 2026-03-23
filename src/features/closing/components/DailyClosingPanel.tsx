@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Check } from "lucide-react";
+import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
@@ -106,7 +107,7 @@ export function DailyClosingPanel() {
   const totalTransferFromOwner = transfersData.filter(t => t.direction === "owner_to_branch").reduce((s, t) => s + t.amount, 0);
 
   const customCreateClosing = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const openingCash = Number(data.openingCash) || 0;
     const cashSales = Number(data.cashSales) || 0;
     const nonCashSales = Number(data.nonCashSales) || 0;
@@ -125,7 +126,7 @@ export function DailyClosingPanel() {
   };
 
   const customCreateTransfer = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     await transferCrud.onCreate({
       ...data,
       branchId: currentBranchId,

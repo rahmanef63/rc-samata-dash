@@ -39,7 +39,7 @@ interface CrudDialogProps<T extends Record<string, any>> {
   fields: FieldConfig[];
   entityName: string;
   onClose: () => void;
-  onSubmit: (item: T) => void;
+  onSubmit: (item: T) => void | Promise<void>;
   onDelete?: (item: T) => void;
   generateId?: () => string;
 }
@@ -56,6 +56,7 @@ export function CrudDialog<T extends Record<string, any>>({
   generateId = () => crypto.randomUUID().slice(0, 8),
 }: CrudDialogProps<T>) {
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (mode === "edit" && item) {
@@ -67,15 +68,22 @@ export function CrudDialog<T extends Record<string, any>>({
       });
       setFormData(defaults);
     }
+    setIsSubmitting(false);
   }, [mode, item, fields, generateId]);
 
   const handleChange = (key: string, value: any) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData as T);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit(formData as T);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (mode === "delete") {
@@ -154,7 +162,9 @@ export function CrudDialog<T extends Record<string, any>>({
             <Button type="button" variant="outline" onClick={onClose}>
               Batal
             </Button>
-            <Button type="submit">{mode === "create" ? "Simpan" : "Perbarui"}</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Menyimpan..." : mode === "create" ? "Simpan" : "Perbarui"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

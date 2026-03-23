@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
@@ -67,7 +68,7 @@ export function PettyCashOverview() {
   const table = useTableState(requestsData, ["requestedBy", "purposeCategory", "notes", "status"]);
 
   const customCreate = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     await crud.onCreate({
       ...data,
       branchId: currentBranchId,

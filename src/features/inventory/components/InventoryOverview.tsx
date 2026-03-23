@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader, DataTable, CrudDialog, TabBar } from "@/shared/components";
@@ -78,9 +79,9 @@ export function InventoryOverview() {
   const recordMovementMutation = useRecordMovement();
   const moveCrud = useConvexCrudState<StockMovement>({
     createMutation: async (data: any) => {
-      if (!currentBranchId) return;
+      if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
       const item = rawItems?.find(i => i.name === data.itemName);
-      if (!item) return;
+      if (!item) { toast.error("Item tidak ditemukan."); return; }
       await recordMovementMutation({
         itemId: item._id,
         itemName: item.name,
@@ -98,7 +99,7 @@ export function InventoryOverview() {
   const moveTable = useTableState(movementsData, ["itemName", "type", "notes"]);
 
   const customCreateItem = async (data: any) => {
-    if (!currentBranchId) return;
+    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const currentQty = Number(data.currentQty) || 0;
     const minQty = Number(data.minQty) || 0;
     const status = currentQty <= 0 ? "Critical" as const : currentQty <= minQty ? "Low" as const : "Stable" as const;

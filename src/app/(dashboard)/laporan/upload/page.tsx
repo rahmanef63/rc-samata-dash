@@ -143,9 +143,8 @@ export default function LaporanUploadPage() {
       } else {
         toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet`);
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Gagal membaca file.");
+    } catch {
+      toast.error("Gagal membaca file. Pastikan format .xlsx valid.");
       setStep("idle");
     }
   }, []);
@@ -296,8 +295,7 @@ export default function LaporanUploadPage() {
       setStep("done");
       toast.success("Import berhasil!");
     } catch (err) {
-      console.error(err);
-      toast.error("Error saat import. Cek console.");
+      toast.error(err instanceof Error ? err.message : "Error saat import. Silakan coba lagi.");
       setStep("error");
     }
   };
@@ -540,36 +538,40 @@ export default function LaporanUploadPage() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Riwayat Upload</h2>
           <div className="space-y-2">
-            {recentReports.map((r) => (
-              <div key={r._id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/20 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{r.fileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {r.periodStart} → {r.periodEnd}
-                    {" · "}{r.expenseCount ?? 0} expense
-                    {" · "}{r.salesCount ?? 0} penjualan
-                    {r.leftoverCount ? ` · ${r.leftoverCount} leftover` : ""}
-                    {r.kasPeriodeCount ? ` · ${r.kasPeriodeCount} kas` : ""}
-                  </p>
+            {recentReports.map((r) => {
+              const shortId = r._id.slice(-8).toUpperCase();
+              return (
+                <div key={r._id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/20 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground shrink-0">#{shortId}</span>
+                      <p className="text-sm font-medium truncate">{r.fileName}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {r.periodStart} → {r.periodEnd}
+                      {" · "}{(r.expenseCount ?? 0) + (r.salesCount ?? 0) + (r.vendorCount ?? 0) + (r.inventoryCount ?? 0) + (r.leftoverCount ?? 0) + (r.kasPeriodeCount ?? 0) + (r.salesControlCount ?? 0) + (r.creditPurchaseCount ?? 0) + (r.foodCostSummaryCount ?? 0) + (r.transferCount ?? 0) + (r.hppCount ?? 0) + (r.costAnalysisCount ?? 0) + (r.cashFlowCount ?? 0) + (r.incentiveCount ?? 0)} total records
+                    </p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                    r.status === "processed" ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" :
+                    r.status === "error" ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
+                  }`}>
+                    {r.status}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Hapus laporan #${shortId} "${r.fileName}"?\n\nSemua data terkait akan ikut terhapus.`)) return;
+                      await deleteReport({ reportId: r._id });
+                      toast.success(`Laporan #${shortId} dihapus`);
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-lg hover:bg-destructive/10"
+                    title={`Hapus #${shortId}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  r.status === "processed" ? "bg-green-100 text-green-700" :
-                  r.status === "error" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
-                }`}>
-                  {r.status}
-                </span>
-                <button
-                  onClick={async () => {
-                    if (!confirm(`Hapus laporan "${r.fileName}"?`)) return;
-                    await deleteReport({ reportId: r._id });
-                    toast.success("Laporan dihapus");
-                  }}
-                  className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
 import { salesChannels, subTabs, formatRpFull } from "../lib";
+import { toast } from "sonner";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -55,14 +56,14 @@ export function DailySalesForm() {
   const crud = useConvexCrudState<DailySale>(mutations as any);
   // Auto-inject branchId for creates
   const customCrudCreate = async (data: any) => {
-    if(!currentBranchId) return;
+    if(!currentBranchId) { toast.error("Cabang belum tersedia. Tambahkan di Master Data."); return; }
     await crud.onCreate({ ...data, branchId: currentBranchId, netAmount: data.grossAmount - (data.platformFee||0) - (data.promoCost||0) });
   };
 
   const table = useTableState(salesData, ["channelName", "businessDate", "referenceNo"]);
 
-  // We simply extract today's dummy date or logic
-  const todaySales = salesData.filter(i => i.businessDate === "2024-05-24" || i.businessDate.startsWith(new Date().toISOString().split('T')[0]));
+  const today = new Date().toISOString().split('T')[0];
+  const todaySales = salesData.filter(i => i.businessDate === today);
   const totalGross = todaySales.reduce((s, i) => s + i.grossAmount, 0);
   const totalNet = todaySales.reduce((s, i) => s + i.netAmount, 0);
   const totalFees = todaySales.reduce((s, i) => s + (i.platformFee||0) + (i.promoCost||0), 0);
@@ -109,7 +110,7 @@ export function DailySalesForm() {
           {/* Input Form */}
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Input Penjualan Harian</h2>
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">24 Mei 2024</span>
+            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">{new Date().toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

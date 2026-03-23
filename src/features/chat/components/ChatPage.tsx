@@ -1,23 +1,11 @@
 "use client";
 
-import { Bot, Send } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Bot, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
-const suggestions = [
-  "Berapa omzet hari ini?",
-  "Tampilkan expense terbesar bulan ini",
-  "Ada berapa item low stock?",
-  "Ringkasan cashflow minggu ini",
-];
-
 export default function ChatPage() {
-  const [input, setInput] = useState("");
-
   return (
     <div className="flex flex-col h-[calc(100dvh-3.5rem-4rem)] md:h-[calc(100dvh-3.5rem)]">
-      {/* Chat area */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -30,11 +18,15 @@ export default function ChatPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="text-center"
+          className="text-center max-w-sm"
         >
-          <h2 className="text-lg font-semibold mb-1">Chat AI Assistant</h2>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            Tanya apapun tentang bisnis Anda — omzet, expense, stok, dan lainnya.
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning/10 text-warning text-xs font-medium mb-3">
+            <Sparkles className="h-3 w-3" />
+            Segera Hadir
+          </div>
+          <h2 className="text-lg font-semibold mb-1" aria-label="Chat AI Assistant - segera hadir">Chat AI Assistant</h2>
+          <p className="text-sm text-muted-foreground">
+            Fitur AI Assistant sedang dalam pengembangan. Nantinya Anda bisa bertanya tentang omzet, expense, stok, dan insight bisnis lainnya langsung dari sini.
           </p>
         </motion.div>
 
@@ -44,35 +36,15 @@ export default function ChatPage() {
           transition={{ delay: 0.2 }}
           className="flex flex-wrap justify-center gap-2 max-w-sm"
         >
-          {suggestions.map((s) => (
-            <button
+          {["Berapa omzet hari ini?", "Expense terbesar bulan ini", "Item low stock", "Ringkasan cashflow"].map((s) => (
+            <span
               key={s}
-              onClick={() => setInput(s)}
-              className="px-3 py-1.5 text-xs rounded-full border border-border bg-card hover:bg-accent hover:text-accent-foreground transition-colors active:scale-95"
+              className="px-3 py-1.5 text-xs rounded-full border border-border bg-muted text-muted-foreground"
             >
               {s}
-            </button>
+            </span>
           ))}
         </motion.div>
-      </div>
-
-      {/* Input bar */}
-      <div className="border-t border-border bg-card/80 glass p-3 safe-area-bottom">
-        <div className="flex items-center gap-2 max-w-2xl mx-auto">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Tanya sesuatu..."
-            className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
-          />
-          <Button
-            size="icon"
-            className="rounded-xl shrink-0 h-10 w-10"
-            disabled={!input.trim()}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
     </div>
   );
