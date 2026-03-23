@@ -22,8 +22,9 @@ import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/par
 import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview } from "@/features/report-upload/components/ImportPreview";
+import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, XCircle } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -73,6 +74,7 @@ function extractPeriod(fileName: string): { start: string; end: string } {
 export default function LaporanUploadPage() {
   const [step, setStep] = useState<ImportStep>("idle");
   const [parsed, setParsed] = useState<ParsedData | null>(null);
+  const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([]);
   const [activeTab, setActiveTab] = useState("lpkk");
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
   const [result, setResult] = useState<Record<string, number> | null>(null);
@@ -131,9 +133,16 @@ export default function LaporanUploadPage() {
         fileName:        file.name,
       };
       setParsed(data);
+      const warnings = validateParsedData(data);
+      setValidationWarnings(warnings);
       setStep("preview");
       const total = Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
-      toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet`);
+      const errorCount = warnings.filter((w) => w.severity === "error").length;
+      if (errorCount > 0) {
+        toast.warning(`File dibaca: ${total} record — ${errorCount} error ditemukan`);
+      } else {
+        toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet`);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Gagal membaca file.");
@@ -297,6 +306,7 @@ export default function LaporanUploadPage() {
     setStep("idle");
     setParsed(null);
     setResult(null);
+    setValidationWarnings([]);
     setDuplicateReport(null);
     setProgress({ current: 0, total: 0, label: "" });
   };
@@ -390,15 +400,62 @@ export default function LaporanUploadPage() {
 
           <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} />
 
+          {/* ─── Validation Warnings ─── */}
+          {validationWarnings.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
+              {validationWarnings.map((w, i) => (
+                <div
+                  key={i}
+                  className={`rounded-xl border p-3 text-sm ${
+                    w.severity === "error"
+                      ? "border-red-300 bg-red-50 dark:bg-red-950/20 dark:border-red-800"
+                      : w.severity === "warning"
+                        ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
+                        : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {w.severity === "error" ? (
+                      <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+                    ) : w.severity === "warning" ? (
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                    ) : (
+                      <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium">
+                        <span className="text-xs text-muted-foreground mr-1">[{w.category}]</span>
+                        {w.message}
+                      </p>
+                      {w.details && w.details.length > 0 && (
+                        <ul className="mt-1 text-xs text-muted-foreground space-y-0.5">
+                          {w.details.map((d, j) => (
+                            <li key={j} className="truncate">• {d}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">Batal</button>
             <button
               onClick={checkAndImport}
-              disabled={!branchId || totalParsed === 0}
+              disabled={!branchId || totalParsed === 0 || validationWarnings.some((w) => w.severity === "error")}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
               Import {totalParsed} Record
+              {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
+                <span className="text-xs opacity-75">
+                  ({validationWarnings.filter((w) => w.severity === "warning").length} warning)
+                </span>
+              )}
             </button>
           </div>
         </div>

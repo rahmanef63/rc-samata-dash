@@ -2,6 +2,12 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
+import {
+  normalizeItemName,
+  generateItemCode,
+  categorizeProduct,
+  categorizeIngredient,
+} from "../../shared/helpers";
 
 // ─── Branches ───────────────────────────────────────────────
 export const createBranch = mutation({
@@ -107,6 +113,269 @@ export const deleteExpenseCategory = mutation({
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     await ctx.db.delete(args.id);
+    return null;
+  },
+});
+
+// ─── Master Products ───────────────────────────────────────
+
+const productCategoryValidator = v.union(
+  v.literal("ayam"),
+  v.literal("minuman"),
+  v.literal("snack"),
+  v.literal("paket"),
+  v.literal("sambal"),
+  v.literal("lainnya"),
+);
+
+/**
+ * Bootstrap masterProducts from existing productSales + productHPP data.
+ * Scans all unique product names, deduplicates by normalizedName, and inserts.
+ */
+export const bootstrapMasterProducts = mutation({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+
+    // Collect unique product names from sales + HPP
+    const nameSet = new Set<string>();
+
+    const sales = await ctx.db
+      .query("productSales")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const s of sales) nameSet.add(s.productName.trim());
+
+    const hpp = await ctx.db
+      .query("productHPP")
+      .withIndex("by_branch_product", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const h of hpp) nameSet.add(h.productName.trim());
+
+    // Get existing master products to avoid duplicates
+    const existing = await ctx.db.query("masterProducts").collect();
+    const existingNorms = new Set(existing.map((e) => e.normalizedName));
+
+    // Get next sequence number
+    let seq = existing.length;
+    let inserted = 0;
+
+    for (const name of nameSet) {
+      const normalized = normalizeItemName(name);
+      if (!normalized || existingNorms.has(normalized)) continue;
+
+      seq++;
+      await ctx.db.insert("masterProducts", {
+        code: generateItemCode("PRD", seq),
+        canonicalName: name,
+        normalizedName: normalized,
+        category: categorizeProduct(name),
+        aliases: [],
+        isActive: true,
+      });
+      existingNorms.add(normalized);
+      inserted++;
+    }
+
+    return { inserted, total: seq };
+  },
+});
+
+/**
+ * Bootstrap masterIngredients from vendor, inventory, costAnalysis, HPP ingredients.
+ */
+export const bootstrapMasterIngredients = mutation({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+
+    const nameSet = new Set<string>();
+
+    // Vendor purchases
+    const vendor = await ctx.db
+      .query("vendorPurchases")
+      .withIndex("by_branch_week", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const v of vendor) nameSet.add(v.commodityName.trim());
+
+    // Inventory valuation
+    const inv = await ctx.db
+      .query("inventoryValuation")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const i of inv) nameSet.add(i.itemName.trim());
+
+    // Cost analysis
+    const ca = await ctx.db
+      .query("costAnalysis")
+      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const c of ca) nameSet.add(c.itemName.trim());
+
+    // Leftover items
+    const lo = await ctx.db
+      .query("leftoverItems")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const l of lo) nameSet.add(l.itemName.trim());
+
+    // Credit purchases
+    const cp = await ctx.db
+      .query("creditPurchases")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const c of cp) nameSet.add(c.itemName.trim());
+
+    // HPP ingredients
+    const hpp = await ctx.db
+      .query("productHPP")
+      .withIndex("by_branch_product", (q) => q.eq("branchId", branchId))
+      .collect();
+    for (const h of hpp) {
+      if (h.ingredients) {
+        for (const ing of h.ingredients) nameSet.add(ing.name.trim());
+      }
+    }
+
+    // Get existing to avoid duplicates
+    const existing = await ctx.db.query("masterIngredients").collect();
+    const existingNorms = new Set(existing.map((e) => e.normalizedName));
+
+    let seq = existing.length;
+    let inserted = 0;
+
+    for (const name of nameSet) {
+      const normalized = normalizeItemName(name);
+      if (!normalized || existingNorms.has(normalized)) continue;
+
+      seq++;
+      await ctx.db.insert("masterIngredients", {
+        code: generateItemCode("ING", seq),
+        canonicalName: name,
+        normalizedName: normalized,
+        category: categorizeIngredient(name),
+        unit: "pcs",
+        aliases: [],
+        isActive: true,
+      });
+      existingNorms.add(normalized);
+      inserted++;
+    }
+
+    return { inserted, total: seq };
+  },
+});
+
+export const upsertMasterProduct = mutation({
+  args: {
+    id: v.optional(v.id("masterProducts")),
+    canonicalName: v.string(),
+    category: productCategoryValidator,
+    defaultSellingPrice: v.optional(v.number()),
+  },
+  handler: async (ctx, { id, canonicalName, category, defaultSellingPrice }) => {
+    await requireAuth(ctx);
+    const normalized = normalizeItemName(canonicalName);
+
+    if (id) {
+      await ctx.db.patch(id, { canonicalName, normalizedName: normalized, category, defaultSellingPrice });
+      return id;
+    }
+
+    const existing = await ctx.db.query("masterProducts").collect();
+    const seq = existing.length + 1;
+    return await ctx.db.insert("masterProducts", {
+      code: generateItemCode("PRD", seq),
+      canonicalName,
+      normalizedName: normalized,
+      category,
+      aliases: [],
+      defaultSellingPrice,
+      isActive: true,
+    });
+  },
+});
+
+const ingredientCategoryValidator = v.union(
+  v.literal("protein"),
+  v.literal("sayur"),
+  v.literal("bumbu"),
+  v.literal("minyak"),
+  v.literal("kemasan"),
+  v.literal("minuman_bahan"),
+  v.literal("lainnya"),
+);
+
+export const upsertMasterIngredient = mutation({
+  args: {
+    id: v.optional(v.id("masterIngredients")),
+    canonicalName: v.string(),
+    category: ingredientCategoryValidator,
+    unit: v.string(),
+  },
+  handler: async (ctx, { id, canonicalName, category, unit }) => {
+    await requireAuth(ctx);
+    const normalized = normalizeItemName(canonicalName);
+
+    if (id) {
+      await ctx.db.patch(id, { canonicalName, normalizedName: normalized, category, unit });
+      return id;
+    }
+
+    const existing = await ctx.db.query("masterIngredients").collect();
+    const seq = existing.length + 1;
+    return await ctx.db.insert("masterIngredients", {
+      code: generateItemCode("ING", seq),
+      canonicalName,
+      normalizedName: normalized,
+      category,
+      unit,
+      aliases: [],
+      isActive: true,
+    });
+  },
+});
+
+export const addProductAlias = mutation({
+  args: { id: v.id("masterProducts"), alias: v.string() },
+  handler: async (ctx, { id, alias }) => {
+    await requireAuth(ctx);
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Product not found");
+    const normalized = normalizeItemName(alias);
+    if (item.aliases.includes(normalized)) return id;
+    await ctx.db.patch(id, { aliases: [...item.aliases, normalized] });
+    return id;
+  },
+});
+
+export const addIngredientAlias = mutation({
+  args: { id: v.id("masterIngredients"), alias: v.string() },
+  handler: async (ctx, { id, alias }) => {
+    await requireAuth(ctx);
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Ingredient not found");
+    const normalized = normalizeItemName(alias);
+    if (item.aliases.includes(normalized)) return id;
+    await ctx.db.patch(id, { aliases: [...item.aliases, normalized] });
+    return id;
+  },
+});
+
+export const deleteMasterProduct = mutation({
+  args: { id: v.id("masterProducts") },
+  handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
+    await ctx.db.delete(id);
+    return null;
+  },
+});
+
+export const deleteMasterIngredient = mutation({
+  args: { id: v.id("masterIngredients") },
+  handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
+    await ctx.db.delete(id);
     return null;
   },
 });
