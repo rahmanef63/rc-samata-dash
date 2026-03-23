@@ -17,7 +17,7 @@ export function DashboardSalesChart() {
 
   if (!salesTrend) {
     return (
-      <motion.div variants={itemVariants} className="lg:col-span-3">
+      <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5 space-y-3">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-[220px] w-full rounded-lg" />
@@ -28,7 +28,7 @@ export function DashboardSalesChart() {
 
   if (salesTrend.length === 0) {
     return (
-      <motion.div variants={itemVariants} className="lg:col-span-3">
+      <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
           <h2 className="text-sm font-semibold mb-2">Sales Last 7 Days</h2>
           <p className="text-sm text-muted-foreground py-8 text-center">
@@ -42,7 +42,7 @@ export function DashboardSalesChart() {
   const dateRange = `${salesTrend[0].date} - ${salesTrend[salesTrend.length - 1].date}`;
 
   return (
-    <motion.div variants={itemVariants} className="lg:col-span-3">
+    <motion.div variants={itemVariants}>
       <AreaChartCard
         data={salesTrend}
         title="Sales Last 7 Days"

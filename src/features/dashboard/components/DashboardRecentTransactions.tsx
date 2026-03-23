@@ -34,7 +34,7 @@ export function DashboardRecentTransactions() {
 
   if (!transactions) {
     return (
-      <motion.div variants={itemVariants} className="lg:col-span-2 bg-card rounded-xl shadow-card p-4 md:p-5">
+      <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <Skeleton className="h-4 w-40 mb-4" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -47,7 +47,7 @@ export function DashboardRecentTransactions() {
 
   return (
     <>
-      <motion.div variants={itemVariants} className="lg:col-span-2 bg-card rounded-xl shadow-card p-4 md:p-5">
+      <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold">Recent Transactions</h2>
           <button onClick={() => router.push("/finance")} className="text-xs text-primary font-medium hover:underline">View All</button>

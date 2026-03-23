@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useMemo, useCallback } from "react";
 import { formatRpFull } from "@/shared/lib";
+import { TagSelect, type TagOption } from "@/components/ui/tag-select";
 import type { LPKKItem } from "../parsers/parseLPKK";
 import type { ProductSaleItem } from "../parsers/parsePenjualan";
 import type { VendorPurchaseItem } from "../parsers/parseVendor";
@@ -16,7 +18,7 @@ import type { CostAnalysisItem } from "../parsers/parseCostAnalysis";
 import type { DailyCashFlowItem } from "../parsers/parseLapCF";
 import type { IncentiveItem } from "../parsers/parseInsentif";
 
-type ParsedData = {
+export type ParsedData = {
   lpkk: LPKKItem[];
   penjualan: ProductSaleItem[];
   platformSales: ProductSaleItem[];
@@ -38,6 +40,7 @@ type Props = {
   data: ParsedData;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onDataChange?: (key: keyof ParsedData, index: number, field: string, value: string) => void;
 };
 
 const TABS = [
@@ -58,7 +61,35 @@ const TABS = [
   { key: "insentif",      label: "Insentif",     countKey: "insentif" },
 ] as const;
 
-export function ImportPreview({ data, activeTab, onTabChange }: Props) {
+// ─── Tag options helpers ───────────────────────────────────
+
+function buildOptionsFromValues(values: string[]): TagOption[] {
+  const unique = [...new Set(values.filter(Boolean))].sort();
+  return unique.map((v) => ({ value: v, label: v }));
+}
+
+const LPKK_CATEGORY_OPTIONS: TagOption[] = [
+  { value: "cogs", label: "COGS" },
+  { value: "utility", label: "Utility" },
+  { value: "other", label: "Other" },
+];
+
+const TRANSFER_DIR_OPTIONS: TagOption[] = [
+  { value: "out", label: "OUT" },
+  { value: "in", label: "IN" },
+];
+
+const HPP_CLASS_OPTIONS: TagOption[] = [
+  { value: "standard", label: "Standard" },
+  { value: "kelas2", label: "Kelas 2" },
+  { value: "kelas3a", label: "Kelas 3A" },
+  { value: "kelas3b", label: "Kelas 3B" },
+  { value: "kelas4", label: "Kelas 4" },
+];
+
+// ─── Main component ────────────────────────────────────────
+
+export function ImportPreview({ data, activeTab, onTabChange, onDataChange }: Props) {
   return (
     <div className="space-y-3">
       {/* Tabs — scroll horizontal di mobile */}
@@ -84,21 +115,21 @@ export function ImportPreview({ data, activeTab, onTabChange }: Props) {
       </div>
 
       <div className="rounded-xl border border-border overflow-hidden">
-        {activeTab === "lpkk"         && <LPKKTable items={data.lpkk} />}
+        {activeTab === "lpkk"         && <LPKKTable items={data.lpkk} onChange={onDataChange} />}
         {activeTab === "penjualan"    && <SalesTable items={data.penjualan} title="LAP. PENJUALAN (semua channel)" />}
-        {activeTab === "platform"     && <SalesTable items={data.platformSales} title="Platform (Grab/GoFood/Shopee)" showChannel />}
+        {activeTab === "platform"     && <SalesTable items={data.platformSales} title="Platform (Grab/GoFood/Shopee)" showChannel onChange={onDataChange} />}
         {activeTab === "kasPeriode"   && <KasPeriodeTable items={data.kasPeriode} />}
         {activeTab === "salesControl" && <SalesControlTable items={data.salesControl} />}
         {activeTab === "leftover"     && <LeftOverTable items={data.leftover} />}
-        {activeTab === "vendor"       && <VendorTable items={data.vendor} />}
-        {activeTab === "weeklyFc"     && <FCTable items={data.weeklyFc} />}
+        {activeTab === "vendor"       && <VendorTable items={data.vendor} onChange={onDataChange} />}
+        {activeTab === "weeklyFc"     && <FCTable items={data.weeklyFc} onChange={onDataChange} />}
         {activeTab === "kredit"       && <KreditTable items={data.pembelianKredit} />}
         {activeTab === "ikhtisarFC"   && <IkhtisarFCTable items={data.ikhtisarFC} />}
-        {activeTab === "transfer"     && <TransferTable items={data.transferTOTI} />}
-        {activeTab === "hpp"          && <HPPTable items={data.hppProduk} />}
+        {activeTab === "transfer"     && <TransferTable items={data.transferTOTI} onChange={onDataChange} />}
+        {activeTab === "hpp"          && <HPPTable items={data.hppProduk} onChange={onDataChange} />}
         {activeTab === "costAnalysis" && <CostAnalysisTable items={data.costAnalysis} />}
         {activeTab === "cashFlow"     && <CashFlowTable items={data.cashFlow} />}
-        {activeTab === "insentif"     && <InsentifTable items={data.insentif} />}
+        {activeTab === "insentif"     && <InsentifTable items={data.insentif} onChange={onDataChange} />}
       </div>
     </div>
   );
@@ -110,7 +141,7 @@ function TableWrapper({ headers, children, empty }: { headers: string[]; childre
   return (
     <div className="overflow-x-auto max-h-64 overflow-y-auto">
       <table className="w-full text-xs">
-        <thead className="bg-muted/60 sticky top-0">
+        <thead className="bg-muted/60 sticky top-0 z-10">
           <tr>{headers.map((h) => <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>)}</tr>
         </thead>
         <tbody>
@@ -136,38 +167,116 @@ function MoreRows({ shown, total, cols }: { shown: number; total: number; cols: 
   return <tr><td colSpan={cols} className="px-3 py-2 text-center text-muted-foreground">+ {total - shown} baris lagi</td></tr>;
 }
 
+// ─── Inline TagSelect cell ──────────────────────────────────
+
+function TagCell({
+  value,
+  options,
+  onChange,
+  onCreate,
+}: {
+  value: string;
+  options: TagOption[];
+  onChange: (v: string) => void;
+  onCreate?: (label: string) => void;
+}) {
+  return (
+    <td className="px-1 py-0.5">
+      <TagSelect
+        value={value}
+        options={options}
+        onChange={(v) => v && onChange(v)}
+        onCreate={onCreate}
+        placeholder="Select..."
+        className="min-w-[100px]"
+      />
+    </td>
+  );
+}
+
 // ─── Tables ──────────────────────────────────────────────────
 
-function LPKKTable({ items }: { items: LPKKItem[] }) {
+type ChangeHandler = ((key: keyof ParsedData, index: number, field: string, value: string) => void) | undefined;
+
+function LPKKTable({ items, onChange }: { items: LPKKItem[]; onChange?: ChangeHandler }) {
   const SHOW = 80;
+  const [customLabels, setCustomLabels] = useState<TagOption[]>([]);
+
+  const labelOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.categoryLabel));
+    return [...existing, ...customLabels.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customLabels]);
+
   return (
-    <TableWrapper headers={["Tanggal", "Kategori", "Deskripsi", "Jumlah"]} empty={items.length === 0}>
+    <TableWrapper headers={["Tanggal", "Tipe", "Kategori", "Deskripsi", "Jumlah"]} empty={items.length === 0}>
       {items.slice(0, SHOW).map((item, i) => (
         <Tr key={i}>
           <Td className="text-muted-foreground">{item.expenseDate}</Td>
-          <Td>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-              item.categoryType === "cogs" ? "bg-orange-100 text-orange-700" :
-              item.categoryType === "utility" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
-            }`}>{item.categoryLabel}</span>
-          </Td>
+          {onChange ? (
+            <TagCell
+              value={item.categoryType}
+              options={LPKK_CATEGORY_OPTIONS}
+              onChange={(v) => onChange("lpkk", i, "categoryType", v)}
+            />
+          ) : (
+            <Td>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                item.categoryType === "cogs" ? "bg-orange-100 text-orange-700" :
+                item.categoryType === "utility" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+              }`}>{item.categoryType}</span>
+            </Td>
+          )}
+          {onChange ? (
+            <TagCell
+              value={item.categoryLabel}
+              options={labelOptions}
+              onChange={(v) => onChange("lpkk", i, "categoryLabel", v)}
+              onCreate={(label) => {
+                setCustomLabels((prev) => [...prev, { value: label, label }]);
+                onChange("lpkk", i, "categoryLabel", label);
+              }}
+            />
+          ) : (
+            <Td>{item.categoryLabel}</Td>
+          )}
           <Td className="max-w-[160px] truncate">{item.description}</Td>
           <Td className="text-right font-mono text-destructive">{formatRpFull(item.amount)}</Td>
         </Tr>
       ))}
-      <MoreRows shown={SHOW} total={items.length} cols={4} />
+      <MoreRows shown={SHOW} total={items.length} cols={5} />
     </TableWrapper>
   );
 }
 
-function SalesTable({ items, title, showChannel }: { items: ProductSaleItem[]; title?: string; showChannel?: boolean }) {
+function SalesTable({ items, title, showChannel, onChange }: { items: ProductSaleItem[]; title?: string; showChannel?: boolean; onChange?: ChangeHandler }) {
   const SHOW = 80;
+  const [customChannels, setCustomChannels] = useState<TagOption[]>([]);
+
+  const channelOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.channel ?? "").filter(Boolean));
+    return [...existing, ...customChannels.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customChannels]);
+
   return (
     <TableWrapper headers={showChannel ? ["Tanggal", "Channel", "Produk", "Qty", "Total"] : ["Tanggal", "Produk", "Qty", "Harga", "Total"]} empty={items.length === 0}>
       {items.slice(0, SHOW).map((item, i) => (
         <Tr key={i}>
           <Td className="text-muted-foreground">{item.businessDate}</Td>
-          {showChannel && <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.channel}</span></Td>}
+          {showChannel && (
+            onChange ? (
+              <TagCell
+                value={item.channel ?? ""}
+                options={channelOptions}
+                onChange={(v) => onChange("platformSales", i, "channel", v)}
+                onCreate={(label) => {
+                  setCustomChannels((prev) => [...prev, { value: label, label }]);
+                  onChange("platformSales", i, "channel", label);
+                }}
+              />
+            ) : (
+              <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.channel}</span></Td>
+            )
+          )}
           <Td className="font-medium">{item.productName}</Td>
           <Td className="text-right">{item.qty}</Td>
           {!showChannel && <Td className="text-right font-mono">{formatRpFull(item.unitPrice)}</Td>}
@@ -230,12 +339,31 @@ function LeftOverTable({ items }: { items: LeftOverItem[] }) {
   );
 }
 
-function VendorTable({ items }: { items: VendorPurchaseItem[] }) {
+function VendorTable({ items, onChange }: { items: VendorPurchaseItem[]; onChange?: ChangeHandler }) {
+  const [customSections, setCustomSections] = useState<TagOption[]>([]);
+
+  const sectionOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.section ?? "").filter(Boolean));
+    return [...existing, ...customSections.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customSections]);
+
   return (
-    <TableWrapper headers={["Section", "Komoditi", "Open Qty", "Beli Qty", "Pemakaian Qty", "Closing Qty", "Beli (Rp)", "Pakai (Rp)"]} empty={items.length === 0}>
+    <TableWrapper headers={["Section", "Komoditi", "Open Qty", "Beli Qty", "Pakai Qty", "Close Qty", "Beli (Rp)", "Pakai (Rp)"]} empty={items.length === 0}>
       {items.map((item, i) => (
         <Tr key={i}>
-          <Td className="text-muted-foreground text-xs">{item.section ?? "-"}</Td>
+          {onChange ? (
+            <TagCell
+              value={item.section ?? ""}
+              options={sectionOptions}
+              onChange={(v) => onChange("vendor", i, "section", v)}
+              onCreate={(label) => {
+                setCustomSections((prev) => [...prev, { value: label, label }]);
+                onChange("vendor", i, "section", label);
+              }}
+            />
+          ) : (
+            <Td className="text-muted-foreground text-xs">{item.section ?? "-"}</Td>
+          )}
           <Td className="font-medium">{item.commodityName}</Td>
           <Td className="text-right">{item.openingQty.toFixed(1)}</Td>
           <Td className="text-right">{item.purchaseQty.toFixed(1)}</Td>
@@ -249,13 +377,32 @@ function VendorTable({ items }: { items: VendorPurchaseItem[] }) {
   );
 }
 
-function FCTable({ items }: { items: InventoryValuationItem[] }) {
+function FCTable({ items, onChange }: { items: InventoryValuationItem[]; onChange?: ChangeHandler }) {
   const SHOW = 80;
+  const [customCats, setCustomCats] = useState<TagOption[]>([]);
+
+  const catOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.category));
+    return [...existing, ...customCats.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customCats]);
+
   return (
     <TableWrapper headers={["Kategori", "Item", "Qty", "Satuan", "Harga", "Total"]} empty={items.length === 0}>
       {items.slice(0, SHOW).map((item, i) => (
         <Tr key={i}>
-          <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
+          {onChange ? (
+            <TagCell
+              value={item.category}
+              options={catOptions}
+              onChange={(v) => onChange("weeklyFc", i, "category", v)}
+              onCreate={(label) => {
+                setCustomCats((prev) => [...prev, { value: label, label }]);
+                onChange("weeklyFc", i, "category", label);
+              }}
+            />
+          ) : (
+            <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
+          )}
           <Td className="font-medium">{item.itemName}</Td>
           <Td className="text-right">{item.qty}</Td>
           <Td>{item.unit}</Td>
@@ -305,17 +452,44 @@ function IkhtisarFCTable({ items }: { items: FoodCostSummaryItem[] }) {
   );
 }
 
-function TransferTable({ items }: { items: TransferItem[] }) {
+function TransferTable({ items, onChange }: { items: TransferItem[]; onChange?: ChangeHandler }) {
+  const [customCats, setCustomCats] = useState<TagOption[]>([]);
+
+  const catOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.category));
+    return [...existing, ...customCats.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customCats]);
+
   return (
     <TableWrapper headers={["Arah", "Kategori", "Item", "Qty", "Unit", "Total"]} empty={items.length === 0}>
       {items.map((item, i) => (
         <Tr key={i}>
-          <Td>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-              item.direction === "out" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-            }`}>{item.direction === "out" ? "OUT" : "IN"}</span>
-          </Td>
-          <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
+          {onChange ? (
+            <TagCell
+              value={item.direction}
+              options={TRANSFER_DIR_OPTIONS}
+              onChange={(v) => onChange("transferTOTI", i, "direction", v)}
+            />
+          ) : (
+            <Td>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                item.direction === "out" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+              }`}>{item.direction === "out" ? "OUT" : "IN"}</span>
+            </Td>
+          )}
+          {onChange ? (
+            <TagCell
+              value={item.category}
+              options={catOptions}
+              onChange={(v) => onChange("transferTOTI", i, "category", v)}
+              onCreate={(label) => {
+                setCustomCats((prev) => [...prev, { value: label, label }]);
+                onChange("transferTOTI", i, "category", label);
+              }}
+            />
+          ) : (
+            <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
+          )}
           <Td className="font-medium">{item.itemName}</Td>
           <Td className="text-right">{item.qty}</Td>
           <Td>{item.unit ?? "-"}</Td>
@@ -326,7 +500,7 @@ function TransferTable({ items }: { items: TransferItem[] }) {
   );
 }
 
-function HPPTable({ items }: { items: ProductHPPItem[] }) {
+function HPPTable({ items, onChange }: { items: ProductHPPItem[]; onChange?: ChangeHandler }) {
   const SHOW = 80;
   return (
     <TableWrapper headers={["Produk", "Kelas", "HPP", "Harga Jual", "Margin", "Bahan"]} empty={items.length === 0}>
@@ -338,7 +512,15 @@ function HPPTable({ items }: { items: ProductHPPItem[] }) {
         return (
           <Tr key={i}>
             <Td className="font-medium">{item.productName}</Td>
-            <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.pricingClass}</span></Td>
+            {onChange ? (
+              <TagCell
+                value={item.pricingClass}
+                options={HPP_CLASS_OPTIONS}
+                onChange={(v) => onChange("hppProduk", i, "pricingClass", v)}
+              />
+            ) : (
+              <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.pricingClass}</span></Td>
+            )}
             <Td className="text-right font-mono text-destructive">{formatRpFull(item.totalHPP)}</Td>
             <Td className="text-right font-mono">{item.sellingPrice ? formatRpFull(item.sellingPrice) : "-"}</Td>
             <Td className={`text-right font-mono font-semibold ${marginPct !== undefined ? (marginPct >= 35 ? "text-green-600" : marginPct >= 20 ? "text-yellow-600" : "text-red-600") : ""}`}>
@@ -392,13 +574,32 @@ function CashFlowTable({ items }: { items: DailyCashFlowItem[] }) {
   );
 }
 
-function InsentifTable({ items }: { items: IncentiveItem[] }) {
+function InsentifTable({ items, onChange }: { items: IncentiveItem[]; onChange?: ChangeHandler }) {
+  const [customTypes, setCustomTypes] = useState<TagOption[]>([]);
+
+  const typeOptions = useMemo(() => {
+    const existing = buildOptionsFromValues(items.map((i) => i.incentiveType));
+    return [...existing, ...customTypes.filter((c) => !existing.some((e) => e.value === c.value))];
+  }, [items, customTypes]);
+
   return (
     <TableWrapper headers={["Nama", "Jenis", "Jumlah", "Catatan"]} empty={items.length === 0}>
       {items.map((item, i) => (
         <Tr key={i}>
           <Td className="font-medium">{item.employeeName}</Td>
-          <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">{item.incentiveType}</span></Td>
+          {onChange ? (
+            <TagCell
+              value={item.incentiveType}
+              options={typeOptions}
+              onChange={(v) => onChange("insentif", i, "incentiveType", v)}
+              onCreate={(label) => {
+                setCustomTypes((prev) => [...prev, { value: label, label }]);
+                onChange("insentif", i, "incentiveType", label);
+              }}
+            />
+          ) : (
+            <Td><span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">{item.incentiveType}</span></Td>
+          )}
           <Td className="text-right font-mono text-primary">{formatRpFull(item.amount)}</Td>
           <Td className="text-muted-foreground max-w-[120px] truncate">{item.notes ?? "-"}</Td>
         </Tr>

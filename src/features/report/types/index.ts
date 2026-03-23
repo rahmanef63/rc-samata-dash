@@ -1,17 +1,2 @@
-export interface MonthlyRevenueData {
-  month: string;
-  value: number;
-}
-
-export interface BranchPerformanceData {
-  name: string;
-  transactions: string;
-  amount: string;
-  percentage: number;
-}
-
-export interface DownloadableReport {
-  name: string;
-  date: string;
-  size: string;
-}
+// Report feature types — shared types for report components
+// Mock types removed; real data comes from Convex queries

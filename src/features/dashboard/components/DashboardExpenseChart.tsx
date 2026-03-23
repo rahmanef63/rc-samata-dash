@@ -17,7 +17,7 @@ export function DashboardExpenseChart() {
 
   if (!expenseData) {
     return (
-      <motion.div variants={itemVariants} className="lg:col-span-2">
+      <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5 space-y-3">
           <Skeleton className="h-4 w-36" />
           <Skeleton className="h-[200px] w-full rounded-lg" />
@@ -28,7 +28,7 @@ export function DashboardExpenseChart() {
 
   if (expenseData.length === 0) {
     return (
-      <motion.div variants={itemVariants} className="lg:col-span-2">
+      <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
           <h2 className="text-sm font-semibold mb-2">Expense by Category</h2>
           <p className="text-sm text-muted-foreground py-8 text-center">

@@ -17,15 +17,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="max-h-svh overflow-hidden">
         <TopHeader />
-        <main
-          className={`flex-1 overflow-auto scroll-smooth overscroll-y-contain ${
+        <div
+          className={`flex-1 overflow-y-auto scroll-smooth overscroll-y-contain ${
             isMobile ? "pb-24" : ""
           }`}
         >
           {children}
-        </main>
+        </div>
         {isMobile && <BottomNav />}
       </SidebarInset>
     </SidebarProvider>

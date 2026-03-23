@@ -21,7 +21,7 @@ import { parseCostAnalysis, type CostAnalysisItem } from "@/features/report-uplo
 import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/parsers/parseLapCF";
 import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
-import { ImportPreview } from "@/features/report-upload/components/ImportPreview";
+import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
 import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, XCircle } from "lucide-react";
@@ -302,6 +302,16 @@ export default function LaporanUploadPage() {
     }
   };
 
+  // ─── Handle tag edits in ImportPreview ───────────────────────
+  const handleDataChange = useCallback((key: keyof ImportParsedData, index: number, field: string, value: string) => {
+    setParsed((prev) => {
+      if (!prev) return prev;
+      const arr = [...(prev[key] as Record<string, unknown>[])];
+      arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [key]: arr };
+    });
+  }, []);
+
   const reset = () => {
     setStep("idle");
     setParsed(null);
@@ -398,7 +408,7 @@ export default function LaporanUploadPage() {
             ))}
           </div>
 
-          <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} />
+          <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} onDataChange={handleDataChange} />
 
           {/* ─── Validation Warnings ─── */}
           {validationWarnings.length > 0 && (
