@@ -1,25 +1,11 @@
 /**
  * Parser sheet "LAP. PENJUALAN" (Laporan Penjualan Harian per Produk)
  *
- * Struktur sheet:
- * - Row 0–5: header/judul
- * - Row 6–7: nama kolom (produk di baris, tanggal di kolom)
- * - Row 8+: data produk
- *
- * Kolom penting (index 0-based):
- *   [0]  NO
- *   [1]  PRODUCT (nama produk)
- *   [2]  (kadang duplikat PRODUCT)
- *   [3..9]  Qty harian (KAMIS–RABU, 7 kolom)
- *   [10] TOTAL UNIT
- *   [11] TOTAL Rp
- *   [12] %
- *   [13] FC ITEM (food cost per item)
- *   [14] CON FC
- *   [15] HARGA (UNIT)
- *
- * Setiap produk punya 7 kolom harian → kita generate 7 record per produk.
- * Tanggal hari diambil dari header baris 7 (kolom 3–9).
+ * Struktur bervariasi — auto-detect:
+ *   Date row: scan rows 3–8 for Date objects starting at col 3
+ *   Data start: 2 rows after date row
+ *   Daily columns: col 3 to last valid date column
+ *   FC ITEM: col 16, HARGA: col 18 (but also auto-detect from header)
  */
 
 import { getSheetRows, toDateString, toNumber } from "../lib/xlsxHelpers";
@@ -35,60 +21,102 @@ export type ProductSaleItem = {
   channel?: string;
 };
 
-const HEADER_ROW = 6;   // baris tanggal ada di sini
-const DATA_START = 8;   // baris pertama data produk
-const DAILY_COL_START = 3;
-const DAILY_COL_END = 9; // inklusif (7 hari: kamis s/d rabu)
-const COL_UNIT_PRICE = 15;
-const COL_FC_ITEM = 13;
+/** Auto-detect: find the row containing Date objects at cols 3+ */
+function findDateRow(rows: (string | number | Date | null | boolean)[][]): {
+  rowIdx: number;
+  dates: (string | null)[];
+  colStart: number;
+  colEnd: number;
+} | null {
+  for (let i = 3; i < Math.min(rows.length, 10); i++) {
+    const row = rows[i];
+    const dates: (string | null)[] = [];
+    let firstDateCol = -1;
+    let lastDateCol = -1;
+
+    for (let c = 3; c < Math.min(row.length, 20); c++) {
+      const d = toDateString(row[c]);
+      if (d && !d.startsWith("1899") && !d.startsWith("1900")) {
+        if (firstDateCol < 0) firstDateCol = c;
+        lastDateCol = c;
+        dates.push(d);
+      } else if (firstDateCol >= 0 && dates.length > 0) {
+        // Check if the next non-date cell is "TOTAL" — end of dates
+        const cellStr = String(row[c] ?? "").toUpperCase().trim();
+        if (cellStr === "TOTAL" || cellStr.includes("TOTAL")) break;
+        // Skip 1899 dates (empty columns in the template)
+        const d2 = toDateString(row[c]);
+        if (d2 && (d2.startsWith("1899") || d2.startsWith("1900"))) continue;
+        break;
+      }
+    }
+
+    if (dates.length >= 3) {
+      return { rowIdx: i, dates, colStart: firstDateCol, colEnd: lastDateCol };
+    }
+  }
+  return null;
+}
+
+/** Auto-detect FC ITEM and HARGA columns from header rows */
+function findValueCols(rows: (string | number | Date | null | boolean)[][], dateRowIdx: number): {
+  colUnitPrice: number;
+  colFcItem: number;
+} {
+  // Default positions
+  let colUnitPrice = 18;
+  let colFcItem = 16;
+
+  // Scan header area (date row and row above/below)
+  for (let i = Math.max(0, dateRowIdx - 1); i <= dateRowIdx + 1; i++) {
+    const row = rows[i] ?? [];
+    for (let c = 10; c < row.length; c++) {
+      const cell = String(row[c] ?? "").toUpperCase().trim();
+      if (cell.includes("HARGA") || cell === "( UNIT )" || cell === "(UNIT)") {
+        colUnitPrice = c;
+      }
+      if (cell.includes("FC ITEM") || cell === "FC ITEM") {
+        colFcItem = c;
+      }
+    }
+  }
+
+  return { colUnitPrice, colFcItem };
+}
 
 export function parsePenjualan(wb: XLSX.WorkBook): ProductSaleItem[] {
-  const sheetName = wb.SheetNames.find((n) =>
-    n.toUpperCase().includes("PENJUALAN") && !n.toUpperCase().includes("GRAB") && !n.toUpperCase().includes("GO") && !n.toUpperCase().includes("SHOPEE")
-  );
+  const sheetName = wb.SheetNames.find((n) => {
+    const up = n.toUpperCase().trim();
+    return up.includes("PENJUALAN") &&
+      !up.includes("GRAB") && !up.includes("GO") &&
+      !up.includes("SHOPEE") && !up.includes("TAMBAHAN") &&
+      !up.includes("PPN");
+  });
   if (!sheetName) return [];
 
   const rows = getSheetRows(wb, sheetName);
+  const dateInfo = findDateRow(rows);
+  if (!dateInfo) return [];
+
+  const { rowIdx: dateRowIdx, dates, colStart, colEnd } = dateInfo;
+  const { colUnitPrice, colFcItem } = findValueCols(rows, dateRowIdx);
+  const dataStart = dateRowIdx + 2; // skip day-name row, then first data row
   const result: ProductSaleItem[] = [];
 
-  // Ekstrak tanggal dari baris header (row 7, index 7 dalam 0-based)
-  const headerRow = rows[HEADER_ROW] ?? [];
-  const dates: (string | null)[] = [];
-  for (let c = DAILY_COL_START; c <= DAILY_COL_END; c++) {
-    dates.push(toDateString(headerRow[c]));
-  }
-
-  // Jika tidak ada tanggal valid sama sekali, skip
-  const hasAnyDate = dates.some((d) => d !== null);
-  if (!hasAnyDate) return [];
-
-  for (let i = DATA_START; i < rows.length; i++) {
+  for (let i = dataStart; i < rows.length; i++) {
     const row = rows[i];
-
-    // Deteksi stop: baris total / subtotal / kosong
-    const firstCell = String(row[0] ?? "").toUpperCase();
-    const secondCell = String(row[1] ?? row[2] ?? "").toUpperCase();
-    if (
-      firstCell.includes("TOTAL") ||
-      secondCell.includes("TOTAL") ||
-      secondCell.includes("JUMLAH") ||
-      secondCell === ""
-    ) {
-      // Bukan stop total, cek apakah ini baris produk
-      // Jika unitPrice = 0 dan nama kosong, skip saja
-      if (!row[1] && !row[2]) continue;
-    }
-
-    // Nama produk di kolom 1 atau 2
     const productName = String(row[1] ?? row[2] ?? "").trim();
-    if (!productName || productName.toUpperCase().includes("TOTAL") || productName.toUpperCase().includes("JUMLAH")) continue;
+    if (!productName) continue;
 
-    const unitPrice = toNumber(row[COL_UNIT_PRICE]);
-    const foodCostItem = toNumber(row[COL_FC_ITEM]);
+    const upper = productName.toUpperCase();
+    if (upper.includes("TOTAL") || upper.includes("JUMLAH") || upper.includes("GRAND")) continue;
 
-    // Generate record per hari
-    for (let d = 0; d < 7; d++) {
-      const qty = toNumber(row[DAILY_COL_START + d]);
+    const unitPrice = toNumber(row[colUnitPrice]);
+    const foodCostItem = toNumber(row[colFcItem]);
+
+    // Generate record per day
+    for (let d = 0; d < dates.length; d++) {
+      const qty = toNumber(row[colStart + d]);
       const date = dates[d];
       if (!date || qty <= 0) continue;
 

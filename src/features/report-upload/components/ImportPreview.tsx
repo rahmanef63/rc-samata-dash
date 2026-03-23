@@ -232,15 +232,17 @@ function LeftOverTable({ items }: { items: LeftOverItem[] }) {
 
 function VendorTable({ items }: { items: VendorPurchaseItem[] }) {
   return (
-    <TableWrapper headers={["Komoditi", "Opening Qty", "Beli Qty", "Pemakaian", "Closing Qty", "Closing Value"]} empty={items.length === 0}>
+    <TableWrapper headers={["Section", "Komoditi", "Open Qty", "Beli Qty", "Pemakaian Qty", "Closing Qty", "Beli (Rp)", "Pakai (Rp)"]} empty={items.length === 0}>
       {items.map((item, i) => (
         <Tr key={i}>
+          <Td className="text-muted-foreground text-xs">{item.section ?? "-"}</Td>
           <Td className="font-medium">{item.commodityName}</Td>
           <Td className="text-right">{item.openingQty.toFixed(1)}</Td>
           <Td className="text-right">{item.purchaseQty.toFixed(1)}</Td>
           <Td className="text-right text-orange-600">{item.usageQty.toFixed(1)}</Td>
           <Td className="text-right">{item.closingQty.toFixed(1)}</Td>
-          <Td className="text-right font-mono">{formatRpFull(item.closingValue)}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.purchaseValue)}</Td>
+          <Td className="text-right font-mono">{formatRpFull(item.usageValue ?? 0)}</Td>
         </Tr>
       ))}
     </TableWrapper>
