@@ -4,6 +4,15 @@ import { aiProviderValidator } from "./_schema";
 
 const now = () => new Date().toISOString();
 
+/** Default base URLs — fallback if client sends empty */
+const DEFAULT_BASE_URLS: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api/v1",
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  openclaw: "https://api.openclaw.ai/v1",
+  custom: "http://localhost:11434/v1",
+};
+
 /** Create or update an AI provider config */
 export const upsertProvider = mutation({
   args: {
@@ -30,12 +39,17 @@ export const upsertProvider = mutation({
       }
     }
 
+    // Ensure baseUrl is never empty — fallback to default for provider
+    const baseUrl = args.baseUrl?.trim() && args.baseUrl.startsWith("http")
+      ? args.baseUrl
+      : DEFAULT_BASE_URLS[args.provider] || DEFAULT_BASE_URLS.openrouter;
+
     if (args.id) {
       // Update — only update apiKey if it's not a masked value
       const update: Record<string, unknown> = {
         provider: args.provider,
         displayName: args.displayName,
-        baseUrl: args.baseUrl,
+        baseUrl,
         defaultModel: args.defaultModel,
         isActive: args.isActive,
         customHeaders: args.customHeaders,
@@ -50,7 +64,7 @@ export const upsertProvider = mutation({
       return await ctx.db.insert("aiProviders", {
         provider: args.provider,
         displayName: args.displayName,
-        baseUrl: args.baseUrl,
+        baseUrl,
         apiKey: args.apiKey,
         defaultModel: args.defaultModel,
         isActive: args.isActive,

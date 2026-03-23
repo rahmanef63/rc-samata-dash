@@ -10,6 +10,21 @@ import { v } from "convex/values";
 
 type Message = { role: "user" | "assistant" | "system"; content: string };
 
+/** Default base URLs per provider (fallback if stored value is empty) */
+const DEFAULT_BASE_URLS: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api/v1",
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  openclaw: "https://api.openclaw.ai/v1",
+  custom: "http://localhost:11434/v1",
+};
+
+function resolveBaseUrl(provider: string, storedUrl: string): string {
+  const url = storedUrl?.trim();
+  if (url && url.startsWith("http")) return url;
+  return DEFAULT_BASE_URLS[provider] || DEFAULT_BASE_URLS.openrouter;
+}
+
 /** Build request for OpenAI-compatible APIs (OpenAI, OpenRouter, OpenClaw, Custom) */
 function buildOpenAIRequest(
   baseUrl: string,
@@ -142,13 +157,14 @@ export const chatCompletion = action({
 
     const model = args.model || provider.defaultModel;
     const messages = args.messages as Message[];
+    const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
 
     let req;
     if (provider.provider === "anthropic") {
-      req = buildAnthropicRequest(provider.baseUrl, provider.apiKey, model, messages);
+      req = buildAnthropicRequest(baseUrl, provider.apiKey, model, messages);
     } else {
       req = buildOpenAIRequest(
-        provider.baseUrl,
+        baseUrl,
         provider.apiKey,
         model,
         messages,
@@ -196,13 +212,14 @@ export const testConnection = action({
     if (!provider) throw new Error("Provider tidak ditemukan.");
 
     const messages: Message[] = [{ role: "user", content: "Hi, respond with just 'OK'" }];
+    const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
 
     let req;
     if (provider.provider === "anthropic") {
-      req = buildAnthropicRequest(provider.baseUrl, provider.apiKey, provider.defaultModel, messages);
+      req = buildAnthropicRequest(baseUrl, provider.apiKey, provider.defaultModel, messages);
     } else {
       req = buildOpenAIRequest(
-        provider.baseUrl,
+        baseUrl,
         provider.apiKey,
         provider.defaultModel,
         messages,

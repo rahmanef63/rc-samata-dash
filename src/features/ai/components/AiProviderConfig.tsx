@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { motion } from "framer-motion";
 import {
   Bot, Plus, Trash2, Check, Zap, Eye, EyeOff,
-  ExternalLink, Loader2, ChevronDown, Radio,
+  ExternalLink, Loader2, ChevronDown, Radio, Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,15 +32,18 @@ type FormData = {
   customHeaders: string;
 };
 
-const emptyForm: FormData = {
-  provider: "openrouter",
-  displayName: "",
-  baseUrl: "",
-  apiKey: "",
-  defaultModel: "",
-  isActive: false,
-  customHeaders: "",
-};
+function defaultFormForProvider(type: AiProviderType, isActive: boolean): FormData {
+  const def = getProviderDef(type);
+  return {
+    provider: type,
+    displayName: def?.displayName || type,
+    baseUrl: def?.defaultBaseUrl || "",
+    apiKey: "",
+    defaultModel: def?.models[0]?.id || "",
+    isActive,
+    customHeaders: "",
+  };
+}
 
 export function AiProviderConfig() {
   const providers = useQuery(api.features.ai.queries.listProviders);
@@ -51,8 +54,9 @@ export function AiProviderConfig() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormData>(emptyForm);
+  const [form, setForm] = useState<FormData>(defaultFormForProvider("openrouter", true));
   const [showKey, setShowKey] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [customModel, setCustomModel] = useState("");
@@ -60,28 +64,18 @@ export function AiProviderConfig() {
   const providerDef = getProviderDef(form.provider);
   const models = getModelsForProvider(form.provider);
 
-  // When provider type changes, update defaults
-  useEffect(() => {
-    if (!editId && providerDef) {
-      setForm((prev) => ({
-        ...prev,
-        displayName: prev.displayName || providerDef.displayName,
-        baseUrl: prev.baseUrl || providerDef.defaultBaseUrl,
-        defaultModel: prev.defaultModel || (providerDef.models[0]?.id ?? ""),
-      }));
-    }
-  }, [form.provider, providerDef, editId]);
-
   const openCreate = () => {
     setEditId(null);
-    setForm({ ...emptyForm, isActive: !providers?.length });
+    setForm(defaultFormForProvider("openrouter", !providers?.length));
     setShowKey(false);
+    setShowAdvanced(false);
     setCustomModel("");
     setDialogOpen(true);
   };
 
-  const openEdit = (p: NonNullable<typeof providers>[number]) => {
+  const openEdit = (p: { _id: string; provider: string; displayName: string; baseUrl: string; apiKey: string; defaultModel: string; isActive: boolean; customHeaders?: string }) => {
     setEditId(p._id);
+    const def = getProviderDef(p.provider);
     setForm({
       provider: p.provider as AiProviderType,
       displayName: p.displayName,
@@ -92,28 +86,17 @@ export function AiProviderConfig() {
       customHeaders: p.customHeaders || "",
     });
     setShowKey(false);
+    // Show advanced if baseUrl differs from default
+    setShowAdvanced(p.baseUrl !== def?.defaultBaseUrl || !!p.customHeaders);
     const knownModels = getModelsForProvider(p.provider);
-    if (!knownModels.find((m) => m.id === p.defaultModel)) {
-      setCustomModel(p.defaultModel);
-    } else {
-      setCustomModel("");
-    }
+    setCustomModel(knownModels.find((m) => m.id === p.defaultModel) ? "" : p.defaultModel);
     setDialogOpen(true);
   };
 
   const handleProviderChange = (type: AiProviderType) => {
-    const def = getProviderDef(type);
-    setForm({
-      ...emptyForm,
-      provider: type,
-      displayName: def?.displayName || type,
-      baseUrl: def?.defaultBaseUrl || "",
-      defaultModel: def?.models[0]?.id || "",
-      isActive: form.isActive,
-      apiKey: "",
-      customHeaders: "",
-    });
+    setForm(defaultFormForProvider(type, form.isActive));
     setCustomModel("");
+    setShowAdvanced(false);
   };
 
   const handleSave = async () => {
@@ -123,20 +106,24 @@ export function AiProviderConfig() {
         return;
       }
     }
-    if (!form.defaultModel && !customModel) {
+    const finalModel = customModel || form.defaultModel;
+    if (!finalModel || finalModel === "__custom__") {
       toast.error("Pilih model.");
       return;
     }
+
+    // Auto-fill baseUrl from default if empty
+    const baseUrl = form.baseUrl?.trim() || providerDef?.defaultBaseUrl || "";
 
     setSaving(true);
     try {
       await upsertProvider({
         id: editId ? (editId as never) : undefined,
         provider: form.provider,
-        displayName: form.displayName,
-        baseUrl: form.baseUrl,
+        displayName: form.displayName || providerDef?.displayName || form.provider,
+        baseUrl,
         apiKey: form.apiKey,
-        defaultModel: customModel || form.defaultModel,
+        defaultModel: finalModel,
         isActive: form.isActive,
         customHeaders: form.customHeaders || undefined,
       });
@@ -231,7 +218,7 @@ export function AiProviderConfig() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {def?.displayName || p.provider} · Model: {p.defaultModel}
+                      {def?.displayName || p.provider} · {p.defaultModel}
                     </p>
                     <p className="text-[10px] font-mono text-muted-foreground/60 mt-1">
                       Key: {p.apiKey}
@@ -239,46 +226,17 @@ export function AiProviderConfig() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {!p.isActive && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-lg"
-                        onClick={() => handleSetActive(p._id)}
-                        title="Set aktif"
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleSetActive(p._id)} title="Set aktif">
                         <Radio className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg"
-                      onClick={() => handleTest(p._id)}
-                      disabled={testing === p._id}
-                      title="Test koneksi"
-                    >
-                      {testing === p._id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="h-3.5 w-3.5" />
-                      )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleTest(p._id)} disabled={testing === p._id} title="Test koneksi">
+                      {testing === p._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg"
-                      onClick={() => openEdit(p)}
-                      title="Edit"
-                    >
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(p)} title="Edit">
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(p._id)}
-                      title="Hapus"
-                    >
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p._id)} title="Hapus">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -295,7 +253,7 @@ export function AiProviderConfig() {
           <DialogHeader>
             <DialogTitle>{editId ? "Edit AI Provider" : "Tambah AI Provider"}</DialogTitle>
             <DialogDescription>
-              Konfigurasi API endpoint dan model AI. API key disimpan aman di server.
+              Pilih provider, masukkan API key, dan pilih model. Selesai.
             </DialogDescription>
           </DialogHeader>
 
@@ -320,27 +278,7 @@ export function AiProviderConfig() {
               )}
             </div>
 
-            {/* Display Name */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Nama Tampilan</Label>
-              <Input
-                value={form.displayName}
-                onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                placeholder="My OpenRouter"
-              />
-            </div>
-
-            {/* Base URL */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Base URL</Label>
-              <Input
-                value={form.baseUrl}
-                onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-                placeholder={providerDef?.defaultBaseUrl}
-              />
-            </div>
-
-            {/* API Key */}
+            {/* API Key — the main input */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">API Key</Label>
@@ -375,36 +313,47 @@ export function AiProviderConfig() {
 
             {/* Model Selection */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Default Model</Label>
+              <Label className="text-xs font-medium">Model</Label>
               {models.length > 1 ? (
-                <Select
-                  value={form.defaultModel}
-                  onValueChange={(v) => {
-                    setForm((f) => ({ ...f, defaultModel: v }));
-                    setCustomModel("");
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <div>
-                          <span className="font-medium">{m.name}</span>
-                          {m.contextWindow && (
-                            <span className="text-muted-foreground ml-2 text-[10px]">
-                              {Math.round(m.contextWindow / 1000)}K ctx
-                            </span>
-                          )}
-                        </div>
+                <>
+                  <Select
+                    value={form.defaultModel}
+                    onValueChange={(v) => {
+                      setForm((f) => ({ ...f, defaultModel: v }));
+                      if (v !== "__custom__") setCustomModel("");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{m.name}</span>
+                            {m.contextWindow && (
+                              <span className="text-muted-foreground text-[10px]">
+                                {Math.round(m.contextWindow / 1000)}K
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">
+                        <span className="text-primary">Custom model ID...</span>
                       </SelectItem>
-                    ))}
-                    <SelectItem value="__custom__">
-                      <span className="text-primary">Custom model ID...</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                  </Select>
+                  {form.defaultModel === "__custom__" && (
+                    <Input
+                      value={customModel}
+                      onChange={(e) => setCustomModel(e.target.value)}
+                      placeholder="e.g. anthropic/claude-3.5-sonnet"
+                      className="mt-2"
+                      autoFocus
+                    />
+                  )}
+                </>
               ) : (
                 <Input
                   value={customModel || form.defaultModel}
@@ -415,34 +364,7 @@ export function AiProviderConfig() {
                   placeholder="Model ID (e.g. gpt-4o)"
                 />
               )}
-
-              {/* Custom model input when __custom__ selected */}
-              {form.defaultModel === "__custom__" && (
-                <Input
-                  value={customModel}
-                  onChange={(e) => setCustomModel(e.target.value)}
-                  placeholder="Masukkan model ID (e.g. anthropic/claude-3.5-sonnet)"
-                  className="mt-2"
-                  autoFocus
-                />
-              )}
             </div>
-
-            {/* Custom Headers (for supported providers) */}
-            {providerDef?.supportsCustomHeaders && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Custom Headers (opsional)</Label>
-                <Textarea
-                  value={form.customHeaders}
-                  onChange={(e) => setForm((f) => ({ ...f, customHeaders: e.target.value }))}
-                  placeholder='{"X-Custom-Header": "value"}'
-                  className="min-h-[60px] font-mono text-xs"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Format JSON. Akan ditambahkan ke header request API.
-                </p>
-              </div>
-            )}
 
             {/* Active Toggle */}
             <label className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 cursor-pointer">
@@ -459,6 +381,62 @@ export function AiProviderConfig() {
                 </p>
               </div>
             </label>
+
+            {/* Advanced Settings — collapsed by default */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Settings2 className="h-3 w-3" />
+                Pengaturan Lanjutan
+                <ChevronDown className={`h-3 w-3 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-3 space-y-4 pt-3 border-t border-border">
+                  {/* Display Name */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Nama Tampilan</Label>
+                    <Input
+                      value={form.displayName}
+                      onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+                      placeholder={providerDef?.displayName}
+                    />
+                  </div>
+
+                  {/* Base URL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Base URL</Label>
+                    <Input
+                      value={form.baseUrl}
+                      onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                      placeholder={providerDef?.defaultBaseUrl}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Default: {providerDef?.defaultBaseUrl}. Ubah hanya jika menggunakan custom endpoint.
+                    </p>
+                  </div>
+
+                  {/* Custom Headers */}
+                  {providerDef?.supportsCustomHeaders && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Custom Headers</Label>
+                      <Textarea
+                        value={form.customHeaders}
+                        onChange={(e) => setForm((f) => ({ ...f, customHeaders: e.target.value }))}
+                        placeholder='{"X-Custom-Header": "value"}'
+                        className="min-h-[60px] font-mono text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Format JSON. Ditambahkan ke setiap request API.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -467,13 +445,9 @@ export function AiProviderConfig() {
             </Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Menyimpan...
-                </>
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Menyimpan...</>
               ) : (
-                <>
-                  <Check className="h-4 w-4 mr-1" /> Simpan
-                </>
+                <><Check className="h-4 w-4 mr-1" /> Simpan</>
               )}
             </Button>
           </DialogFooter>
