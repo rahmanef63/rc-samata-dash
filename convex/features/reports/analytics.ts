@@ -10,28 +10,59 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName, matchItemNames } from "../../shared/helpers";
 
+async function fetchData(ctx: any, tableName: string, args: { reportId?: string; branchId?: string; timeFilter?: string }) {
+  if (args.reportId && args.reportId !== "all") {
+    return ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", args.reportId)).collect();
+  }
+  if (!args.branchId) return [];
+  const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any)).collect();
+  let allData: any[] = [];
+  for (const r of reports) {
+    const data = await ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", r._id)).collect();
+    allData.push(...data);
+  }
+  if (args.timeFilter && args.timeFilter !== "all" && allData.length > 0) {
+    const now = new Date();
+    allData = allData.filter(d => {
+      const dVal = d.businessDate || d.periodStart || d.valuationDate || d.weekStart;
+      if (!dVal) return true;
+      const date = new Date(dVal);
+      if (args.timeFilter === "daily") return date.toDateString() === now.toDateString();
+      if (args.timeFilter === "weekly") {
+        const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+        return date >= weekAgo;
+      }
+      if (args.timeFilter === "monthly") return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+      if (args.timeFilter === "quarterly") return Math.floor(now.getMonth() / 3) === Math.floor(date.getMonth() / 3) && date.getFullYear() === now.getFullYear();
+      return true;
+    });
+  }
+  return allData;
+}
+
+
 // ─── 1. Overview KPI ──────────────────────────────────────────
 
 export const getAnalyticsOverview = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [sales, fcSummary, salesCtrl, leftover, invVal, hpp] = await Promise.all([
-      ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("foodCostSummary").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("salesControl").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("leftoverItems").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("inventoryValuation").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("productHPP").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
     ]);
 
     // Revenue from sales (channel = undefined means "all"/dine-in)
-    const allChannelSales = sales.filter((s) => !s.channel || s.channel === "all");
-    const totalRevenue = allChannelSales.reduce((s, item) => s + item.amount, 0);
+    const allChannelSales = sales.filter((s: any) => !s.channel || s.channel === "all");
+    const totalRevenue = allChannelSales.reduce((s: number, item: any) => s + item.amount, 0);
 
     // COGS from food cost summary
-    const totalCOGS = fcSummary.reduce((s, item) => s + item.usageValue, 0);
+    const totalCOGS = fcSummary.reduce((s: number, item: any) => s + item.usageValue, 0);
 
     // Gross margin
     const grossMarginPct = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0;
@@ -52,21 +83,21 @@ export const getAnalyticsOverview = query({
     }
 
     // Sales control metrics
-    const totalCustomers = salesCtrl.reduce((s, item) => s + item.customerCount, 0);
+    const totalCustomers = salesCtrl.reduce((s: number, item: any) => s + item.customerCount, 0);
     const avgSpendingPower = salesCtrl.length > 0
-      ? salesCtrl.reduce((s, item) => s + item.spendingPower, 0) / salesCtrl.length
+      ? salesCtrl.reduce((s: number, item: any) => s + item.spendingPower, 0) / salesCtrl.length
       : 0;
     const avgAchievement = salesCtrl.length > 0
-      ? salesCtrl.reduce((s, item) => s + item.achievementPct, 0) / salesCtrl.length
+      ? salesCtrl.reduce((s: number, item: any) => s + item.achievementPct, 0) / salesCtrl.length
       : 0;
 
     // HPP-based margin (alternative)
     const avgHPPMargin = hpp.length > 0
-      ? hpp.filter((h) => h.sellingPrice && h.sellingPrice > 0)
-          .reduce((s, h) => {
+      ? hpp.filter((h: any) => h.sellingPrice && h.sellingPrice > 0)
+          .reduce((s: number, h: any) => {
             const margin = ((h.sellingPrice! - h.totalHPP) / h.sellingPrice!) * 100;
             return s + margin;
-          }, 0) / Math.max(hpp.filter((h) => h.sellingPrice && h.sellingPrice > 0).length, 1)
+          }, 0) / Math.max(hpp.filter((h: any) => h.sellingPrice && h.sellingPrice > 0).length, 1)
       : 0;
 
     return {
@@ -88,13 +119,13 @@ export const getAnalyticsOverview = query({
 // ─── 2. Product Profitability ─────────────────────────────────
 
 export const getProductProfitability = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [hpp, sales] = await Promise.all([
-      ctx.db.query("productHPP").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
     ]);
 
     // Aggregate sales by product name
@@ -173,13 +204,13 @@ export const getProductProfitability = query({
 // ─── 3. Purchase Efficiency ───────────────────────────────────
 
 export const getPurchaseEfficiency = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [vendor, costAn] = await Promise.all([
-      ctx.db.query("vendorPurchases").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("costAnalysis").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
     ]);
 
     type EfficiencyItem = {
@@ -271,14 +302,14 @@ export const getPurchaseEfficiency = query({
 // ─── 4. Waste Analysis ────────────────────────────────────────
 
 export const getWasteAnalysis = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [leftover, invVal, hpp] = await Promise.all([
-      ctx.db.query("leftoverItems").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("inventoryValuation").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("productHPP").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
     ]);
 
     // Build price map from inventory valuation and HPP
@@ -345,8 +376,8 @@ export const getWasteAnalysis = query({
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((d) => ({ ...d, totalCost: Math.round(d.totalCost) }));
 
-    const totalWasteCost = topWastedItems.reduce((s, i) => s + i.estimatedCost, 0);
-    const totalWasteQty = topWastedItems.reduce((s, i) => s + i.totalQty, 0);
+    const totalWasteCost = topWastedItems.reduce((s: number, i: any) => s + i.estimatedCost, 0);
+    const totalWasteQty = topWastedItems.reduce((s: number, i: any) => s + i.totalQty, 0);
 
     return {
       topWastedItems,
@@ -360,13 +391,13 @@ export const getWasteAnalysis = query({
 // ─── 5. Cash Flow Summary ─────────────────────────────────────
 
 export const getCashFlowSummary = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [cashFlow, cashSummary] = await Promise.all([
-      ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("dailyCashSummary").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "dailyCashSummary", { reportId, branchId, timeFilter }),
     ]);
 
     // Build commission map from kas periode
@@ -413,10 +444,10 @@ export const getCashFlowSummary = query({
         };
       });
 
-    const totalInflow = daily.reduce((s, d) => s + d.totalInflow, 0);
-    const totalOutflow = daily.reduce((s, d) => s + d.totalOutflow, 0);
-    const totalCommissions = daily.reduce((s, d) => s + d.commissions, 0);
-    const tightDays = daily.filter((d) => d.isTight).length;
+    const totalInflow = daily.reduce((s: number, d: any) => s + d.totalInflow, 0);
+    const totalOutflow = daily.reduce((s: number, d: any) => s + d.totalOutflow, 0);
+    const totalCommissions = daily.reduce((s: number, d: any) => s + d.commissions, 0);
+    const tightDays = daily.filter((d: any) => d.isTight).length;
 
     return {
       daily,
@@ -432,17 +463,17 @@ export const getCashFlowSummary = query({
 // ─── 6. Priority Items ────────────────────────────────────────
 
 export const getPriorityItems = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [leftover, hpp, sales, vendor, costAn, invVal] = await Promise.all([
-      ctx.db.query("leftoverItems").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("productHPP").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("vendorPurchases").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("costAnalysis").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("inventoryValuation").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
     ]);
 
     // Build item universe (all unique items across tables)

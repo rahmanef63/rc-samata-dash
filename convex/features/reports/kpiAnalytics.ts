@@ -10,6 +10,37 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName } from "../../shared/helpers";
 
+async function fetchData(ctx: any, tableName: string, args: { reportId?: string; branchId?: string; timeFilter?: string }) {
+  if (args.reportId && args.reportId !== "all") {
+    return ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", args.reportId)).collect();
+  }
+  if (!args.branchId) return [];
+  const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any)).collect();
+  let allData: any[] = [];
+  for (const r of reports) {
+    const data = await ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", r._id)).collect();
+    if (data.length > 0) allData.push(...data);
+  }
+  if (args.timeFilter && args.timeFilter !== "all" && allData.length > 0) {
+    const now = new Date();
+    allData = allData.filter(d => {
+      const dVal = d.businessDate || d.periodStart || d.valuationDate || d.weekStart;
+      if (!dVal) return true;
+      const date = new Date(dVal);
+      if (args.timeFilter === "daily") return date.toDateString() === now.toDateString();
+      if (args.timeFilter === "weekly") {
+        const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+        return date >= weekAgo;
+      }
+      if (args.timeFilter === "monthly") return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+      if (args.timeFilter === "quarterly") return Math.floor(now.getMonth() / 3) === Math.floor(date.getMonth() / 3) && date.getFullYear() === now.getFullYear();
+      return true;
+    });
+  }
+  return allData;
+}
+
+
 // ─── Default KPI Targets (QSR Standard) ──────────────────────
 
 const DEFAULT_KPIS = [
@@ -108,20 +139,23 @@ function evaluateKPI(
 }
 
 export const getKPIDashboard = query({
-  args: { reportId: v.id("weeklyReports") },
-  handler: async (ctx, { reportId }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
-    // Get report metadata
-    const report = await ctx.db.get(reportId);
-    if (!report) return { kpis: [], hasTargets: false };
+    let targetBranchId = branchId;
+    
+    if (reportId && reportId !== "all") {
+      const report = await ctx.db.get(reportId as any) as any;
+      if (report) targetBranchId = report.branchId;
+    }
 
-    const branchId = report.branchId;
+    if (!targetBranchId) return { kpis: [], hasTargets: false };
 
     // Get targets
     const targets = await ctx.db
       .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_branch", (q) => q.eq("branchId", targetBranchId))
       .collect();
 
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
@@ -138,25 +172,25 @@ export const getKPIDashboard = query({
       incentives,
       vendor,
     ] = await Promise.all([
-      ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("foodCostSummary").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("salesControl").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("leftoverItems").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("inventoryValuation").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("costAnalysis").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("employeeIncentives").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
-      ctx.db.query("vendorPurchases").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "employeeIncentives", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
     ]);
 
     // ── Compute actuals ──
 
     // Revenue (all-channel sales)
-    const allChannelSales = sales.filter((s) => !s.channel || s.channel === "all");
-    const totalRevenue = allChannelSales.reduce((s, item) => s + item.amount, 0);
+    const allChannelSales = sales.filter((s: any) => !s.channel || s.channel === "all");
+    const totalRevenue = allChannelSales.reduce((s: number, item: any) => s + item.amount, 0);
 
     // COGS
-    const totalCOGS = fcSummary.reduce((s, item) => s + item.usageValue, 0);
+    const totalCOGS = fcSummary.reduce((s: number, item: any) => s + item.usageValue, 0);
 
     // Food Cost %
     const foodCostPct = totalRevenue > 0 ? (totalCOGS / totalRevenue) * 100 : 0;
@@ -178,34 +212,34 @@ export const getKPIDashboard = query({
 
     // Sales Achievement %
     const avgAchievement = salesCtrl.length > 0
-      ? (salesCtrl.reduce((s, item) => s + item.achievementPct, 0) / salesCtrl.length) * 100
+      ? (salesCtrl.reduce((s: number, item: any) => s + item.achievementPct, 0) / salesCtrl.length) * 100
       : 0;
 
     // Purchase Efficiency (avg usage/purchase ratio)
-    const itemsWithPurchase = costAn.filter((c) => c.purchaseQty > 0);
+    const itemsWithPurchase = costAn.filter((c: any) => c.purchaseQty > 0);
     const purchaseEfficiency = itemsWithPurchase.length > 0
-      ? itemsWithPurchase.reduce((s, c) => s + (c.usageQty / c.purchaseQty), 0) / itemsWithPurchase.length
+      ? itemsWithPurchase.reduce((s: number, c: any) => s + (c.usageQty / c.purchaseQty), 0) / itemsWithPurchase.length
       : 0;
 
     // Cash Tight Days (closing < 500k)
-    const cashTightDays = cashFlow.filter((d) => d.closingBalance < 500000).length;
+    const cashTightDays = cashFlow.filter((d: any) => d.closingBalance < 500000).length;
 
     // Labor Cost % (incentives total / revenue)
-    const totalIncentives = incentives.reduce((s, item) => s + item.amount, 0);
+    const totalIncentives = incentives.reduce((s: number, item: any) => s + item.amount, 0);
     const laborCostPct = totalRevenue > 0 ? (totalIncentives / totalRevenue) * 100 : 0;
 
     // Variance Rate %
-    const totalPurchaseValue = costAn.reduce((s, c) => s + c.purchaseValue, 0);
-    const totalVariance = costAn.reduce((s, c) => s + Math.abs(c.variance), 0);
+    const totalPurchaseValue = costAn.reduce((s: number, c: any) => s + c.purchaseValue, 0);
+    const totalVariance = costAn.reduce((s: number, c: any) => s + Math.abs(c.variance), 0);
     const varianceRatePct = totalPurchaseValue > 0 ? (totalVariance / totalPurchaseValue) * 100 : 0;
 
     // Avg Spending Power
     const avgSpendingPower = salesCtrl.length > 0
-      ? salesCtrl.reduce((s, item) => s + item.spendingPower, 0) / salesCtrl.length
+      ? salesCtrl.reduce((s: number, item: any) => s + item.spendingPower, 0) / salesCtrl.length
       : 0;
 
     // Inventory Turnover (COGS / avg inventory value)
-    const totalInventoryValue = invVal.reduce((s, item) => s + item.totalValue, 0);
+    const totalInventoryValue = invVal.reduce((s: number, item: any) => s + item.totalValue, 0);
     const inventoryTurnover = totalInventoryValue > 0 ? totalCOGS / totalInventoryValue : 0;
 
     // ── Build KPI results ──

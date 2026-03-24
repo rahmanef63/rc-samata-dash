@@ -20,7 +20,8 @@ type Tab = typeof TABS[number];
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
-  const [selectedReportId, setSelectedReportId] = useState<Id<"weeklyReports"> | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<Id<"weeklyReports"> | "all" | null>(null);
+  const [timeFilter, setTimeFilter] = useState<string>("all");
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -29,8 +30,15 @@ export default function AnalyticsPage() {
     branchId ? { branchId } : "skip"
   );
 
-  // Auto-select first report
+  // Auto-select first report if not 'all'
   const reportId = selectedReportId ?? reports?.[0]?._id ?? null;
+  const isAll = selectedReportId === "all";
+
+  const queryArgs = isAll
+    ? { reportId: "all" as const, branchId, timeFilter }
+    : reportId
+    ? { reportId, branchId, timeFilter }
+    : "skip";
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 space-y-4">
@@ -39,20 +47,37 @@ export default function AnalyticsPage() {
           <h1 className="text-xl font-bold">Analisis Laporan</h1>
           <p className="text-sm text-muted-foreground">Profitabilitas, efisiensi pembelian, waste, dan arus kas</p>
         </div>
-        {/* Report Selector */}
-        <select
-          className="px-3 py-2 rounded-xl border border-border bg-card text-sm max-w-[300px]"
-          value={reportId ?? ""}
-          onChange={(e) => setSelectedReportId(e.target.value as Id<"weeklyReports">)}
-        >
-          {!reports && <option>Loading...</option>}
-          {reports?.length === 0 && <option>Belum ada laporan</option>}
-          {reports?.map((r) => (
-            <option key={r._id} value={r._id}>
-              {r.fileName} ({r.periodStart} → {r.periodEnd})
-            </option>
-          ))}
-        </select>
+        {/* Filters */}
+        <div className="flex items-center gap-2">
+          {selectedReportId === "all" && (
+            <select
+              className="px-3 py-2 rounded-xl border border-border bg-card text-sm"
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+            >
+              <option value="all">Semua Waktu</option>
+              <option value="daily">Harian / Hari Ini</option>
+              <option value="weekly">Mingguan / Minggu Ini</option>
+              <option value="monthly">Bulanan / Bulan Ini</option>
+              <option value="quarterly">Kuartal Ini</option>
+            </select>
+          )}
+
+          <select
+            className="px-3 py-2 rounded-xl border border-border bg-card text-sm max-w-[300px]"
+            value={selectedReportId ?? reports?.[0]?._id ?? ""}
+            onChange={(e) => setSelectedReportId(e.target.value as Id<"weeklyReports"> | "all")}
+          >
+            {!reports && <option>Loading...</option>}
+            {reports?.length === 0 && <option>Belum ada laporan</option>}
+            <option value="all">Semua Laporan (All)</option>
+            {reports?.map((r) => (
+              <option key={r._id} value={r._id}>
+                {r.fileName} ({r.periodStart} → {r.periodEnd})
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -73,19 +98,19 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Content */}
-      {!reportId ? (
+      {queryArgs === "skip" ? (
         <div className="text-center py-12 text-muted-foreground">
           <p>Upload laporan terlebih dahulu di halaman Upload Laporan</p>
         </div>
       ) : (
         <>
-          {activeTab === "Overview" && <OverviewTab reportId={reportId} />}
-          {activeTab === "KPI" && <KPITab reportId={reportId} />}
-          {activeTab === "Data Browser" && <ReportDataBrowser reportId={reportId} />}
-          {activeTab === "Profitabilitas" && <ProfitabilityTab reportId={reportId} />}
-          {activeTab === "Efisiensi Beli" && <PurchaseTab reportId={reportId} />}
-          {activeTab === "Waste" && <WasteTab reportId={reportId} />}
-          {activeTab === "Arus Kas" && <CashFlowTab reportId={reportId} />}
+          {activeTab === "Overview" && <OverviewTab args={queryArgs} />}
+          {activeTab === "KPI" && <KPITab args={queryArgs} />}
+          {activeTab === "Data Browser" && (isAll ? <div className="p-8 text-center text-muted-foreground bg-card rounded-2xl border">Data Browser tidak tersedia untuk mode "Semua Laporan". Pilih satu laporan spesifik.</div> : <ReportDataBrowser reportId={reportId as any} />)}
+          {activeTab === "Profitabilitas" && <ProfitabilityTab args={queryArgs} />}
+          {activeTab === "Efisiensi Beli" && <PurchaseTab args={queryArgs} />}
+          {activeTab === "Waste" && <WasteTab args={queryArgs} />}
+          {activeTab === "Arus Kas" && <CashFlowTab args={queryArgs} />}
         </>
       )}
     </div>
@@ -105,9 +130,9 @@ function LoadingSkeleton() {
 
 // ─── Overview Tab ────────────────────────────────────────────
 
-function OverviewTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const overview = useQuery(api.features.reports.analytics.getAnalyticsOverview, { reportId });
-  const priority = useQuery(api.features.reports.analytics.getPriorityItems, { reportId });
+function OverviewTab({ args }: { args: any }) {
+  const overview = useQuery(api.features.reports.analytics.getAnalyticsOverview, args);
+  const priority = useQuery(api.features.reports.analytics.getPriorityItems, args);
 
   if (!overview) return <LoadingSkeleton />;
 
@@ -177,8 +202,8 @@ function OverviewTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
 
 // ─── Profitability Tab ───────────────────────────────────────
 
-function ProfitabilityTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const data = useQuery(api.features.reports.analytics.getProductProfitability, { reportId });
+function ProfitabilityTab({ args }: { args: any }) {
+  const data = useQuery(api.features.reports.analytics.getProductProfitability, args);
   const [classFilter, setClassFilter] = useState<string>("all");
 
   if (!data) return <LoadingSkeleton />;
@@ -261,8 +286,8 @@ function ProfitabilityTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
 
 // ─── Purchase Efficiency Tab ─────────────────────────────────
 
-function PurchaseTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const data = useQuery(api.features.reports.analytics.getPurchaseEfficiency, { reportId });
+function PurchaseTab({ args }: { args: any }) {
+  const data = useQuery(api.features.reports.analytics.getPurchaseEfficiency, args);
 
   if (!data) return <LoadingSkeleton />;
 
@@ -335,8 +360,8 @@ function PurchaseTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
 
 // ─── Waste Tab ───────────────────────────────────────────────
 
-function WasteTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const data = useQuery(api.features.reports.analytics.getWasteAnalysis, { reportId });
+function WasteTab({ args }: { args: any }) {
+  const data = useQuery(api.features.reports.analytics.getWasteAnalysis, args);
 
   if (!data) return <LoadingSkeleton />;
 
@@ -446,8 +471,8 @@ function formatKPIValue(value: number, unit: string): string {
   return `${value} ${unit}`;
 }
 
-function KPITab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const data = useQuery(api.features.reports.kpiAnalytics.getKPIDashboard, { reportId });
+function KPITab({ args }: { args: any }) {
+  const data = useQuery(api.features.reports.kpiAnalytics.getKPIDashboard, args);
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
   const seedTargets = useMutation(api.features.reports.kpiAnalytics.seedDefaultKPITargets);
@@ -591,8 +616,8 @@ function KPITab({ reportId }: { reportId: Id<"weeklyReports"> }) {
 
 // ─── Cash Flow Tab ───────────────────────────────────────────
 
-function CashFlowTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const data = useQuery(api.features.reports.analytics.getCashFlowSummary, { reportId });
+function CashFlowTab({ args }: { args: any }) {
+  const data = useQuery(api.features.reports.analytics.getCashFlowSummary, args);
 
   if (!data) return <LoadingSkeleton />;
 
