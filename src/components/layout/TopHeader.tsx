@@ -50,7 +50,7 @@ export function TopHeader() {
   const [isDark, setIsDark] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   
-  const user = useQuery((api as any).users.current);
+  const user = useQuery(api.users.current);
   const { signOut } = useAuthActions();
   const router = useRouter();
 

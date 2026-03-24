@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { User, Mail, Shield } from "lucide-react";
 
 export default function ProfilePage() {
-  const user = useQuery((api as any).users.current);
+  const user = useQuery(api.users.current);
 
   if (user === undefined) {
     return (
