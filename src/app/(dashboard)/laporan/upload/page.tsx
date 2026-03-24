@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
@@ -90,6 +90,18 @@ export default function LaporanUploadPage() {
   );
 
   const createBranch      = useMutation(api.features.masterData.mutations.createBranch);
+
+  // Auto-seed default branch if none exists
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (branches && branches.length === 0 && !seededRef.current) {
+      seededRef.current = true;
+      createBranch({ code: "RC-SAMATA", name: "RC Samata Gowa", location: "Gowa, Sulawesi Selatan", isActive: true })
+        .then(() => toast.success("Cabang default RC Samata Gowa dibuat otomatis"))
+        .catch(() => { seededRef.current = false; });
+    }
+  }, [branches, createBranch]);
+
   const createReport      = useMutation(api.features.reports.mutations.createWeeklyReport);
   const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
   const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
@@ -364,28 +376,6 @@ export default function LaporanUploadPage() {
         </p>
       </div>
 
-      {/* ─── No Branch Warning ─── */}
-      {branches !== undefined && branches.length === 0 && (
-        <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">Belum ada cabang terdaftar</p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-400">Upload membutuhkan minimal 1 cabang. Klik tombol untuk membuat cabang RC Samata Gowa secara otomatis.</p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              await createBranch({ code: "RC-SAMATA", name: "RC Samata Gowa", location: "Gowa, Sulawesi Selatan", isActive: true });
-              toast.success("Cabang RC Samata Gowa berhasil dibuat");
-            }}
-            className="shrink-0 px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-semibold transition-colors"
-          >
-            Buat Cabang Default
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-6 flex flex-col">
@@ -512,20 +502,6 @@ export default function LaporanUploadPage() {
                 </div>
               )}
 
-              {!branchId && branches !== undefined && branches.length === 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 px-4 py-3">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-300 font-medium">Belum ada cabang — buat dulu sebelum import</p>
-                  <button
-                    onClick={async () => {
-                      await createBranch({ code: "RC-SAMATA", name: "RC Samata Gowa", location: "Gowa, Sulawesi Selatan", isActive: true });
-                      toast.success("Cabang RC Samata Gowa berhasil dibuat");
-                    }}
-                    className="shrink-0 px-3 py-1.5 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold transition-colors"
-                  >
-                    Buat Cabang
-                  </button>
-                </div>
-              )}
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button onClick={reset} className="px-6 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/50 text-sm font-medium transition-colors shadow-sm">
                   Batal
