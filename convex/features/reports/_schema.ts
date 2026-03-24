@@ -309,6 +309,24 @@ export const reportsTables = {
     .index("by_branch_period", ["branchId", "periodLabel"]),
 
   /**
+   * KPI targets per branch — target vs actual benchmarks for QSR operations.
+   * Seeded with standard Rocket Chicken targets, editable per branch.
+   */
+  kpiTargets: defineTable({
+    branchId: v.id("branches"),
+    effectiveFrom: v.string(),
+    kpiCode: v.string(),
+    kpiLabel: v.string(),
+    targetValue: v.number(),
+    warningThreshold: v.number(),
+    dangerThreshold: v.number(),
+    unit: v.string(),
+    direction: v.union(v.literal("lower_is_better"), v.literal("higher_is_better")),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_branch_kpi", ["branchId", "kpiCode"]),
+
+  /**
    * Tunjangan khusus karyawan — dari file "FORM PENGAJUAN TUNJANGAN KHUSUS".
    * Satu record = satu karyawan dengan detail tunjangan.
    */

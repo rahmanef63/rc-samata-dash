@@ -9,11 +9,13 @@ import { formatRpFull } from "@/shared/lib";
 import { AreaChartCard } from "@/shared/components/AreaChartCard";
 import {
   DollarSign, TrendingDown, Percent, AlertTriangle,
-  Users, Target, ShoppingCart, Trash2, Loader2,
+  Users, Target, ShoppingCart, Trash2, Loader2, Gauge, Settings2,
 } from "lucide-react";
+import { useMutation } from "convex/react";
 import { ReportDataBrowser } from "./ReportDataBrowser";
+import { toast } from "sonner";
 
-const TABS = ["Overview", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Waste", "Arus Kas"] as const;
+const TABS = ["Overview", "KPI", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Waste", "Arus Kas"] as const;
 type Tab = typeof TABS[number];
 
 export default function AnalyticsPage() {
@@ -78,6 +80,7 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {activeTab === "Overview" && <OverviewTab reportId={reportId} />}
+          {activeTab === "KPI" && <KPITab reportId={reportId} />}
           {activeTab === "Data Browser" && <ReportDataBrowser reportId={reportId} />}
           {activeTab === "Profitabilitas" && <ProfitabilityTab reportId={reportId} />}
           {activeTab === "Efisiensi Beli" && <PurchaseTab reportId={reportId} />}
@@ -394,6 +397,194 @@ function WasteTab({ reportId }: { reportId: Id<"weeklyReports"> }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── KPI Tab ────────────────────────────────────────────────
+
+const KPI_ICONS: Record<string, typeof DollarSign> = {
+  food_cost_pct: Percent,
+  gross_margin_pct: TrendingDown,
+  waste_pct: Trash2,
+  sales_achievement_pct: Target,
+  purchase_efficiency: ShoppingCart,
+  cash_tight_days: DollarSign,
+  labor_cost_pct: Users,
+  variance_rate_pct: AlertTriangle,
+  avg_spending_power: DollarSign,
+  inventory_turnover: Gauge,
+};
+
+const STATUS_COLORS = {
+  good: { bg: "bg-green-50 dark:bg-green-950/20", border: "border-green-200 dark:border-green-800", text: "text-green-700 dark:text-green-400", badge: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300", ring: "stroke-green-500", label: "SEHAT" },
+  warning: { bg: "bg-yellow-50 dark:bg-yellow-950/20", border: "border-yellow-200 dark:border-yellow-800", text: "text-yellow-700 dark:text-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300", ring: "stroke-yellow-500", label: "PERHATIAN" },
+  danger: { bg: "bg-red-50 dark:bg-red-950/20", border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-400", badge: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300", ring: "stroke-red-500", label: "BAHAYA" },
+};
+
+function KPIGauge({ value, max, status }: { value: number; max: number; status: "good" | "warning" | "danger" }) {
+  const pct = Math.min(value / max, 1);
+  const r = 32;
+  const circ = 2 * Math.PI * r;
+  const dashOffset = circ * (1 - pct * 0.75); // 270° arc
+  const colors = STATUS_COLORS[status];
+
+  return (
+    <svg viewBox="0 0 80 80" className="w-16 h-16">
+      <circle cx="40" cy="40" r={r} fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/30" strokeDasharray={`${circ * 0.75} ${circ * 0.25}`} strokeLinecap="round" transform="rotate(135 40 40)" />
+      <circle cx="40" cy="40" r={r} fill="none" strokeWidth="6" className={colors.ring} strokeDasharray={`${circ * 0.75} ${circ * 0.25}`} strokeDashoffset={dashOffset} strokeLinecap="round" transform="rotate(135 40 40)" />
+      <text x="40" y="42" textAnchor="middle" className={`text-xs font-bold fill-current ${colors.text}`}>{value}</text>
+    </svg>
+  );
+}
+
+function formatKPIValue(value: number, unit: string): string {
+  if (unit === "Rp") return `Rp ${value.toLocaleString("id-ID")}`;
+  if (unit === "%") return `${value}%`;
+  if (unit === "ratio") return `${value}x`;
+  if (unit === "x") return `${value}x`;
+  return `${value} ${unit}`;
+}
+
+function KPITab({ reportId }: { reportId: Id<"weeklyReports"> }) {
+  const data = useQuery(api.features.reports.kpiAnalytics.getKPIDashboard, { reportId });
+  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const branchId = branches?.[0]?._id;
+  const seedTargets = useMutation(api.features.reports.kpiAnalytics.seedDefaultKPITargets);
+
+  if (!data) return <LoadingSkeleton />;
+
+  const { kpis, hasTargets } = data;
+  const good = kpis.filter((k) => k.status === "good").length;
+  const warning = kpis.filter((k) => k.status === "warning").length;
+  const danger = kpis.filter((k) => k.status === "danger").length;
+
+  const handleSeedTargets = async () => {
+    if (!branchId) return;
+    const result = await seedTargets({ branchId });
+    if (result.seeded) toast.success(result.message);
+    else toast.info(result.message);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+            <span className="text-xs font-medium">{good} Sehat</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+            <span className="text-xs font-medium">{warning} Perhatian</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+            <span className="text-xs font-medium">{danger} Bahaya</span>
+          </div>
+        </div>
+        {!hasTargets && branchId && (
+          <button
+            onClick={handleSeedTargets}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Settings2 className="h-3 w-3" /> Set Default Targets
+          </button>
+        )}
+      </div>
+
+      {/* Score Overview */}
+      <div className="bg-card rounded-xl shadow-card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Skor KPI Keseluruhan</h3>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-center">
+            <p className={`text-4xl font-bold ${
+              good >= 7 ? "text-green-600" : good >= 5 ? "text-yellow-600" : "text-red-600"
+            }`}>{good}/{kpis.length}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">KPI On Target</p>
+          </div>
+          <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden flex">
+            {good > 0 && <div className="h-full bg-green-500" style={{ width: `${(good / kpis.length) * 100}%` }} />}
+            {warning > 0 && <div className="h-full bg-yellow-500" style={{ width: `${(warning / kpis.length) * 100}%` }} />}
+            {danger > 0 && <div className="h-full bg-red-500" style={{ width: `${(danger / kpis.length) * 100}%` }} />}
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {kpis.map((kpi) => {
+          const colors = STATUS_COLORS[kpi.status];
+          const Icon = KPI_ICONS[kpi.kpiCode] ?? Gauge;
+          const gaugeMax = kpi.direction === "lower_is_better"
+            ? kpi.dangerThreshold * 1.2
+            : kpi.target * 1.2;
+
+          return (
+            <div key={kpi.kpiCode} className={`rounded-xl p-4 border ${colors.bg} ${colors.border}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon className={`h-4 w-4 ${colors.text}`} />
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{kpi.kpiLabel}</p>
+                  </div>
+                  <p className={`text-2xl font-bold font-mono ${colors.text}`}>
+                    {formatKPIValue(kpi.actual, kpi.unit)}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${colors.badge}`}>
+                      {colors.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Target: {formatKPIValue(kpi.target, kpi.unit)}
+                    </span>
+                  </div>
+                </div>
+                <KPIGauge
+                  value={kpi.actual}
+                  max={gaugeMax}
+                  status={kpi.status}
+                />
+              </div>
+
+              {/* Target bar */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                  <span>{kpi.direction === "lower_is_better" ? "Target ↓" : "Target ↑"}</span>
+                  <span>
+                    {formatKPIValue(kpi.dangerThreshold, kpi.unit)} — {formatKPIValue(kpi.warningThreshold, kpi.unit)} — {formatKPIValue(kpi.target, kpi.unit)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Danger items detail */}
+      {danger > 0 && (
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">KPI Perlu Perhatian Segera</h3>
+          </div>
+          <div className="space-y-2">
+            {kpis.filter((k) => k.status === "danger").map((kpi) => (
+              <div key={kpi.kpiCode} className="flex items-center justify-between text-xs">
+                <span className="font-medium">{kpi.kpiLabel}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-red-600 font-semibold font-mono">{formatKPIValue(kpi.actual, kpi.unit)}</span>
+                  <span className="text-muted-foreground">target: {formatKPIValue(kpi.target, kpi.unit)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

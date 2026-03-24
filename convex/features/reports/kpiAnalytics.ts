@@ -1,0 +1,246 @@
+/**
+ * KPI Analytics — target vs actual benchmarks for QSR operations.
+ *
+ * Standard KPIs for Rocket Chicken franchise: food cost %, gross margin,
+ * waste %, sales achievement, purchase efficiency, cash tight days, etc.
+ */
+
+import { query, mutation } from "../../_generated/server";
+import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
+import { normalizeItemName } from "../../shared/helpers";
+
+// ─── Default KPI Targets (QSR Standard) ──────────────────────
+
+const DEFAULT_KPIS = [
+  { kpiCode: "food_cost_pct", kpiLabel: "Food Cost %", targetValue: 33, warningThreshold: 38, dangerThreshold: 42, unit: "%", direction: "lower_is_better" as const },
+  { kpiCode: "gross_margin_pct", kpiLabel: "Gross Margin %", targetValue: 67, warningThreshold: 60, dangerThreshold: 55, unit: "%", direction: "higher_is_better" as const },
+  { kpiCode: "waste_pct", kpiLabel: "Waste %", targetValue: 1.5, warningThreshold: 2.5, dangerThreshold: 4, unit: "%", direction: "lower_is_better" as const },
+  { kpiCode: "sales_achievement_pct", kpiLabel: "Capaian Sales %", targetValue: 100, warningThreshold: 85, dangerThreshold: 70, unit: "%", direction: "higher_is_better" as const },
+  { kpiCode: "purchase_efficiency", kpiLabel: "Efisiensi Beli", targetValue: 0.90, warningThreshold: 0.80, dangerThreshold: 0.70, unit: "ratio", direction: "higher_is_better" as const },
+  { kpiCode: "cash_tight_days", kpiLabel: "Cash Tight Days", targetValue: 0, warningThreshold: 1, dangerThreshold: 3, unit: "hari", direction: "lower_is_better" as const },
+  { kpiCode: "labor_cost_pct", kpiLabel: "Labor Cost %", targetValue: 20, warningThreshold: 25, dangerThreshold: 30, unit: "%", direction: "lower_is_better" as const },
+  { kpiCode: "variance_rate_pct", kpiLabel: "Variance Rate %", targetValue: 2, warningThreshold: 4, dangerThreshold: 6, unit: "%", direction: "lower_is_better" as const },
+  { kpiCode: "avg_spending_power", kpiLabel: "Avg Spending Power", targetValue: 25000, warningThreshold: 20000, dangerThreshold: 15000, unit: "Rp", direction: "higher_is_better" as const },
+  { kpiCode: "inventory_turnover", kpiLabel: "Inventory Turnover", targetValue: 4, warningThreshold: 3, dangerThreshold: 2, unit: "x", direction: "higher_is_better" as const },
+];
+
+// ─── Seed Default KPI Targets ────────────────────────────────
+
+export const seedDefaultKPITargets = mutation({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+
+    // Check if targets already exist for this branch
+    const existing = await ctx.db
+      .query("kpiTargets")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .first();
+
+    if (existing) return { seeded: false, message: "KPI targets already exist" };
+
+    const today = new Date().toISOString().split("T")[0];
+    for (const kpi of DEFAULT_KPIS) {
+      await ctx.db.insert("kpiTargets", {
+        branchId,
+        effectiveFrom: today,
+        ...kpi,
+      });
+    }
+
+    return { seeded: true, message: `${DEFAULT_KPIS.length} KPI targets seeded` };
+  },
+});
+
+// ─── Update a KPI target ─────────────────────────────────────
+
+export const updateKPITarget = mutation({
+  args: {
+    id: v.id("kpiTargets"),
+    targetValue: v.optional(v.number()),
+    warningThreshold: v.optional(v.number()),
+    dangerThreshold: v.optional(v.number()),
+  },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(
+      Object.entries(updates).filter(([, val]) => val !== undefined)
+    );
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+// ─── List KPI targets for branch ─────────────────────────────
+
+export const listKPITargets = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    return ctx.db
+      .query("kpiTargets")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .collect();
+  },
+});
+
+// ─── KPI Dashboard — compute actuals vs targets ──────────────
+
+type KPIStatus = "good" | "warning" | "danger";
+
+function evaluateKPI(
+  actual: number,
+  target: number,
+  warning: number,
+  danger: number,
+  direction: "lower_is_better" | "higher_is_better"
+): KPIStatus {
+  if (direction === "lower_is_better") {
+    if (actual <= target) return "good";
+    if (actual <= warning) return "warning";
+    return "danger";
+  } else {
+    if (actual >= target) return "good";
+    if (actual >= warning) return "warning";
+    return "danger";
+  }
+}
+
+export const getKPIDashboard = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+
+    // Get report metadata
+    const report = await ctx.db.get(reportId);
+    if (!report) return { kpis: [], hasTargets: false };
+
+    const branchId = report.branchId;
+
+    // Get targets
+    const targets = await ctx.db
+      .query("kpiTargets")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .collect();
+
+    const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
+
+    // ── Fetch all needed data ──
+    const [
+      sales,
+      fcSummary,
+      salesCtrl,
+      leftover,
+      invVal,
+      costAn,
+      cashFlow,
+      incentives,
+      vendor,
+    ] = await Promise.all([
+      ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("foodCostSummary").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("salesControl").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("leftoverItems").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("inventoryValuation").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("costAnalysis").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("employeeIncentives").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+      ctx.db.query("vendorPurchases").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect(),
+    ]);
+
+    // ── Compute actuals ──
+
+    // Revenue (all-channel sales)
+    const allChannelSales = sales.filter((s) => !s.channel || s.channel === "all");
+    const totalRevenue = allChannelSales.reduce((s, item) => s + item.amount, 0);
+
+    // COGS
+    const totalCOGS = fcSummary.reduce((s, item) => s + item.usageValue, 0);
+
+    // Food Cost %
+    const foodCostPct = totalRevenue > 0 ? (totalCOGS / totalRevenue) * 100 : 0;
+
+    // Gross Margin %
+    const grossMarginPct = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0;
+
+    // Waste %
+    const priceMap = new Map<string, number>();
+    for (const inv of invVal) {
+      priceMap.set(normalizeItemName(inv.itemName), inv.unitPrice);
+    }
+    let totalWasteCost = 0;
+    for (const lo of leftover) {
+      const price = priceMap.get(normalizeItemName(lo.itemName)) ?? 0;
+      totalWasteCost += lo.qty * price;
+    }
+    const wastePct = totalRevenue > 0 ? (totalWasteCost / totalRevenue) * 100 : 0;
+
+    // Sales Achievement %
+    const avgAchievement = salesCtrl.length > 0
+      ? (salesCtrl.reduce((s, item) => s + item.achievementPct, 0) / salesCtrl.length) * 100
+      : 0;
+
+    // Purchase Efficiency (avg usage/purchase ratio)
+    const itemsWithPurchase = costAn.filter((c) => c.purchaseQty > 0);
+    const purchaseEfficiency = itemsWithPurchase.length > 0
+      ? itemsWithPurchase.reduce((s, c) => s + (c.usageQty / c.purchaseQty), 0) / itemsWithPurchase.length
+      : 0;
+
+    // Cash Tight Days (closing < 500k)
+    const cashTightDays = cashFlow.filter((d) => d.closingBalance < 500000).length;
+
+    // Labor Cost % (incentives total / revenue)
+    const totalIncentives = incentives.reduce((s, item) => s + item.amount, 0);
+    const laborCostPct = totalRevenue > 0 ? (totalIncentives / totalRevenue) * 100 : 0;
+
+    // Variance Rate %
+    const totalPurchaseValue = costAn.reduce((s, c) => s + c.purchaseValue, 0);
+    const totalVariance = costAn.reduce((s, c) => s + Math.abs(c.variance), 0);
+    const varianceRatePct = totalPurchaseValue > 0 ? (totalVariance / totalPurchaseValue) * 100 : 0;
+
+    // Avg Spending Power
+    const avgSpendingPower = salesCtrl.length > 0
+      ? salesCtrl.reduce((s, item) => s + item.spendingPower, 0) / salesCtrl.length
+      : 0;
+
+    // Inventory Turnover (COGS / avg inventory value)
+    const totalInventoryValue = invVal.reduce((s, item) => s + item.totalValue, 0);
+    const inventoryTurnover = totalInventoryValue > 0 ? totalCOGS / totalInventoryValue : 0;
+
+    // ── Build KPI results ──
+    const actuals: Record<string, number> = {
+      food_cost_pct: Math.round(foodCostPct * 10) / 10,
+      gross_margin_pct: Math.round(grossMarginPct * 10) / 10,
+      waste_pct: Math.round(wastePct * 10) / 10,
+      sales_achievement_pct: Math.round(avgAchievement * 10) / 10,
+      purchase_efficiency: Math.round(purchaseEfficiency * 100) / 100,
+      cash_tight_days: cashTightDays,
+      labor_cost_pct: Math.round(laborCostPct * 10) / 10,
+      variance_rate_pct: Math.round(varianceRatePct * 10) / 10,
+      avg_spending_power: Math.round(avgSpendingPower),
+      inventory_turnover: Math.round(inventoryTurnover * 10) / 10,
+    };
+
+    const kpis = DEFAULT_KPIS.map((def) => {
+      const target = targetMap.get(def.kpiCode);
+      const actual = actuals[def.kpiCode] ?? 0;
+      const t = target ?? def;
+
+      return {
+        kpiCode: def.kpiCode,
+        kpiLabel: def.kpiLabel,
+        unit: def.unit,
+        direction: def.direction,
+        actual,
+        target: t.targetValue,
+        warningThreshold: t.warningThreshold,
+        dangerThreshold: t.dangerThreshold,
+        status: evaluateKPI(actual, t.targetValue, t.warningThreshold, t.dangerThreshold, def.direction),
+        targetId: target?._id ?? null,
+      };
+    });
+
+    return { kpis, hasTargets: targets.length > 0 };
+  },
+});

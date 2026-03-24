@@ -196,13 +196,21 @@ export const getExpensesByBranch = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
-    const all = [];
-    for (const r of reports) {
-      const items = await ctx.db.query("lpkkExpenses").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
-      all.push(...items);
-    }
-    return all;
+    // LPKK data is imported into the expenses table (not a report-linked table)
+    const items = await ctx.db
+      .query("expenses")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+    return items.map((e) => ({
+      _id: e._id,
+      _creationTime: e._creationTime,
+      branchId: e.branchId,
+      expenseDate: e.expenseDate,
+      categoryLabel: e.categoryName,
+      categoryType: e.paymentSource === "petty_cash" ? "cogs" : "other",
+      amount: e.amount,
+      description: e.description,
+    }));
   },
 });
 

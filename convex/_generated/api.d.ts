@@ -11,10 +11,10 @@
 import type * as auth from "../auth.js";
 import type * as features_ai__schema from "../features/ai/_schema.js";
 import type * as features_ai_actions from "../features/ai/actions.js";
-import type * as features_ai_mutations from "../features/ai/mutations.js";
-import type * as features_ai_queries from "../features/ai/queries.js";
 import type * as features_ai_embedding from "../features/ai/embedding.js";
 import type * as features_ai_indexing from "../features/ai/indexing.js";
+import type * as features_ai_mutations from "../features/ai/mutations.js";
+import type * as features_ai_queries from "../features/ai/queries.js";
 import type * as features_ai_search from "../features/ai/search.js";
 import type * as features_audit__schema from "../features/audit/_schema.js";
 import type * as features_audit_mutations from "../features/audit/mutations.js";
@@ -38,19 +38,20 @@ import type * as features_pettyCash__schema from "../features/pettyCash/_schema.
 import type * as features_pettyCash_mutations from "../features/pettyCash/mutations.js";
 import type * as features_pettyCash_queries from "../features/pettyCash/queries.js";
 import type * as features_reports__schema from "../features/reports/_schema.js";
-import type * as features_reports_mutations from "../features/reports/mutations.js";
 import type * as features_reports_analytics from "../features/reports/analytics.js";
 import type * as features_reports_dashboardQueries from "../features/reports/dashboardQueries.js";
+import type * as features_reports_kpiAnalytics from "../features/reports/kpiAnalytics.js";
+import type * as features_reports_mutations from "../features/reports/mutations.js";
 import type * as features_reports_queries from "../features/reports/queries.js";
 import type * as features_sales__schema from "../features/sales/_schema.js";
 import type * as features_sales_mutations from "../features/sales/mutations.js";
 import type * as features_sales_queries from "../features/sales/queries.js";
 import type * as http from "../http.js";
-import type * as users from "../users.js";
 import type * as shared_auth from "../shared/auth.js";
 import type * as shared_helpers from "../shared/helpers.js";
 import type * as shared_index from "../shared/index.js";
 import type * as shared_validators from "../shared/validators.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -62,10 +63,10 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "features/ai/_schema": typeof features_ai__schema;
   "features/ai/actions": typeof features_ai_actions;
-  "features/ai/mutations": typeof features_ai_mutations;
-  "features/ai/queries": typeof features_ai_queries;
   "features/ai/embedding": typeof features_ai_embedding;
   "features/ai/indexing": typeof features_ai_indexing;
+  "features/ai/mutations": typeof features_ai_mutations;
+  "features/ai/queries": typeof features_ai_queries;
   "features/ai/search": typeof features_ai_search;
   "features/audit/_schema": typeof features_audit__schema;
   "features/audit/mutations": typeof features_audit_mutations;
@@ -91,17 +92,18 @@ declare const fullApi: ApiFromModules<{
   "features/reports/_schema": typeof features_reports__schema;
   "features/reports/analytics": typeof features_reports_analytics;
   "features/reports/dashboardQueries": typeof features_reports_dashboardQueries;
+  "features/reports/kpiAnalytics": typeof features_reports_kpiAnalytics;
   "features/reports/mutations": typeof features_reports_mutations;
   "features/reports/queries": typeof features_reports_queries;
   "features/sales/_schema": typeof features_sales__schema;
   "features/sales/mutations": typeof features_sales_mutations;
   "features/sales/queries": typeof features_sales_queries;
   http: typeof http;
-  users: typeof users;
   "shared/auth": typeof shared_auth;
   "shared/helpers": typeof shared_helpers;
   "shared/index": typeof shared_index;
   "shared/validators": typeof shared_validators;
+  users: typeof users;
 }>;
 
 /**

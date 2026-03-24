@@ -367,20 +367,6 @@ export default function LaporanUploadPage() {
       parsed.costAnalysis.length + parsed.cashFlow.length + parsed.insentif.length
     : 0;
 
-  // ─── DEBUG: Log semua kondisi tombol Import ─────────────────
-  console.log("[UPLOAD DEBUG]", {
-    step,
-    branches_loading: branches === undefined,
-    branches_count: branches?.length ?? "undefined",
-    branchId: branchId ?? "undefined",
-    totalParsed,
-    parsed_exists: !!parsed,
-    duplicateReport: !!duplicateReport,
-    button_disabled: !branchId || totalParsed === 0,
-    button_disabled_reason: !branchId ? "NO_BRANCH" : totalParsed === 0 ? "NO_RECORDS" : "NONE (should be enabled)",
-    seededRef: seededRef.current,
-  });
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 lg:p-8">
       <div>
