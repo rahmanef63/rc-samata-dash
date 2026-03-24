@@ -84,46 +84,89 @@ export function parseVendor(wb: XLSX.WorkBook): VendorPurchaseItem[] {
   let currentSection = "UMUM";
   const dataStartRow = 8; // First data/section row
 
+  // Known section keywords for explicit detection
+  const SECTION_KEYWORDS = [
+    "AYAM", "PELENGKAP", "BAHAN ES", "MINUMAN", "MINYAK", "BUMBU",
+    "GROCERIES", "PEMBUNGKUS", "PEMBERSIH", "LAIN", "MARINADE",
+  ];
+
+  // Track vertical-spelling accumulator for col1
+  // VENDOR sheet spells section names vertically in col1: P-E-M-B-U-N-G-K-U-S
+  let verticalLetters = "";
+  let verticalStartRow = -1;
+
+  function matchSection(text: string): string | null {
+    const upper = text.toUpperCase().trim();
+    for (const kw of SECTION_KEYWORDS) {
+      if (upper.includes(kw)) return text.trim();
+    }
+    return null;
+  }
+
   for (let i = dataStartRow; i < rows.length; i++) {
     const row = rows[i];
+    const col1Raw = String(row[1] ?? "").trim();
     const col2 = row[2];
     const col3 = String(row[3] ?? "").trim();
+    const col1Upper = col1Raw.toUpperCase();
+    const col3Upper = col3.toUpperCase();
+    const itemNum = toNumber(col2);
+
+    // ── Detect section from col1 (inline full word like "MINYAK") ──
+    if (col1Upper && col1Upper.length > 2 && !col1Upper.includes("NB") && !col1Upper.includes("VENDOR")) {
+      const sec = matchSection(col1Upper);
+      if (sec) {
+        currentSection = sec;
+        // col1 section label may coexist with item data in cols 2+, so don't skip
+      }
+    }
+
+    // ── Detect vertical spelling in col1 (single letters like P, E, M, B, ...) ──
+    if (col1Upper.length === 1 && /^[A-Z]$/.test(col1Upper)) {
+      if (verticalStartRow === -1 || i - verticalStartRow <= (verticalLetters.length + 1)) {
+        if (verticalLetters === "") verticalStartRow = i;
+        verticalLetters += col1Upper;
+      } else {
+        verticalLetters = col1Upper;
+        verticalStartRow = i;
+      }
+      // Check if accumulated letters form a known section
+      const sec = matchSection(verticalLetters);
+      if (sec) {
+        currentSection = verticalLetters;
+        // Don't reset — more letters might come
+      }
+    } else if (col1Upper.length !== 1) {
+      // Reset vertical accumulator when we see non-single-letter
+      if (verticalLetters.length > 2) {
+        const sec = matchSection(verticalLetters);
+        if (sec) currentSection = verticalLetters;
+      }
+      verticalLetters = "";
+      verticalStartRow = -1;
+    }
 
     if (!col3 && !col2) continue;
 
-    // Detect section headers — they have text in col 3 but no number in col 2,
-    // or text in col 1 as category label
-    const col1Str = String(row[1] ?? "").toUpperCase().trim();
-    const col3Upper = col3.toUpperCase();
-
-    // Section header: text in col 3 with no item number, and it matches known sections
-    // OR text spans multiple columns indicating a section
-    const itemNum = toNumber(col2);
-    const isSectionHeader = col3Upper && itemNum === 0 && !col3Upper.match(/^\d/) &&
-      (col3Upper === "AYAM" || col3Upper.includes("PELENGKAP") || col3Upper.includes("BAHAN ES") ||
-       col3Upper.includes("MINUMAN") || col3Upper.includes("MINYAK") || col3Upper.includes("BUMBU") ||
-       col3Upper.includes("GROCERIES") || col3Upper.includes("PEMBUNGKUS") || col3Upper.includes("PEMBERSIH") ||
-       col3Upper.includes("LAIN"));
-
-    if (isSectionHeader) {
-      currentSection = col3;
-      continue;
+    // ── Detect section from col3 (no item number) ──
+    if (col3Upper && itemNum === 0 && !col3Upper.match(/^\d/)) {
+      const sec = matchSection(col3Upper);
+      if (sec) {
+        currentSection = col3;
+        continue;
+      }
     }
 
-    // Also detect section from col 1 single letters that spell section names (A-Y-A-M etc.)
-    // These appear as single chars: "A", "Y", "A", "M" in consecutive rows col 1
-    // But they co-occur with item data in cols 2+, so just use them as section marker
-    // if no item number is present
-
-    // Item rows: must have a valid name in col 3
+    // Item rows: must have a valid name in col3
     if (!col3 || col3 === "0") continue;
 
-    // Skip header-like text
-    if (col3Upper.includes("KETERANGAN") || col3Upper === "NO" || col3Upper.includes("TOTAL")) continue;
+    // Skip header-like text and totals
+    if (col3Upper.includes("KETERANGAN") || col3Upper === "NO" ||
+        col3Upper.startsWith("TOTAL") || col3Upper.includes("VENDOR REPORT") ||
+        col3Upper.includes("BAHAN") && col3Upper.includes("HARI")) continue;
 
     // Extract values
     const prevWeekValue = toNumber(row[colPrevWeekRp]);
-    const prevWeekUnit = toNumber(row[colPrevWeekUnit]);
     const openingValue = toNumber(row[colOpeningRp]);
     const openingUnit = toNumber(row[colOpeningUnit]);
     const purchaseValue = toNumber(row[colTotalPurchaseRp]);
