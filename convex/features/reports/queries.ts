@@ -176,3 +176,61 @@ export const listEmployeeAllowances = query({
   },
 });
 
+// ─── Finance Bridge Queries (aggregate report data by branch) ──
+
+export const getSalesByBranch = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const all = [];
+    for (const r of reports) {
+      const items = await ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      all.push(...items);
+    }
+    return all;
+  },
+});
+
+export const getExpensesByBranch = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const all = [];
+    for (const r of reports) {
+      const items = await ctx.db.query("lpkkExpenses").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      all.push(...items);
+    }
+    return all;
+  },
+});
+
+export const getPayablesByBranch = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const all = [];
+    for (const r of reports) {
+      const items = await ctx.db.query("creditPurchases").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      all.push(...items);
+    }
+    return all;
+  },
+});
+
+export const getCashFlowByBranch = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const all = [];
+    for (const r of reports) {
+      const items = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      all.push(...items);
+    }
+    return all.sort((a, b) => b.businessDate.localeCompare(a.businessDate));
+  },
+});
+

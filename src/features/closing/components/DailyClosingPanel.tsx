@@ -82,7 +82,25 @@ export function DailyClosingPanel() {
   const currentBranchId = branches?.[0]?._id;
 
   const rawClosings = useListClosings(currentBranchId || "");
-  const closingsData = (rawClosings || []).map(c => ({ ...c, id: c._id })) as unknown as DailyClosing[];
+  const reportCashFlow = useQuery(api.features.reports.queries.getCashFlowByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+
+  const manualClosings = (rawClosings || []).map(c => ({ ...c, id: c._id })) as unknown as DailyClosing[];
+  const reportClosings: DailyClosing[] = (reportCashFlow || []).map((cf: any) => ({
+    id: cf._id,
+    _id: cf._id,
+    businessDate: cf.businessDate ?? "",
+    openingCash: cf.openingBalance ?? 0,
+    cashSales: cf.salesInflow ?? 0,
+    nonCashSales: cf.otherInflow ?? 0,
+    expensesPaidCash: cf.expenseOutflow ?? 0,
+    expectedCash: cf.closingBalance ?? 0,
+    actualCash: cf.closingBalance ?? 0,
+    difference: 0,
+    status: "verified" as const,
+    branchId: cf.branchId,
+    _creationTime: cf._creationTime,
+  })) as unknown as DailyClosing[];
+  const closingsData = manualClosings.length > 0 ? manualClosings : reportClosings;
 
   const rawTransfers = useListTransfers(currentBranchId || "");
   const transfersData = (rawTransfers || []).map(t => ({ ...t, id: t._id })) as unknown as OwnerTransfer[];

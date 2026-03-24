@@ -47,7 +47,26 @@ export function DailySalesForm() {
   const currentBranchId = branches?.[0]?._id;
 
   const rawSales = useDailySales(currentBranchId || "");
-  const salesData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as DailySale[];
+  const reportSales = useQuery(api.features.reports.queries.getSalesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+
+  // Merge manual entries + uploaded report data (transformed to DailySale shape)
+  const manualData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as DailySale[];
+  const reportData: DailySale[] = (reportSales || []).map((s: any) => ({
+    id: s._id,
+    _id: s._id,
+    businessDate: s.businessDate ?? "",
+    channelName: s.channel === "grabfood" ? "GrabFood" : s.channel === "gofood" ? "GoFood" : s.channel === "shopeefood" ? "ShopeeFood" : s.channel === "tambahan" ? "Tambahan" : "Dine-in",
+    grossAmount: s.amount ?? 0,
+    platformFee: 0,
+    promoCost: 0,
+    netAmount: s.amount ?? 0,
+    cashReceivedAmount: 0,
+    status: "recorded" as const,
+    referenceNo: s.productName ?? "",
+    branchId: s.branchId,
+    _creationTime: s._creationTime,
+  })) as unknown as DailySale[];
+  const salesData = manualData.length > 0 ? manualData : reportData;
 
   const mutations = {
     createMutation: useCreateSale(),

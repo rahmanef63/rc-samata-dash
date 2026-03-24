@@ -32,7 +32,24 @@ export function ExpensesOverview() {
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 
   const rawExpenses = useExpenses(currentBranchId || "");
-  const expensesData = (rawExpenses || []).map(e => ({ ...e, id: e._id })) as unknown as Expense[];
+  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+
+  const manualExpenses = (rawExpenses || []).map(e => ({ ...e, id: e._id })) as unknown as Expense[];
+  const reportData: Expense[] = (reportExpenses || []).map((e: any) => ({
+    id: e._id,
+    _id: e._id,
+    expenseDate: e.expenseDate ?? "",
+    description: e.description ?? "",
+    categoryName: e.categoryLabel ?? e.categoryType ?? "",
+    amount: e.amount ?? 0,
+    paymentSource: "petty_cash",
+    vendorName: "",
+    hasAttachment: false,
+    status: "approved" as const,
+    branchId: e.branchId,
+    _creationTime: e._creationTime,
+  })) as unknown as Expense[];
+  const expensesData = manualExpenses.length > 0 ? manualExpenses : reportData;
 
   const mutations = {
     createMutation: useCreateExpense(),

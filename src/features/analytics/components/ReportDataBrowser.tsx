@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { TagBadge, hashColor, type TagOption } from "@/components/ui/tag-select";
+import { TagBadge, TagSelect, hashColor, type TagOption } from "@/components/ui/tag-select";
 import { formatRpFull } from "@/shared/lib";
 import { Loader2, Search, Database } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -190,6 +190,7 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 
 function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyReports">; search: string; channelFilter?: string | null }) {
   const data = useQuery(api.features.reports.queries.getProductSales, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateProductSale);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((s) => {
@@ -222,8 +223,8 @@ function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyR
               return (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{s.productName}</td>
-                  <td className="px-3 py-1.5">
-                    {channel && <TagBadge option={channel} size="xs" />}
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={s.channel ?? "all"} options={channelOptions} onChange={(v) => v && update({ id: s._id, channel: v })} placeholder="Channel" className="min-w-[100px]" />
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{s.businessDate}</td>
                   <td className="px-3 py-1.5 text-right">{s.qty}</td>
@@ -244,6 +245,7 @@ function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyR
 
 function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getVendorPurchases, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateVendorPurchase);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((v) =>
@@ -271,15 +273,13 @@ function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; sear
             </tr>
           </thead>
           <tbody>
-            {filtered.map((v, i) => {
-              const sectionTag: TagOption | null = v.section
-                ? { value: v.section, label: v.section }
-                : null;
-              return (
+            {(() => {
+              const sectionOpts: TagOption[] = [...new Set(data.map((v) => v.section).filter(Boolean))].map((s) => ({ value: s!, label: s! }));
+              return filtered.map((v, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{v.commodityName}</td>
-                  <td className="px-3 py-1.5">
-                    {sectionTag && <TagBadge option={sectionTag} size="xs" />}
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={v.section ?? ""} options={sectionOpts} onChange={(val) => val && update({ id: v._id, section: val })} onCreate={(label) => update({ id: v._id, section: label })} placeholder="Section" className="min-w-[90px]" />
                   </td>
                   <td className="px-3 py-1.5 text-right">{fmtN(v.openingQty, 1)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(v.openingValue)}</td>
@@ -289,8 +289,8 @@ function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; sear
                   <td className="px-3 py-1.5 text-right">{fmtN(v.closingQty, 1)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(v.closingValue)}</td>
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
         </table>
       </ScrollableTable>
@@ -469,6 +469,7 @@ function CostAnalysisTable({ reportId, search }: { reportId: Id<"weeklyReports">
 
 function InventoryTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getInventoryValuation, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateInventoryValuation);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((v) =>
@@ -492,19 +493,21 @@ function InventoryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
             </tr>
           </thead>
           <tbody>
-            {filtered.map((v, i) => {
-              const catTag: TagOption = { value: v.category, label: v.category };
-              return (
+            {(() => {
+              const catOpts: TagOption[] = [...new Set(data.map((v) => v.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              return filtered.map((v, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{v.itemName}</td>
-                  <td className="px-3 py-1.5"><TagBadge option={catTag} size="xs" /></td>
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={v.category} options={catOpts} onChange={(val) => val && update({ id: v._id, category: val })} onCreate={(label) => update({ id: v._id, category: label })} placeholder="Kategori" className="min-w-[90px]" />
+                  </td>
                   <td className="px-3 py-1.5 text-right">{fmtN(v.qty, 2)}</td>
                   <td className="px-3 py-1.5 text-muted-foreground">{v.unit}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(v.unitPrice)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-primary font-medium">{fmtN(v.totalValue)}</td>
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
         </table>
       </ScrollableTable>
@@ -516,6 +519,7 @@ function InventoryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
 
 function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getProductHPP, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateProductHPP);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((h) =>
@@ -539,14 +543,17 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
             </tr>
           </thead>
           <tbody>
-            {filtered.map((h, i) => {
-              const classTag: TagOption = { value: h.pricingClass, label: h.pricingClass };
+            {(() => {
+              const classOpts: TagOption[] = [...new Set(data.map((h) => h.pricingClass).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              return filtered.map((h, i) => {
               const margin = h.sellingPrice ? h.sellingPrice - h.totalHPP : 0;
               const marginPct = h.sellingPrice ? (margin / h.sellingPrice * 100) : 0;
               return (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{h.productName}</td>
-                  <td className="px-3 py-1.5"><TagBadge option={classTag} size="xs" /></td>
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={h.pricingClass} options={classOpts} onChange={(val) => val && update({ id: h._id, pricingClass: val })} onCreate={(label) => update({ id: h._id, pricingClass: label })} placeholder="Kelas" className="min-w-[80px]" />
+                  </td>
                   <td className="px-3 py-1.5 text-right font-mono text-destructive">{fmtN(h.totalHPP)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{h.sellingPrice ? fmtN(h.sellingPrice) : "-"}</td>
                   <td className={`px-3 py-1.5 text-right font-semibold ${marginPct >= 35 ? "text-green-600" : marginPct >= 20 ? "text-yellow-600" : "text-red-600"}`}>
@@ -555,7 +562,8 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
                   <td className="px-3 py-1.5 text-right text-muted-foreground">{h.ingredients?.length ?? 0}</td>
                 </tr>
               );
-            })}
+            });
+            })()}
           </tbody>
         </table>
       </ScrollableTable>
@@ -567,6 +575,7 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
 
 function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"weeklyReports">; search: string; directionFilter?: string | null }) {
   const data = useQuery(api.features.reports.queries.getTransferItems, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateTransferItem);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((t) => {
@@ -593,22 +602,23 @@ function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"we
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t, i) => {
-              const dirTag = directionOptions.find((d) => d.value === t.direction);
-              const catTag: TagOption = { value: t.category, label: t.category };
-              return (
+            {(() => {
+              const catOpts: TagOption[] = [...new Set(data.map((t) => t.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              return filtered.map((t, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{t.itemName}</td>
-                  <td className="px-3 py-1.5">
-                    {dirTag && <TagBadge option={dirTag} size="xs" />}
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={t.direction} options={directionOptions} onChange={(val) => val && update({ id: t._id, direction: val })} placeholder="Arah" className="min-w-[100px]" />
                   </td>
-                  <td className="px-3 py-1.5"><TagBadge option={catTag} size="xs" /></td>
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={t.category} options={catOpts} onChange={(val) => val && update({ id: t._id, category: val })} onCreate={(label) => update({ id: t._id, category: label })} placeholder="Kategori" className="min-w-[90px]" />
+                  </td>
                   <td className="px-3 py-1.5 text-right">{fmtN(t.qty, 1)}</td>
                   <td className="px-3 py-1.5 text-muted-foreground">{t.unit ?? "-"}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-primary">{fmtN(t.totalValue)}</td>
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
         </table>
       </ScrollableTable>
@@ -620,6 +630,7 @@ function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"we
 
 function IncentiveTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getEmployeeIncentives, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateEmployeeIncentive);
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((e) =>
@@ -641,17 +652,19 @@ function IncentiveTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
             </tr>
           </thead>
           <tbody>
-            {filtered.map((e, i) => {
-              const typeTag: TagOption = { value: e.incentiveType, label: e.incentiveType };
-              return (
+            {(() => {
+              const typeOpts: TagOption[] = [...new Set(data.map((e) => e.incentiveType).filter(Boolean))].map((t) => ({ value: t, label: t }));
+              return filtered.map((e, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 font-medium">{e.employeeName}</td>
-                  <td className="px-3 py-1.5"><TagBadge option={typeTag} size="xs" /></td>
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={e.incentiveType} options={typeOpts} onChange={(val) => val && update({ id: e._id, incentiveType: val })} onCreate={(label) => update({ id: e._id, incentiveType: label })} placeholder="Tipe" className="min-w-[90px]" />
+                  </td>
                   <td className="px-3 py-1.5 text-right font-mono text-primary">{fmtN(e.amount)}</td>
                   <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[200px]">{e.notes ?? "-"}</td>
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
         </table>
       </ScrollableTable>
@@ -663,6 +676,7 @@ function IncentiveTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
 
 function FCSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getFoodCostSummary, { reportId });
+  const update = useMutation(api.features.reports.mutations.updateFoodCostSummary);
   if (!data) return <TableLoading />;
   if (data.length === 0) return <TableEmpty tableName="ikhtisar FC" />;
 
@@ -684,11 +698,13 @@ function FCSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
             </tr>
           </thead>
           <tbody>
-            {data.map((f, i) => {
-              const catTag: TagOption = { value: f.category, label: f.category };
-              return (
+            {(() => {
+              const catOpts: TagOption[] = [...new Set(data.map((f) => f.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              return data.map((f, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5"><TagBadge option={catTag} size="xs" /></td>
+                  <td className="px-1 py-0.5">
+                    <TagSelect value={f.category} options={catOpts} onChange={(val) => val && update({ id: f._id, category: val })} onCreate={(label) => update({ id: f._id, category: label })} placeholder="Kategori" className="min-w-[90px]" />
+                  </td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(f.openingValue)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(f.purchaseValue)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-orange-600">{fmtN(f.transferOutValue)}</td>
@@ -699,8 +715,8 @@ function FCSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
                     (f.foodCostPct ?? 0) <= 35 ? "text-green-600" : (f.foodCostPct ?? 0) <= 42 ? "text-yellow-600" : "text-red-600"
                   }`}>{f.foodCostPct ? `${f.foodCostPct.toFixed(1)}%` : "-"}</td>
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
         </table>
       </ScrollableTable>

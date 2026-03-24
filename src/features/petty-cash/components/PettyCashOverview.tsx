@@ -60,7 +60,24 @@ export function PettyCashOverview() {
   const currentBranchId = branches?.[0]?._id;
 
   const rawRequests = usePettyCashRequests(currentBranchId || "");
-  const requestsData = (rawRequests || []).map(r => ({ ...r, id: r._id })) as unknown as PettyCashRequest[];
+  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+
+  const manualData = (rawRequests || []).map(r => ({ ...r, id: r._id })) as unknown as PettyCashRequest[];
+  const reportData: PettyCashRequest[] = (reportExpenses || []).map((e: any) => ({
+    id: e._id,
+    _id: e._id,
+    requestDate: e.expenseDate ?? "",
+    requestedBy: e.categoryLabel ?? e.categoryType ?? "",
+    purposeCategory: e.categoryType === "cogs" ? "Bahan Baku" : e.categoryType === "utility" ? "Utilitas" : "Lain-lain",
+    requestedAmount: e.amount ?? 0,
+    approvedAmount: e.amount ?? 0,
+    actualAmount: e.amount ?? 0,
+    notes: e.description ?? "",
+    status: "closed" as const,
+    branchId: e.branchId,
+    _creationTime: e._creationTime,
+  })) as unknown as PettyCashRequest[];
+  const requestsData = manualData.length > 0 ? manualData : reportData;
 
   const mutations = {
     createMutation: useCreatePettyCashRequest(),

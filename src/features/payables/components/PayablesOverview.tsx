@@ -48,11 +48,28 @@ export function PayablesOverview() {
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 
   const rawPayables = usePayables(currentBranchId || "");
-  const payablesData = (rawPayables || []).map(p => ({
+  const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+
+  const manualPayables = (rawPayables || []).map(p => ({
     ...p,
     id: p._id,
     agingDays: p.dueDate ? Math.max(0, Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000)) : 0,
   })) as unknown as Payable[];
+  const reportData: Payable[] = (reportPayables || []).map((p: any) => ({
+    id: p._id,
+    _id: p._id,
+    vendorName: p.supplierName ?? "",
+    description: p.itemName ?? "",
+    amount: p.totalAmount ?? 0,
+    paidAmount: 0,
+    invoiceDate: p.businessDate ?? "",
+    dueDate: p.dueDate ?? "",
+    agingDays: p.dueDate ? Math.max(0, Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000)) : 0,
+    status: "open" as const,
+    branchId: p.branchId,
+    _creationTime: p._creationTime,
+  })) as unknown as Payable[];
+  const payablesData = manualPayables.length > 0 ? manualPayables : reportData;
 
   const mutations = {
     createMutation: useCreatePayable(),

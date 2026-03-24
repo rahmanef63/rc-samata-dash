@@ -660,3 +660,75 @@ export const deleteWeeklyReport = mutation({
   },
 });
 
+// ─── Inline Update Mutations (for ReportDataBrowser editing) ──
+
+export const updateProductSale = mutation({
+  args: { id: v.id("productSales"), channel: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateVendorPurchase = mutation({
+  args: { id: v.id("vendorPurchases"), section: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateInventoryValuation = mutation({
+  args: { id: v.id("inventoryValuation"), category: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateProductHPP = mutation({
+  args: { id: v.id("productHPP"), pricingClass: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateTransferItem = mutation({
+  args: { id: v.id("transferItems"), direction: v.optional(v.string()), category: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateEmployeeIncentive = mutation({
+  args: { id: v.id("employeeIncentives"), incentiveType: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
+export const updateFoodCostSummary = mutation({
+  args: { id: v.id("foodCostSummary"), category: v.optional(v.string()) },
+  handler: async (ctx, { id, ...updates }) => {
+    await requireAuth(ctx);
+    const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    if (Object.keys(clean).length > 0) await ctx.db.patch(id, clean);
+    return id;
+  },
+});
+
