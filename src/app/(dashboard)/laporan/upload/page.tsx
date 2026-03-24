@@ -24,7 +24,7 @@ import { UploadDropzone } from "@/features/report-upload/components/UploadDropzo
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, XCircle, Brain } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -141,9 +141,8 @@ export default function LaporanUploadPage() {
       setValidationWarnings(warnings);
       setStep("preview");
       const total = Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
-      const errorCount = warnings.filter((w) => w.severity === "error").length;
-      if (errorCount > 0) {
-        toast.warning(`File dibaca: ${total} record — ${errorCount} error ditemukan`);
+      if (warnings.length > 0) {
+        toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet (${warnings.length} catatan)`);
       } else {
         toast.success(`File dibaca: ${total} record dari ${wb.SheetNames.length} sheet`);
       }
@@ -441,25 +440,24 @@ export default function LaporanUploadPage() {
                 <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} onDataChange={handleDataChange} />
               </div>
 
-              {/* ─── Validation Warnings ─── */}
+              {/* ─── Validation Info ─── */}
               {validationWarnings.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
+                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-full">Informatif — tidak memblokir upload</span>
+                  </div>
                   {validationWarnings.map((w, i) => (
                     <div
                       key={i}
                       className={`rounded-xl border p-4 text-sm shadow-sm ${
-                        w.severity === "error"
-                          ? "border-red-300 bg-red-50 dark:bg-red-950/20 dark:border-red-800"
-                          : w.severity === "warning"
-                            ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
-                            : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
+                        w.severity === "warning"
+                          ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
+                          : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        {w.severity === "error" ? (
-                          <XCircle className="h-5 w-5 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
-                        ) : w.severity === "warning" ? (
+                        {w.severity === "warning" ? (
                           <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
                         ) : (
                           <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
@@ -469,6 +467,7 @@ export default function LaporanUploadPage() {
                             <span className="text-xs text-muted-foreground font-mono bg-background/50 px-1.5 py-0.5 rounded mr-2">[{w.category}]</span>
                             {w.message}
                           </p>
+                          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{w.tip}</p>
                           {w.details && w.details.length > 0 && (
                             <ul className="mt-2 text-xs text-muted-foreground space-y-1 bg-background/30 rounded-lg py-2 px-3">
                               {w.details.map((d, j) => (
@@ -489,14 +488,14 @@ export default function LaporanUploadPage() {
                 </button>
                 <button
                   onClick={checkAndImport}
-                  disabled={!branchId || totalParsed === 0 || validationWarnings.some((w) => w.severity === "error")}
+                  disabled={!branchId || totalParsed === 0}
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                 >
                   <Upload className="h-4 w-4" />
                   Import {totalParsed} Record
-                  {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
+                  {validationWarnings.length > 0 && (
                     <span className="text-xs opacity-75 font-normal bg-black/10 px-1.5 py-0.5 rounded">
-                      ({validationWarnings.filter((w) => w.severity === "warning").length} warning)
+                      ({validationWarnings.length} catatan)
                     </span>
                   )}
                 </button>

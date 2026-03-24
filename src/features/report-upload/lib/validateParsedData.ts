@@ -1,6 +1,9 @@
 /**
  * Client-side validation for parsed Excel data.
  * Runs after parsing but before import to catch data quality issues.
+ *
+ * ALL validations are INFORMATIONAL ONLY — they never block import.
+ * User can always upload and delete later if something is wrong.
  */
 
 import type { ProductSaleItem } from "../parsers/parsePenjualan";
@@ -10,12 +13,13 @@ import type { CostAnalysisItem } from "../parsers/parseCostAnalysis";
 import type { DailyCashFlowItem } from "../parsers/parseLapCF";
 import type { DailyCashSummaryItem } from "../parsers/parseLaporanKasPeriode";
 
-export type ValidationSeverity = "error" | "warning" | "info";
+export type ValidationSeverity = "warning" | "info";
 
 export type ValidationWarning = {
   severity: ValidationSeverity;
   category: string;
   message: string;
+  tip: string;
   details?: string[];
 };
 
@@ -46,10 +50,11 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
   // 1. Period date validation
   if (!data.periodStart || !data.periodEnd) {
     warnings.push({
-      severity: "error",
+      severity: "warning",
       category: "Periode",
       message: "Periode tidak terdeteksi dari nama file",
-      details: ["Format nama file harus: 'NEW LAP 1-7 JAN 2025.xlsx'"],
+      tip: "Format nama file harus: 'NEW LAP 1-7 JAN 2025.xlsx'. Tanpa periode, beberapa laporan mungkin tidak terkelompok dengan benar.",
+      details: ["Rename file sesuai format, lalu upload ulang jika perlu"],
     });
   }
 
@@ -63,9 +68,10 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
 
   if (emptySections.length > 0) {
     warnings.push({
-      severity: "warning",
+      severity: "info",
       category: "Data Kosong",
       message: `${emptySections.length} tabel tidak ada data`,
+      tip: "Tidak semua sheet harus terisi. Tabel kosong akan di-skip saat import.",
       details: emptySections.map((s) => `${s}: 0 record`),
     });
   }
@@ -78,9 +84,10 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
   const salesWithoutHPP = salesProductNames.filter((n) => !hppProductNames.has(n));
   if (salesWithoutHPP.length > 0) {
     warnings.push({
-      severity: "warning",
+      severity: "info",
       category: "HPP Coverage",
       message: `${salesWithoutHPP.length} produk penjualan tanpa data HPP`,
+      tip: "Produk ini tetap di-import, tapi perhitungan margin/profit tidak bisa dihitung karena tidak ada data HPP. Ini normal jika sheet HPP tidak lengkap.",
       details: salesWithoutHPP.slice(0, 10).map((n) => n),
     });
   }
@@ -95,6 +102,7 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
       severity: "info",
       category: "Cost Analysis",
       message: `${vendorWithoutCA.length} item vendor tanpa cost analysis`,
+      tip: "Item vendor tetap di-import. Cost analysis hanya untuk cross-check harga vendor — tidak wajib ada.",
       details: vendorWithoutCA.slice(0, 8),
     });
   }
@@ -114,6 +122,7 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
       severity: "warning",
       category: "Nilai Negatif",
       message: `${negativeItems.length} record dengan nilai negatif`,
+      tip: "Nilai negatif bisa berarti retur atau koreksi. Data tetap di-import apa adanya — cek di laporan jika angka terlihat janggal.",
       details: negativeItems.slice(0, 8),
     });
   }
@@ -138,6 +147,7 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
         severity: "warning",
         category: "Tanggal",
         message: `${unique.length} record di luar periode ${data.periodStart} → ${data.periodEnd}`,
+        tip: "Kemungkinan tanggal di Excel berbeda dari periode nama file. Data tetap di-import semua — cek ulang nanti jika ada tanggal yang salah.",
         details: unique.slice(0, 8),
       });
     }
@@ -149,9 +159,10 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
     const diff = Math.abs(cf.closingBalance - expected);
     if (diff > 100000 && cf.closingBalance > 0) {
       warnings.push({
-        severity: "warning",
+        severity: "info",
         category: "Cash Flow",
         message: `Cash flow ${cf.businessDate}: selisih Rp ${Math.round(diff).toLocaleString("id-ID")}`,
+        tip: "Ada selisih antara saldo penutup yang tercatat vs yang dihitung (opening + in - out). Bisa karena ada transaksi yang belum tercatat. Data tetap di-import.",
         details: [
           `Opening: ${cf.openingBalance.toLocaleString("id-ID")}`,
           `Sales: +${cf.salesInflow.toLocaleString("id-ID")}`,
@@ -181,6 +192,7 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
       severity: "info",
       category: "Duplikat Nama",
       message: `${dupes.length} kemungkinan duplikat nama produk`,
+      tip: "Nama produk yang mirip (beda spasi/titik) mungkin sebenarnya produk yang sama. Tidak mempengaruhi import.",
       details: dupes.slice(0, 5).map((g) => g.join(" ↔ ")),
     });
   }
