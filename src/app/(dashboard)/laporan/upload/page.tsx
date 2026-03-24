@@ -512,6 +512,20 @@ export default function LaporanUploadPage() {
                 </div>
               )}
 
+              {!branchId && branches !== undefined && branches.length === 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 px-4 py-3">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-300 font-medium">Belum ada cabang — buat dulu sebelum import</p>
+                  <button
+                    onClick={async () => {
+                      await createBranch({ code: "RC-SAMATA", name: "RC Samata Gowa", location: "Gowa, Sulawesi Selatan", isActive: true });
+                      toast.success("Cabang RC Samata Gowa berhasil dibuat");
+                    }}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold transition-colors"
+                  >
+                    Buat Cabang
+                  </button>
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button onClick={reset} className="px-6 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/50 text-sm font-medium transition-colors shadow-sm">
                   Batal
