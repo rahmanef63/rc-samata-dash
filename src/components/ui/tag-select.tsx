@@ -59,16 +59,18 @@ function TagBadge({
       <span className={cn("rounded-full shrink-0", color.dot, size === "sm" ? "h-1.5 w-1.5" : "h-1 w-1")} />
       {option.label}
       {onRemove && (
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
           }}
-          className="ml-0.5 rounded-sm hover:bg-black/10 dark:hover:bg-white/10 p-px"
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onRemove(); } }}
+          className="ml-0.5 rounded-sm hover:bg-black/10 dark:hover:bg-white/10 p-px cursor-pointer"
         >
           <X className={size === "sm" ? "h-3 w-3" : "h-2.5 w-2.5"} />
-        </button>
+        </span>
       )}
     </span>
   );
