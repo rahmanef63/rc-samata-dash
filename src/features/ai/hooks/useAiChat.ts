@@ -20,7 +20,7 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
   const chatCompletion = useAction(api.features.ai.actions.chatCompletion);
 
   const sendMessage = useCallback(
-    async (content: string, systemPrompt?: string) => {
+    async (content: string, systemPrompt?: string, branchId?: Id<"branches">) => {
       if (!sessionId || !content.trim()) return;
 
       setError(null);
@@ -42,9 +42,11 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
         }
         history.push({ role: "user", content });
 
-        // Call AI
+        // Call AI with RAG enabled by default
         const result = await chatCompletion({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
+          useRag: true,
+          branchId,
         });
 
         // Store assistant response

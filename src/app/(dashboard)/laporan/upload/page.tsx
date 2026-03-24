@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
 import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
@@ -24,7 +24,7 @@ import { UploadDropzone } from "@/features/report-upload/components/UploadDropzo
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, XCircle } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, XCircle, Brain } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -79,6 +79,8 @@ export default function LaporanUploadPage() {
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
   const [result, setResult] = useState<Record<string, number> | null>(null);
   const [duplicateReport, setDuplicateReport] = useState<{ _id: Id<"weeklyReports">; fileName: string; periodStart: string } | null>(null);
+  const [lastReportId, setLastReportId] = useState<Id<"weeklyReports"> | null>(null);
+  const [indexingStatus, setIndexingStatus] = useState<"idle" | "indexing" | "done" | "error">("idle");
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -104,6 +106,8 @@ export default function LaporanUploadPage() {
   const importIncentive   = useMutation(api.features.reports.mutations.importEmployeeIncentivesBatch);
   const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
   const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
+  const indexReport       = useAction(api.features.ai.indexing.indexReportData);
+  const aiConfig          = useQuery(api.features.ai.queries.getAiConfig);
 
   // ─── Parse file ─────────────────────────────────────────────
 
@@ -292,6 +296,7 @@ export default function LaporanUploadPage() {
       });
 
       setResult(counts);
+      setLastReportId(reportId);
       setStep("done");
       toast.success("Import berhasil!");
     } catch (err) {
@@ -317,6 +322,21 @@ export default function LaporanUploadPage() {
     setValidationWarnings([]);
     setDuplicateReport(null);
     setProgress({ current: 0, total: 0, label: "" });
+    setLastReportId(null);
+    setIndexingStatus("idle");
+  };
+
+  const handleIndexForAi = async () => {
+    if (!lastReportId) return;
+    setIndexingStatus("indexing");
+    try {
+      const res = await indexReport({ reportId: lastReportId });
+      setIndexingStatus("done");
+      toast.success(`AI index selesai: ${res.indexed} record di-embed`);
+    } catch (err) {
+      setIndexingStatus("error");
+      toast.error(err instanceof Error ? err.message : "Gagal index data untuk AI");
+    }
   };
 
   // ─── Total record ────────────────────────────────────────────
@@ -516,9 +536,27 @@ export default function LaporanUploadPage() {
               </div>
             ))}
           </div>
-          <button onClick={reset} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-            Upload File Lainnya
-          </button>
+          <div className="flex flex-wrap gap-3">
+            {aiConfig?.provider && aiConfig.provider.embeddingModel && lastReportId && (
+              <button
+                onClick={handleIndexForAi}
+                disabled={indexingStatus === "indexing" || indexingStatus === "done"}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 text-sm font-semibold hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors disabled:opacity-50"
+              >
+                {indexingStatus === "indexing" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : indexingStatus === "done" ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  <Brain className="h-4 w-4" />
+                )}
+                {indexingStatus === "indexing" ? "Indexing..." : indexingStatus === "done" ? "Indexed untuk AI" : "Index untuk AI Chat"}
+              </button>
+            )}
+            <button onClick={reset} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+              Upload File Lainnya
+            </button>
+          </div>
         </div>
       )}
 

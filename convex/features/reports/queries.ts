@@ -1,6 +1,14 @@
-import { query } from "../../_generated/server";
+import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+
+/** Internal: get report by ID (for actions, no auth required) */
+export const getReportById = internalQuery({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    return await ctx.db.get(reportId);
+  },
+});
 
 export const listWeeklyReports = query({
   args: { branchId: v.id("branches") },
@@ -141,3 +149,30 @@ export const getEmployeeIncentives = query({
       .collect();
   },
 });
+
+// ─── Standalone document queries ────────────────────────────
+
+export const listProductChanges = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("productChanges")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const listEmployeeAllowances = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("employeeAllowances")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .collect();
+  },
+});
+

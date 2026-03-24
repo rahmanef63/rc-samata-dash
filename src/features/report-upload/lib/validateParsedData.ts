@@ -135,7 +135,7 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
     const unique = [...new Set(outOfRange)];
     if (unique.length > 0) {
       warnings.push({
-        severity: "error",
+        severity: "warning",
         category: "Tanggal",
         message: `${unique.length} record di luar periode ${data.periodStart} → ${data.periodEnd}`,
         details: unique.slice(0, 8),

@@ -136,6 +136,11 @@ export const getAiConfig = query({
       .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
       .collect();
 
+    // Count total embeddings for RAG status
+    const embeddingDocs = await ctx.db.query("aiEmbeddings").take(1);
+    const hasEmbeddings = embeddingDocs.length > 0;
+    const ragEnabled = hasEmbeddings && !!provider?.embeddingModel;
+
     return {
       provider: provider ? {
         ...provider,
@@ -143,6 +148,25 @@ export const getAiConfig = query({
       } : null,
       instruction,
       tools,
+      ragEnabled,
+      hasEmbeddings,
     };
+  },
+});
+
+/** Get embedding stats for a report */
+export const getEmbeddingStats = query({
+  args: { reportId: v.optional(v.id("weeklyReports")) },
+  handler: async (ctx, { reportId }) => {
+    if (reportId) {
+      const docs = await ctx.db
+        .query("aiEmbeddings")
+        .withIndex("by_report", (q) => q.eq("reportId", reportId))
+        .collect();
+      return { count: docs.length, indexed: docs.length > 0 };
+    }
+    // Total count
+    const allDocs = await ctx.db.query("aiEmbeddings").collect();
+    return { count: allDocs.length, indexed: allDocs.length > 0 };
   },
 });

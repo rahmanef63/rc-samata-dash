@@ -6,7 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   Bot, Send, Plus, Loader2, AlertCircle, MessageSquare, Trash2, Settings,
-  History, X, ChevronLeft, ChevronRight, Paperclip, Image as ImageIcon, FileText, Search
+  History, X, ChevronLeft, ChevronRight, Paperclip, Image as ImageIcon, FileText, Search, Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -186,12 +186,19 @@ export default function ChatPage() {
             </p>
           )}
         </div>
-        {/* Desktop: enabled tools indicator */}
-        {enabledTools.length > 0 && (
-          <div className="p-3 border-t border-border bg-muted/20">
-            <p className="text-[10px] text-muted-foreground font-medium flex items-center justify-center gap-1">
-              <Bot className="h-3 w-3" /> {enabledTools.length} skills aktif
-            </p>
+        {/* Desktop: status indicators */}
+        {(enabledTools.length > 0 || aiConfig?.ragEnabled) && (
+          <div className="p-3 border-t border-border bg-muted/20 space-y-1">
+            {enabledTools.length > 0 && (
+              <p className="text-[10px] text-muted-foreground font-medium flex items-center justify-center gap-1">
+                <Bot className="h-3 w-3" /> {enabledTools.length} skills aktif
+              </p>
+            )}
+            {aiConfig?.ragEnabled && (
+              <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium flex items-center justify-center gap-1">
+                <Database className="h-3 w-3" /> RAG aktif
+              </p>
+            )}
           </div>
         )}
       </div>

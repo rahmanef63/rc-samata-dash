@@ -78,6 +78,19 @@ export { DashboardSalesChart } from "./components/DashboardSalesChart";
 4. Tambah tab di `ImportPreview.tsx`
 5. Buat batch mutation di `convex/features/reports/mutations.ts`
 
+## File Upload Yang Didukung
+
+Project mendukung 3 jenis file upload:
+
+| Jenis | Upload Page | Parser | Convex Table |
+|-------|------------|--------|-------------|
+| NEW LAP (mingguan) | `/laporan/upload` | 15 parsers di `parsers/` | 14 tables via `weeklyReports` |
+| Pergantian Produk | `/laporan/upload-pergantian` | `parseProductChanges.ts` | `productChanges` |
+| Form Tunjangan | `/laporan/upload-tunjangan` | `parseAllowances.ts` | `employeeAllowances` |
+
+NEW LAP menggunakan flow `createReport → importBatch × N → finalizeReport`.
+Pergantian Produk dan Tunjangan menggunakan flow standalone (langsung `importBatch`).
+
 ## Menambah Dashboard Component Baru
 
 1. Buat query di `convex/features/reports/dashboardQueries.ts`

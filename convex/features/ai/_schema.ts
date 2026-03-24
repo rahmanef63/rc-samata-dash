@@ -68,6 +68,27 @@ export const aiTables = {
     .index("by_active", ["isActive"])
     .index("by_default", ["isDefault"]),
 
+  /** Vector embeddings for RAG — stores embedded text chunks from report data */
+  aiEmbeddings: defineTable({
+    sourceTable: v.string(),            // "productSales", "costAnalysis", etc.
+    sourceId: v.string(),               // ID of source document (string for flexibility)
+    branchId: v.id("branches"),
+    reportId: v.optional(v.id("weeklyReports")),
+    periodKey: v.string(),              // "2026-W12", "2026-03" for grouping
+    textContent: v.string(),            // Human-readable text that was embedded
+    embedding: v.array(v.float64()),    // 1536-dim vector
+    embeddingModel: v.string(),         // "text-embedding-3-small"
+    createdAt: v.string(),
+  })
+    .index("by_source", ["sourceTable", "sourceId"])
+    .index("by_report", ["reportId"])
+    .index("by_period", ["branchId", "periodKey"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["sourceTable", "branchId"],
+    }),
+
   aiChatSessions: defineTable({
     title: v.string(),
     providerId: v.optional(v.id("aiProviders")),

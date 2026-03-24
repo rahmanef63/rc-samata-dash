@@ -124,7 +124,7 @@ function parseAnthropicResponse(data: Record<string, unknown>): {
   };
 }
 
-/** Send a chat completion request */
+/** Send a chat completion request (with optional RAG) */
 export const chatCompletion = action({
   args: {
     providerId: v.optional(v.id("aiProviders")),
@@ -135,11 +135,14 @@ export const chatCompletion = action({
         content: v.string(),
       })
     ),
+    useRag: v.optional(v.boolean()),
+    branchId: v.optional(v.id("branches")),
   },
   handler: async (ctx, args): Promise<{
     content: string;
     model: string;
     tokenUsage?: { promptTokens: number; completionTokens: number };
+    ragContext?: string[];
   }> => {
     // Get provider config (with raw API key)
     let provider;
@@ -156,8 +159,46 @@ export const chatCompletion = action({
     }
 
     const model = args.model || provider.defaultModel;
-    const messages = args.messages as Message[];
+    let messages = [...args.messages] as Message[];
     const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
+
+    // RAG: If enabled and provider has embedding model, search for relevant data
+    let ragTexts: string[] = [];
+    if (args.useRag !== false && provider.embeddingModel) {
+      // Get the last user message for search query
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUserMsg) {
+        try {
+          const searchResults: Array<{ text: string; score: number; sourceTable: string; periodKey: string }> =
+            await ctx.runAction(
+              internal.features.ai.search.semanticSearch,
+              {
+                query: lastUserMsg.content,
+                branchId: args.branchId,
+                limit: 8,
+              }
+            );
+
+          if (searchResults.length > 0) {
+            ragTexts = searchResults.map((r) => r.text);
+            const ragContext = `\n\n## Data Konteks dari Database (RAG):\n${ragTexts.map((t) => `- ${t}`).join("\n")}\n\nGunakan data di atas untuk menjawab pertanyaan user secara akurat. Jika data tidak relevan, abaikan.`;
+
+            // Inject RAG context into system message
+            const systemIdx = messages.findIndex((m) => m.role === "system");
+            if (systemIdx >= 0) {
+              messages[systemIdx] = {
+                ...messages[systemIdx],
+                content: messages[systemIdx].content + ragContext,
+              };
+            } else {
+              messages.unshift({ role: "system", content: ragContext });
+            }
+          }
+        } catch {
+          // RAG failure should not block chat — just continue without context
+        }
+      }
+    }
 
     let req;
     if (provider.provider === "anthropic") {
@@ -197,6 +238,7 @@ export const chatCompletion = action({
       content: parsed.content,
       model,
       tokenUsage: parsed.tokenUsage,
+      ragContext: ragTexts.length > 0 ? ragTexts : undefined,
     };
   },
 });

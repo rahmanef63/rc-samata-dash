@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type RouteConfig = {
@@ -21,6 +21,8 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Dashboard", url: "/", icon: Home },
       { title: "Report", url: "/report", icon: BarChart3 },
       { title: "Upload Laporan", url: "/laporan/upload", icon: UploadCloud },
+      { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
+      { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
       { title: "Analisis", url: "/laporan/analisis", icon: PieChart },
       { title: "Chat AI", url: "/chat", icon: Bot },
     ],

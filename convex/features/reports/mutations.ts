@@ -506,6 +506,116 @@ export const finalizeWeeklyReport = mutation({
   },
 });
 
+// ─── 17. Import PERGANTIAN PRODUK → productChanges ───────────
+
+const productChangeItemValidator = v.object({
+  itemName: v.string(),
+  expiredDate: v.optional(v.string()),
+  unit: v.optional(v.string()),
+  unitPrice: v.number(),
+  qty: v.number(),
+  ppn: v.number(),
+  totalPrice: v.number(),
+});
+
+export const importProductChangesBatch = mutation({
+  args: {
+    branchId: v.id("branches"),
+    fileName: v.string(),
+    periodLabel: v.string(),
+    items: v.array(productChangeItemValidator),
+  },
+  handler: async (ctx, { branchId, fileName, periodLabel, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    const uploadedAt = Date.now();
+    for (const item of items) {
+      if (item.totalPrice <= 0) continue;
+      await ctx.db.insert("productChanges", {
+        ...item,
+        branchId,
+        fileName,
+        periodLabel,
+        uploadedAt,
+      });
+      count++;
+    }
+    return count;
+  },
+});
+
+export const deleteProductChanges = mutation({
+  args: { branchId: v.id("branches"), periodLabel: v.string() },
+  handler: async (ctx, { branchId, periodLabel }) => {
+    await requireAuth(ctx);
+    const rows = await ctx.db
+      .query("productChanges")
+      .withIndex("by_branch_period", (q) =>
+        q.eq("branchId", branchId).eq("periodLabel", periodLabel)
+      )
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    return rows.length;
+  },
+});
+
+// ─── 18. Import TUNJANGAN KHUSUS → employeeAllowances ────────
+
+const allowanceItemValidator = v.object({
+  employeeName: v.string(),
+  joinDate: v.optional(v.string()),
+  position: v.optional(v.string()),
+  storeOrigin: v.optional(v.string()),
+  storePlacement: v.optional(v.string()),
+  rotationType: v.optional(v.string()),
+  distance: v.optional(v.string()),
+  travelTime: v.optional(v.string()),
+  luarKotaAmount: v.number(),
+  subsidiTransportAmount: v.number(),
+  budgetKosAmount: v.number(),
+  reimburseNote: v.optional(v.string()),
+  kosNote: v.optional(v.string()),
+});
+
+export const importAllowancesBatch = mutation({
+  args: {
+    branchId: v.id("branches"),
+    fileName: v.string(),
+    periodLabel: v.string(),
+    items: v.array(allowanceItemValidator),
+  },
+  handler: async (ctx, { branchId, fileName, periodLabel, items }) => {
+    await requireAuth(ctx);
+    let count = 0;
+    const uploadedAt = Date.now();
+    for (const item of items) {
+      await ctx.db.insert("employeeAllowances", {
+        ...item,
+        branchId,
+        fileName,
+        periodLabel,
+        uploadedAt,
+      });
+      count++;
+    }
+    return count;
+  },
+});
+
+export const deleteAllowances = mutation({
+  args: { branchId: v.id("branches"), periodLabel: v.string() },
+  handler: async (ctx, { branchId, periodLabel }) => {
+    await requireAuth(ctx);
+    const rows = await ctx.db
+      .query("employeeAllowances")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .filter((q) => q.eq(q.field("periodLabel"), periodLabel))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    return rows.length;
+  },
+});
+
 // ─── 11. Hapus report + semua data terkait ───────────────────
 
 export const deleteWeeklyReport = mutation({
@@ -529,3 +639,4 @@ export const deleteWeeklyReport = mutation({
     return null;
   },
 });
+

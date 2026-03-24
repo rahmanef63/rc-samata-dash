@@ -278,4 +278,50 @@ export const reportsTables = {
   })
     .index("by_report", ["reportId"])
     .index("by_branch_period", ["branchId", "periodStart"]),
+
+  /**
+   * Pergantian produk / bahan — dari file "RC SAMATA PERGANTIAN PRODUK".
+   * Satu record = satu bahan yang diganti/dibuang dalam periode tertentu.
+   */
+  productChanges: defineTable({
+    branchId: v.id("branches"),
+    fileName: v.string(),
+    periodLabel: v.string(),
+    uploadedAt: v.number(),
+    itemName: v.string(),
+    expiredDate: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    unitPrice: v.number(),
+    qty: v.number(),
+    ppn: v.number(),
+    totalPrice: v.number(),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_branch_period", ["branchId", "periodLabel"]),
+
+  /**
+   * Tunjangan khusus karyawan — dari file "FORM PENGAJUAN TUNJANGAN KHUSUS".
+   * Satu record = satu karyawan dengan detail tunjangan.
+   */
+  employeeAllowances: defineTable({
+    branchId: v.id("branches"),
+    fileName: v.string(),
+    periodLabel: v.string(),
+    uploadedAt: v.number(),
+    employeeName: v.string(),
+    joinDate: v.optional(v.string()),
+    position: v.optional(v.string()),
+    storeOrigin: v.optional(v.string()),
+    storePlacement: v.optional(v.string()),
+    rotationType: v.optional(v.string()),
+    distance: v.optional(v.string()),
+    travelTime: v.optional(v.string()),
+    luarKotaAmount: v.number(),
+    subsidiTransportAmount: v.number(),
+    budgetKosAmount: v.number(),
+    reimburseNote: v.optional(v.string()),
+    kosNote: v.optional(v.string()),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_employee", ["branchId", "employeeName"]),
 };

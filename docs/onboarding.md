@@ -304,6 +304,25 @@ Pengaturan aplikasi.
 
 ---
 
+## 10. File Yang Didukung
+
+Project ini mendukung **3 jenis file** untuk di-upload:
+
+| Jenis File | Format | Halaman Upload | Keterangan |
+|---|---|---|---|
+| **NEW LAP** (Laporan Mingguan) | `.xlsx` — 15 sheet | `/laporan/upload` | File utama: penjualan, kas kecil, vendor, food cost, dll |
+| **Pergantian Produk** | `.xlsx` — 1 sheet | `/laporan/upload-pergantian` | Data bahan yang diganti/expired per periode |
+| **Form Tunjangan Khusus** | `.xlsx` — 1 sheet | `/laporan/upload-tunjangan` | Tunjangan luar kota, kost, subsidi transport |
+
+### File yang TIDAK Didukung
+
+| File | Alasan |
+|---|---|
+| BA Pemakaian Ayam (`.docx`) | Format Word, data sudah ada di sheet TO-TI |
+| File `.xls` (Excel lama) | Harus dikonversi ke `.xlsx` terlebih dahulu |
+
+---
+
 ## 9. Troubleshooting
 
 ### File Tidak Bisa Di-parse
@@ -352,7 +371,7 @@ Pengaturan aplikasi.
 
 ## Sheet Excel yang Didukung
 
-File "NEW LAP" memiliki 15 sheet yang di-parse:
+### File NEW LAP (15 sheet)
 
 | No | Sheet | Data | Tabel Database |
 |----|-------|------|---------------|
@@ -374,3 +393,19 @@ File "NEW LAP" memiliki 15 sheet yang di-parse:
 | 16 | COST ANALYSIS | Analisis biaya per item | costAnalysis |
 | 17 | LAP. CF | Arus kas harian | dailyCashFlow |
 | 18 | INSENTIF | Insentif karyawan | employeeIncentives |
+
+### File Pergantian Produk
+
+| Kolom | Data | Tabel Database |
+|-------|------|---------------|
+| NAMA BAHAN | Nama bahan yang diganti | productChanges |
+| EXPIRED | Tanggal expired (opsional) | productChanges |
+| HARGA / JMLH / PPN / TOTAL | Data harga & kuantitas | productChanges |
+
+### File Form Tunjangan Khusus
+
+| Kolom | Data | Tabel Database |
+|-------|------|---------------|
+| NAMA LENGKAP | Nama karyawan | employeeAllowances |
+| JABATAN / STORE | Info posisi & penempatan | employeeAllowances |
+| LUAR KOTA / SUBSIDI TRANSPORT / BUDGET KOS | 3 jenis tunjangan | employeeAllowances |

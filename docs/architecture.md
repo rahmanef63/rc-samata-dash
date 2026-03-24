@@ -42,6 +42,9 @@ rc-samata-dash/
 │   │   │   ├── page.tsx         # Dashboard (/)
 │   │   │   ├── finance/         # Finance routes
 │   │   │   ├── laporan/         # Report upload + analytics
+│   │   │   │   ├── upload/      # NEW LAP weekly report upload
+│   │   │   │   ├── upload-pergantian/  # Pergantian produk upload
+│   │   │   │   └── upload-tunjangan/  # Tunjangan khusus upload
 │   │   │   ├── operation/       # Operations routes
 │   │   │   ├── report/          # Report overview
 │   │   │   └── chat/            # AI chat
@@ -132,6 +135,8 @@ Client stores token → ConvexReactClient authenticated
 | productHPP | HPP per product | by_report |
 | costAnalysis | Cost analysis per item | by_report |
 | employeeIncentives | Employee incentives | by_report, by_branch_period |
+| productChanges | Pergantian produk/bahan expired | by_branch, by_branch_period |
+| employeeAllowances | Tunjangan khusus karyawan | by_branch, by_employee |
 
 ### Master Data Tables
 | Table | Description |
