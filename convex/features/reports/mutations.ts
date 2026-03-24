@@ -498,10 +498,30 @@ export const finalizeWeeklyReport = mutation({
     costAnalysisCount: v.optional(v.number()),
     cashFlowCount: v.optional(v.number()),
     incentiveCount: v.optional(v.number()),
+    validationNotes: v.optional(v.array(v.object({
+      severity: v.string(),
+      category: v.string(),
+      message: v.string(),
+      tip: v.string(),
+    }))),
   },
-  handler: async (ctx, { reportId, ...data }) => {
+  handler: async (ctx, { reportId, validationNotes, ...data }) => {
     await requireAuth(ctx);
-    await ctx.db.patch(reportId, data);
+    const validationStatus = validationNotes && validationNotes.length > 0 ? "needs_review" as const : "clean" as const;
+    await ctx.db.patch(reportId, { ...data, validationStatus, validationNotes });
+    return reportId;
+  },
+});
+
+/** Mark a report's validation as reviewed/validated by user */
+export const updateValidationStatus = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    validationStatus: v.union(v.literal("clean"), v.literal("needs_review"), v.literal("validated")),
+  },
+  handler: async (ctx, { reportId, validationStatus }) => {
+    await requireAuth(ctx);
+    await ctx.db.patch(reportId, { validationStatus });
     return reportId;
   },
 });

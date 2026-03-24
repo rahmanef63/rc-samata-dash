@@ -24,7 +24,7 @@ import { UploadDropzone } from "@/features/report-upload/components/UploadDropzo
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -106,6 +106,7 @@ export default function LaporanUploadPage() {
   const importIncentive   = useMutation(api.features.reports.mutations.importEmployeeIncentivesBatch);
   const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
   const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
+  const updateValidation  = useMutation(api.features.reports.mutations.updateValidationStatus);
   const indexReport       = useAction(api.features.ai.indexing.indexReportData);
   const aiConfig          = useQuery(api.features.ai.queries.getAiConfig);
 
@@ -292,6 +293,12 @@ export default function LaporanUploadPage() {
         costAnalysisCount:   counts.costAnalysis,
         cashFlowCount:       counts.cashFlow,
         incentiveCount:      counts.incentive,
+        validationNotes: validationWarnings.map((w) => ({
+          severity: w.severity,
+          category: w.category,
+          message: w.message,
+          tip: w.tip,
+        })),
       });
 
       setResult(counts);
@@ -648,13 +655,33 @@ export default function LaporanUploadPage() {
                           <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors" title={r.fileName}>
                             {r.fileName}
                           </p>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="text-[10px] font-mono bg-muted/50 px-1.5 py-0.5 rounded text-muted-foreground border border-border/50">
                               #{shortId}
                             </span>
                             <span className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded-full bg-background border border-border">
                               {r.status}
                             </span>
+                            {r.validationStatus === "needs_review" && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await updateValidation({ reportId: r._id, validationStatus: "validated" });
+                                  toast.success(`Laporan #${shortId} ditandai sudah divalidasi`);
+                                }}
+                                className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700 hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition-colors"
+                                title={`${(r.validationNotes ?? []).length} catatan — klik untuk tandai sudah diperiksa`}
+                              >
+                                <ShieldAlert className="h-3 w-3" />
+                                {(r.validationNotes ?? []).length} catatan
+                              </button>
+                            )}
+                            {r.validationStatus === "validated" && (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border border-green-300 dark:border-green-700">
+                                <ShieldCheck className="h-3 w-3" />
+                                validated
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1.5 font-medium">
                             {r.periodStart} → {r.periodEnd}

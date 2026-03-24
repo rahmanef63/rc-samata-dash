@@ -11,6 +11,15 @@ export const reportsTables = {
     uploadedBy: v.string(),
     uploadedAt: v.number(),
     status: v.union(v.literal("pending"), v.literal("processed"), v.literal("error")),
+    /** Validation tracking — "clean" = no issues, "needs_review" = has notes, "validated" = user confirmed OK */
+    validationStatus: v.optional(v.union(v.literal("clean"), v.literal("needs_review"), v.literal("validated"))),
+    /** Stored validation notes from upload (JSON array of {severity, category, message, tip}) */
+    validationNotes: v.optional(v.array(v.object({
+      severity: v.string(),
+      category: v.string(),
+      message: v.string(),
+      tip: v.string(),
+    }))),
     expenseCount: v.optional(v.number()),
     salesCount: v.optional(v.number()),
     vendorCount: v.optional(v.number()),
