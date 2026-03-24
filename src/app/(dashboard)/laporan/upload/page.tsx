@@ -349,270 +349,341 @@ export default function LaporanUploadPage() {
     : 0;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 p-4">
+    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 lg:p-8">
       <div>
-        <h1 className="text-xl font-bold">Upload Laporan Mingguan</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Upload Laporan Mingguan</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload file Excel "NEW LAP" — otomatis parse 15 sheet ke database.
+          Upload file Excel &quot;NEW LAP&quot; — otomatis parse 15 sheet ke database.
         </p>
       </div>
 
-      {/* ─── Idle ─── */}
-      {(step === "idle" || step === "parsing") && (
-        <UploadDropzone onFileSelect={handleFileSelect} isLoading={step === "parsing"} />
-      )}
-      {step === "parsing" && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />Membaca file Excel...
-        </div>
-      )}
-
-      {/* ─── Duplicate Warning Modal ─── */}
-      {duplicateReport && (
-        <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-5 space-y-3">
-          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <p className="font-semibold">Laporan periode ini sudah ada!</p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            File <strong>{duplicateReport.fileName}</strong> dengan periode mulai{" "}
-            <strong>{duplicateReport.periodStart}</strong> sudah pernah diupload.
-            Timpa data lama atau batalkan?
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => setDuplicateReport(null)} className="px-4 py-2 rounded-xl border border-border text-sm">
-              Batal
-            </button>
-            <button
-              onClick={handleReplaceAndImport}
-              className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold"
-            >
-              Timpa & Import Ulang
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Preview ─── */}
-      {step === "preview" && parsed && !duplicateReport && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-border p-4 bg-muted/20 flex flex-wrap gap-4 text-sm">
-            <div><span className="text-muted-foreground text-xs">File</span><p className="font-medium">{parsed.fileName}</p></div>
-            <div><span className="text-muted-foreground text-xs">Periode</span><p className="font-medium">{parsed.periodStart} → {parsed.periodEnd}</p></div>
-          </div>
-
-          {/* Summary cards */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {[
-              { label: "Kas Kecil", count: parsed.lpkk.length, color: "text-orange-600" },
-              { label: "Penjualan", count: parsed.penjualan.length + parsed.platformSales.length, color: "text-primary" },
-              { label: "Left Over", count: parsed.leftover.length, color: "text-red-500" },
-              { label: "Kas Periode", count: parsed.kasPeriode.length, color: "text-blue-600" },
-              { label: "Sales Ctrl", count: parsed.salesControl.length, color: "text-purple-600" },
-              { label: "Vendor", count: parsed.vendor.length, color: "text-teal-600" },
-              { label: "Food Cost", count: parsed.weeklyFc.length, color: "text-green-600" },
-              { label: "Beli Kredit", count: parsed.pembelianKredit.length, color: "text-yellow-600" },
-              { label: "Ikhtisar FC", count: parsed.ikhtisarFC.length, color: "text-emerald-600" },
-              { label: "Transfer", count: parsed.transferTOTI.length, color: "text-cyan-600" },
-              { label: "HPP", count: parsed.hppProduk.length, color: "text-indigo-600" },
-              { label: "Cost Anls", count: parsed.costAnalysis.length, color: "text-pink-600" },
-              { label: "Cash Flow", count: parsed.cashFlow.length, color: "text-lime-600" },
-              { label: "Insentif", count: parsed.insentif.length, color: "text-amber-600" },
-            ].map((s) => (
-              <div key={s.label} className="rounded-xl border border-border p-2 text-center">
-                <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} onDataChange={handleDataChange} />
-
-          {/* ─── Validation Warnings ─── */}
-          {validationWarnings.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
-              {validationWarnings.map((w, i) => (
-                <div
-                  key={i}
-                  className={`rounded-xl border p-3 text-sm ${
-                    w.severity === "error"
-                      ? "border-red-300 bg-red-50 dark:bg-red-950/20 dark:border-red-800"
-                      : w.severity === "warning"
-                        ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
-                        : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {w.severity === "error" ? (
-                      <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
-                    ) : w.severity === "warning" ? (
-                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-                    ) : (
-                      <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium">
-                        <span className="text-xs text-muted-foreground mr-1">[{w.category}]</span>
-                        {w.message}
-                      </p>
-                      {w.details && w.details.length > 0 && (
-                        <ul className="mt-1 text-xs text-muted-foreground space-y-0.5">
-                          {w.details.map((d, j) => (
-                            <li key={j} className="truncate">• {d}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Main Content Area */}
+        <div className="lg:col-span-2 space-y-6 flex flex-col">
+          {/* ─── Idle ─── */}
+          {(step === "idle" || step === "parsing") && (
+            <div className="bg-card border border-border rounded-xl p-1 shadow-sm">
+              <UploadDropzone onFileSelect={handleFileSelect} isLoading={step === "parsing"} />
+            </div>
+          )}
+          {step === "parsing" && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground px-2">
+              <Loader2 className="h-4 w-4 animate-spin" />Membaca file Excel...
             </div>
           )}
 
-          <div className="flex gap-3">
-            <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">Batal</button>
-            <button
-              onClick={checkAndImport}
-              disabled={!branchId || totalParsed === 0 || validationWarnings.some((w) => w.severity === "error")}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Upload className="h-4 w-4" />
-              Import {totalParsed} Record
-              {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
-                <span className="text-xs opacity-75">
-                  ({validationWarnings.filter((w) => w.severity === "warning").length} warning)
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Importing ─── */}
-      {step === "importing" && (
-        <div className="rounded-xl border border-border p-8 space-y-4">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <p className="text-sm font-medium">{progress.label}</p>
-          </div>
-          <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
-              style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground text-right">{progress.current} / {progress.total}</p>
-        </div>
-      )}
-
-      {/* ─── Done ─── */}
-      {step === "done" && result && (
-        <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-6 space-y-4">
-          <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <CheckCircle className="h-5 w-5" />
-            <p className="font-semibold">Import Berhasil!</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Expense", val: result.expense },
-              { label: "Penjualan", val: result.sales },
-              { label: "Vendor", val: result.vendor },
-              { label: "Food Cost", val: result.inventory },
-              { label: "Left Over", val: result.leftover },
-              { label: "Kas Periode", val: result.kasPeriode },
-              { label: "Sales Control", val: result.salesControl },
-              { label: "Beli Kredit", val: result.creditPurchase },
-              { label: "Ikhtisar FC", val: result.fcSummary },
-              { label: "Transfer", val: result.transfer },
-              { label: "HPP", val: result.hpp },
-              { label: "Cost Analysis", val: result.costAnalysis },
-              { label: "Cash Flow", val: result.cashFlow },
-              { label: "Insentif", val: result.incentive },
-            ].map((r) => (
-              <div key={r.label} className="text-center">
-                <p className="text-2xl font-bold text-green-700 dark:text-green-400">{r.val}</p>
-                <p className="text-xs text-muted-foreground">{r.label}</p>
+          {/* ─── Duplicate Warning Modal ─── */}
+          {duplicateReport && (
+            <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-6 space-y-4 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                <AlertTriangle className="h-6 w-6 shrink-0" />
+                <p className="text-lg font-bold">Laporan periode ini sudah ada!</p>
               </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {aiConfig?.provider && aiConfig.provider.embeddingModel && lastReportId && (
-              <button
-                onClick={handleIndexForAi}
-                disabled={indexingStatus === "indexing" || indexingStatus === "done"}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 text-sm font-semibold hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors disabled:opacity-50"
-              >
-                {indexingStatus === "indexing" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : indexingStatus === "done" ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <Brain className="h-4 w-4" />
-                )}
-                {indexingStatus === "indexing" ? "Indexing..." : indexingStatus === "done" ? "Indexed untuk AI" : "Index untuk AI Chat"}
-              </button>
-            )}
-            <button onClick={reset} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-              Upload File Lainnya
-            </button>
-          </div>
-        </div>
-      )}
+              <p className="text-sm text-yellow-800/80 dark:text-yellow-200/80 font-medium">
+                File <strong className="text-yellow-900 dark:text-yellow-100">{duplicateReport.fileName}</strong> dengan periode mulai{" "}
+                <strong className="text-yellow-900 dark:text-yellow-100">{duplicateReport.periodStart}</strong> sudah pernah diupload.
+                Timpa data lama atau batalkan?
+              </p>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setDuplicateReport(null)} className="px-5 py-2.5 rounded-xl border border-yellow-300/50 bg-white/50 hover:bg-white dark:bg-black/20 dark:hover:bg-black/40 text-yellow-800 dark:text-yellow-200 text-sm font-semibold transition-colors">
+                  Batal
+                </button>
+                <button
+                  onClick={handleReplaceAndImport}
+                  className="px-5 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors shadow-sm"
+                >
+                  Timpa & Import Ulang
+                </button>
+              </div>
+            </div>
+          )}
 
-      {/* ─── Error ─── */}
-      {step === "error" && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 space-y-3">
-          <div className="flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5" /><p className="font-semibold">Import Gagal</p>
-          </div>
-          <p className="text-sm text-muted-foreground">Terjadi error saat menyimpan data. Cek console untuk detail.</p>
-          <button onClick={reset} className="px-4 py-2 rounded-xl border border-border text-sm">Coba Lagi</button>
-        </div>
-      )}
-
-      {/* ─── Riwayat Upload ─── */}
-      {recentReports && recentReports.length > 0 && step === "idle" && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Riwayat Upload</h2>
-          <div className="space-y-2">
-            {recentReports.map((r) => {
-              const shortId = r._id.slice(-8).toUpperCase();
-              return (
-                <div key={r._id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/20 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground shrink-0">#{shortId}</span>
-                      <p className="text-sm font-medium truncate">{r.fileName}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {r.periodStart} → {r.periodEnd}
-                      {" · "}{(r.expenseCount ?? 0) + (r.salesCount ?? 0) + (r.vendorCount ?? 0) + (r.inventoryCount ?? 0) + (r.leftoverCount ?? 0) + (r.kasPeriodeCount ?? 0) + (r.salesControlCount ?? 0) + (r.creditPurchaseCount ?? 0) + (r.foodCostSummaryCount ?? 0) + (r.transferCount ?? 0) + (r.hppCount ?? 0) + (r.costAnalysisCount ?? 0) + (r.cashFlowCount ?? 0) + (r.incentiveCount ?? 0)} total records
-                    </p>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                    r.status === "processed" ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" :
-                    r.status === "error" ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
-                  }`}>
-                    {r.status}
-                  </span>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Hapus laporan #${shortId} "${r.fileName}"?\n\nSemua data terkait akan ikut terhapus.`)) return;
-                      await deleteReport({ reportId: r._id });
-                      toast.success(`Laporan #${shortId} dihapus`);
-                    }}
-                    className="text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-lg hover:bg-destructive/10"
-                    title={`Hapus #${shortId}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+          {/* ─── Preview ─── */}
+          {step === "preview" && parsed && !duplicateReport && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-border p-4 bg-card shadow-sm flex flex-col justify-center">
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">File</span>
+                  <p className="font-medium text-sm truncate" title={parsed.fileName}>{parsed.fileName}</p>
                 </div>
-              );
-            })}
+                <div className="rounded-xl border border-border p-4 bg-card shadow-sm flex flex-col justify-center">
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Periode</span>
+                  <p className="font-medium text-sm truncate">{parsed.periodStart} → {parsed.periodEnd}</p>
+                </div>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {[
+                  { label: "Kas Kecil", count: parsed.lpkk.length, color: "text-orange-600" },
+                  { label: "Penjualan", count: parsed.penjualan.length + parsed.platformSales.length, color: "text-primary" },
+                  { label: "Left Over", count: parsed.leftover.length, color: "text-red-500" },
+                  { label: "Kas Periode", count: parsed.kasPeriode.length, color: "text-blue-600" },
+                  { label: "Sales Ctrl", count: parsed.salesControl.length, color: "text-purple-600" },
+                  { label: "Vendor", count: parsed.vendor.length, color: "text-teal-600" },
+                  { label: "Food Cost", count: parsed.weeklyFc.length, color: "text-green-600" },
+                  { label: "Beli Kredit", count: parsed.pembelianKredit.length, color: "text-yellow-600" },
+                  { label: "Ikhtisar FC", count: parsed.ikhtisarFC.length, color: "text-emerald-600" },
+                  { label: "Transfer", count: parsed.transferTOTI.length, color: "text-cyan-600" },
+                  { label: "HPP", count: parsed.hppProduk.length, color: "text-indigo-600" },
+                  { label: "Cost Anls", count: parsed.costAnalysis.length, color: "text-pink-600" },
+                  { label: "Cash Flow", count: parsed.cashFlow.length, color: "text-lime-600" },
+                  { label: "Insentif", count: parsed.insentif.length, color: "text-amber-600" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl border border-border p-3 text-center bg-card shadow-sm">
+                    <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight font-medium uppercase tracking-wide mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-card shadow-sm rounded-xl border border-border overflow-hidden">
+                <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} onDataChange={handleDataChange} />
+              </div>
+
+              {/* ─── Validation Warnings ─── */}
+              {validationWarnings.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
+                  {validationWarnings.map((w, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-xl border p-4 text-sm shadow-sm ${
+                        w.severity === "error"
+                          ? "border-red-300 bg-red-50 dark:bg-red-950/20 dark:border-red-800"
+                          : w.severity === "warning"
+                            ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
+                            : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {w.severity === "error" ? (
+                          <XCircle className="h-5 w-5 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+                        ) : w.severity === "warning" ? (
+                          <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                        ) : (
+                          <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-foreground">
+                            <span className="text-xs text-muted-foreground font-mono bg-background/50 px-1.5 py-0.5 rounded mr-2">[{w.category}]</span>
+                            {w.message}
+                          </p>
+                          {w.details && w.details.length > 0 && (
+                            <ul className="mt-2 text-xs text-muted-foreground space-y-1 bg-background/30 rounded-lg py-2 px-3">
+                              {w.details.map((d, j) => (
+                                <li key={j} className="truncate tracking-wide">• {d}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button onClick={reset} className="px-6 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/50 text-sm font-medium transition-colors shadow-sm">
+                  Batal
+                </button>
+                <button
+                  onClick={checkAndImport}
+                  disabled={!branchId || totalParsed === 0 || validationWarnings.some((w) => w.severity === "error")}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none shadow-sm"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import {totalParsed} Record
+                  {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
+                    <span className="text-xs opacity-75 font-normal bg-black/10 px-1.5 py-0.5 rounded">
+                      ({validationWarnings.filter((w) => w.severity === "warning").length} warning)
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Importing ─── */}
+          {step === "importing" && (
+            <div className="rounded-xl border border-border bg-card p-10 space-y-6 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold">Menyimpan Laporan</p>
+                  <p className="text-sm text-muted-foreground mt-1">{progress.label}</p>
+                </div>
+              </div>
+              <div className="max-w-md mx-auto space-y-2">
+                <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-right font-medium tracking-wide">
+                  {progress.current} / {progress.total}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Done ─── */}
+          {step === "done" && result && (
+             <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-8 shadow-sm animate-in fade-in zoom-in-95 duration-500">
+              <div className="flex flex-col items-center justify-center gap-3 text-center mb-6">
+                <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                  <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-green-800 dark:text-green-300 mb-1">Import Berhasil</h3>
+                  <p className="text-sm text-green-600/80 dark:text-green-400/80 font-medium">Laporan mingguan telah tersimpan ke database</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-8">
+                {[
+                  { label: "Expense", val: result.expense },
+                  { label: "Penjualan", val: result.sales },
+                  { label: "Vendor", val: result.vendor },
+                  { label: "Food Cost", val: result.inventory },
+                  { label: "Left Over", val: result.leftover },
+                  { label: "Kas Periode", val: result.kasPeriode },
+                  { label: "Sales Control", val: result.salesControl },
+                  { label: "Beli Kredit", val: result.creditPurchase },
+                  { label: "Ikhtisar FC", val: result.fcSummary },
+                  { label: "Transfer", val: result.transfer },
+                  { label: "HPP", val: result.hpp },
+                  { label: "Cost Analysis", val: result.costAnalysis },
+                  { label: "Cash Flow", val: result.cashFlow },
+                  { label: "Insentif", val: result.incentive },
+                ].map((r) => (
+                  <div key={r.label} className="text-center bg-white/50 dark:bg-black/20 rounded-lg p-2 border border-green-200/50 dark:border-green-800/50">
+                    <p className="text-xl font-bold text-green-700 dark:text-green-400">{r.val}</p>
+                    <p className="text-[10px] uppercase font-semibold text-green-600/70 dark:text-green-400/70 tracking-tight">{r.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button 
+                  onClick={reset} 
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors shadow-sm order-2 sm:order-1"
+                >
+                  Upload File Lainnya
+                </button>
+                {aiConfig?.provider && aiConfig.provider.embeddingModel && lastReportId && (
+                  <button
+                    onClick={handleIndexForAi}
+                    disabled={indexingStatus === "indexing" || indexingStatus === "done"}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl border border-purple-300 dark:border-purple-700 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 text-sm font-bold transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none order-1 sm:order-2"
+                  >
+                    {indexingStatus === "indexing" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : indexingStatus === "done" ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <Brain className="h-4 w-4" />
+                    )}
+                    {indexingStatus === "indexing" ? "Sedang Indexing..." : indexingStatus === "done" ? "Tersedia untuk AI" : "Proses Index ke AI Chat"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Error ─── */}
+          {step === "error" && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-8 flex flex-col items-center justify-center gap-5 shadow-sm text-center animate-in fade-in zoom-in-95 duration-300">
+               <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-8 w-8 text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-destructive mb-1">Import Gagal</h3>
+                <p className="text-destructive/80 font-medium">Terjadi error saat menyimpan data.</p>
+              </div>
+              <button onClick={reset} className="mt-2 px-6 py-2.5 rounded-xl border border-destructive/20 bg-card hover:bg-destructive/10 text-destructive text-sm font-semibold transition-colors shadow-sm">
+                Coba Lagi
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Kolom Kanan: Side Panel Riwayat Upload */}
+        <div className="lg:col-span-1">
+          <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6">
+            <div className="p-4 border-b border-border/50 bg-muted/20">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Upload className="h-4 w-4 text-primary" />
+                Riwayat Mingguan
+              </h2>
+            </div>
+            <div className="p-2 flex-1 max-h-[700px] overflow-y-auto">
+              {(!recentReports || recentReports.length === 0) ? (
+                 <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
+                   <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
+                     <Upload className="h-6 w-6 text-muted-foreground/50" />
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-sm font-medium text-foreground">Belum ada riwayat</p>
+                     <p className="text-xs text-muted-foreground">Laporan mingguan akan muncul di sini</p>
+                   </div>
+                 </div>
+              ) : (
+                <div className="space-y-1">
+                  {recentReports.map((r) => {
+                    const shortId = r._id.slice(-8).toUpperCase();
+                    const totalRecords = (r.expenseCount ?? 0) + (r.salesCount ?? 0) + (r.vendorCount ?? 0) + (r.inventoryCount ?? 0) + (r.leftoverCount ?? 0) + (r.kasPeriodeCount ?? 0) + (r.salesControlCount ?? 0) + (r.creditPurchaseCount ?? 0) + (r.foodCostSummaryCount ?? 0) + (r.transferCount ?? 0) + (r.hppCount ?? 0) + (r.costAnalysisCount ?? 0) + (r.cashFlowCount ?? 0) + (r.incentiveCount ?? 0);
+                    return (
+                      <div key={r._id} className="flex gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors group">
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          r.status === "processed" ? "bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400" :
+                          r.status === "error" ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400" : 
+                          "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-400"
+                        }`}>
+                          <Upload className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors" title={r.fileName}>
+                            {r.fileName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-mono bg-muted/50 px-1.5 py-0.5 rounded text-muted-foreground border border-border/50">
+                              #{shortId}
+                            </span>
+                            <span className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded-full bg-background border border-border">
+                              {r.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1.5 font-medium">
+                            {r.periodStart} → {r.periodEnd}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                            {totalRecords} records
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Hapus laporan #${shortId} "${r.fileName}"?\n\nSemua data terkait akan ikut terhapus.`)) return;
+                            await deleteReport({ reportId: r._id });
+                            toast.success(`Laporan #${shortId} dihapus`);
+                          }}
+                          className="text-muted-foreground opacity-0 md:group-hover:opacity-100 hover:text-destructive transition-all p-2 rounded-lg hover:bg-destructive/10 shrink-0 self-start"
+                          title={`Hapus #${shortId}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
