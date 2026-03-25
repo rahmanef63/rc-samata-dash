@@ -423,9 +423,21 @@ export const getCashFlowSummary = query({
       isTight: boolean;
     };
 
-    const daily: DailyFlow[] = cashFlow
-      .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
-      .map((cf) => {
+    type CashFlowRow = {
+      businessDate: string;
+      openingBalance: number;
+      salesInflow: number;
+      otherInflow: number;
+      expenseOutflow: number;
+      otherOutflow: number;
+      closingBalance: number;
+    };
+
+    const daily: DailyFlow[] = (cashFlow as CashFlowRow[])
+      .sort((a, b) =>
+        a.businessDate.localeCompare(b.businessDate)
+      )
+      .map((cf: CashFlowRow) => {
         const totalInflow = cf.salesInflow + cf.otherInflow;
         const totalOutflow = cf.expenseOutflow + cf.otherOutflow;
         const commissions = commissionByDate.get(cf.businessDate) ?? 0;
@@ -534,9 +546,14 @@ export const getPriorityItems = query({
     }
 
     // 4. Variance scores (from cost analysis)
-    const absVariances = costAn.map((ca) => Math.abs(ca.variance));
+    type CostAnalysisRow = {
+      itemName: string;
+      variance: number;
+    };
+
+    const absVariances = (costAn as CostAnalysisRow[]).map((ca: CostAnalysisRow) => Math.abs(ca.variance));
     const maxVariance = Math.max(...absVariances, 1);
-    for (const ca of costAn) {
+    for (const ca of costAn as CostAnalysisRow[]) {
       const item = getOrCreate(ca.itemName);
       item.varianceScore = (Math.abs(ca.variance) / maxVariance) * 100;
       if (Math.abs(ca.variance) > maxVariance * 0.3) {
