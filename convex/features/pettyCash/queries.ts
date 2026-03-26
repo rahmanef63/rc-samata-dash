@@ -25,3 +25,36 @@ export const listByStatus = query({
     return await ctx.db.query("pettyCashRequests").withIndex("by_status", (q) => q.eq("status", args.status)).order("desc").take(100);
   },
 });
+
+export const getMonthlySummary = query({
+  args: {
+    branchId: v.id("branches"),
+    yearMonth: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    const records = await ctx.db
+      .query("pettyCashRequests")
+      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
+      .collect();
+
+    const filtered = records.filter((r) => r.requestDate.startsWith(args.yearMonth));
+    const totalRequested = filtered.reduce((sum, r) => sum + r.requestedAmount, 0);
+    const totalApproved = filtered.reduce((sum, r) => sum + r.approvedAmount, 0);
+    const totalActual = filtered.reduce((sum, r) => sum + r.actualAmount, 0);
+    const byStatus = filtered.reduce<Record<string, number>>((acc, r) => {
+      acc[r.status] = (acc[r.status] || 0) + r.requestedAmount;
+      return acc;
+    }, {});
+
+    return {
+      yearMonth: args.yearMonth,
+      count: filtered.length,
+      totalRequested,
+      totalApproved,
+      totalActual,
+      byStatus,
+      records: filtered.slice(0, 10),
+    };
+  },
+});

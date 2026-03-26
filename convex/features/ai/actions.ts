@@ -124,6 +124,68 @@ function parseAnthropicResponse(data: Record<string, unknown>): {
   };
 }
 
+function monthNameToNumber(input: string): string | null {
+  const normalized = input.toLowerCase();
+  const months: Record<string, string> = {
+    january: "01",
+    jan: "01",
+    februari: "02",
+    february: "02",
+    feb: "02",
+    maret: "03",
+    march: "03",
+    mar: "03",
+    april: "04",
+    apr: "04",
+    mei: "05",
+    may: "05",
+    juni: "06",
+    june: "06",
+    jul: "07",
+    juli: "07",
+    july: "07",
+    agustus: "08",
+    august: "08",
+    agu: "08",
+    aug: "08",
+    september: "09",
+    sep: "09",
+    oktober: "10",
+    october: "10",
+    okt: "10",
+    oct: "10",
+    november: "11",
+    nov: "11",
+    desember: "12",
+    december: "12",
+    dec: "12",
+  };
+
+  for (const [k, v] of Object.entries(months)) {
+    if (normalized.includes(k)) return v;
+  }
+  return null;
+}
+
+function formatRp(n: number): string {
+  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+}
+
+function extractDataQuery(content: string): string | null {
+  const match = content.match(/\[DATA QUERY:\s*([^\]]+)\]/i);
+  return match?.[1]?.trim() || null;
+}
+
+type PettyCashMonthlySummary = {
+  yearMonth: string;
+  count: number;
+  totalRequested: number;
+  totalApproved: number;
+  totalActual: number;
+  byStatus: Record<string, number>;
+  records: Array<Record<string, unknown>>;
+};
+
 /** Send a chat completion request (with optional RAG) */
 export const chatCompletion = action({
   args: {
@@ -233,6 +295,66 @@ export const chatCompletion = action({
       provider.provider === "anthropic"
         ? parseAnthropicResponse(data)
         : parseOpenAIResponse(data);
+
+    const dataQuery = extractDataQuery(parsed.content);
+    if (dataQuery) {
+      const q = dataQuery.toLowerCase();
+      const isPettyCash =
+        q.includes("petty cash") ||
+        q.includes("kas kecil") ||
+        q.includes("kas petty");
+
+      if (isPettyCash && args.branchId) {
+        const month = monthNameToNumber(dataQuery);
+        const yearMatch = dataQuery.match(/\b(20\d{2})\b/);
+        const year = yearMatch?.[1] || new Date().getFullYear().toString();
+
+        if (month) {
+          const yearMonth = `${year}-${month}`;
+          const pettyCashQueries = (internal as unknown as {
+            features: {
+              pettyCash: {
+                queries: {
+                  getMonthlySummary: unknown;
+                };
+              };
+            };
+          }).features.pettyCash.queries;
+
+          const summary = await ctx.runQuery(
+            pettyCashQueries.getMonthlySummary as never,
+            { branchId: args.branchId, yearMonth } as never
+          ) as PettyCashMonthlySummary;
+
+          if (summary && summary.count > 0) {
+            const statusParts = Object.entries(summary.byStatus)
+              .map(([status, total]) => `${status}: ${formatRp(Number(total))}`)
+              .join(", ");
+
+            return {
+              content: [
+                `Ringkasan petty cash ${yearMonth}:`,
+                `- Total request: ${formatRp(summary.totalRequested)}`,
+                `- Total approved: ${formatRp(summary.totalApproved)}`,
+                `- Total actual: ${formatRp(summary.totalActual)}`,
+                `- Jumlah pengajuan: ${summary.count}`,
+                statusParts ? `- Per status: ${statusParts}` : null,
+              ].filter(Boolean).join("\n"),
+              model,
+              tokenUsage: parsed.tokenUsage,
+              ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+            };
+          }
+
+          return {
+            content: `Tidak ada data petty cash untuk ${yearMonth}.`,
+            model,
+            tokenUsage: parsed.tokenUsage,
+            ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+          };
+        }
+      }
+    }
 
     return {
       content: parsed.content,
