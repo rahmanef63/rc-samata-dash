@@ -159,7 +159,7 @@ export const chatCompletion = action({
     }
 
     const model = args.model || provider.defaultModel;
-    let messages = [...args.messages] as Message[];
+    const messages = [...args.messages] as Message[];
     const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
 
     // RAG: If enabled and provider has embedding model, search for relevant data

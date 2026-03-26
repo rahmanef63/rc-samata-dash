@@ -94,6 +94,15 @@ const DEFAULT_EMBEDDING_MODELS = {
 When a provider is created/updated, `embeddingModel` is auto-set for
 OpenRouter and OpenAI. Other providers can configure manually.
 
+### 1D. Where the embedding config lives
+
+The embedding model is stored in Convex as fields on `aiProviders`:
+
+- `embeddingModel`
+- `embeddingBaseUrl`
+
+Set them from **Settings → AI Provider → Pengaturan Lanjutan**. They are not separate `.env` variables.
+
 ## Phase 2: Data Indexing Pipeline
 
 ### 2A. Text Conversion
@@ -134,7 +143,7 @@ export const indexReportData = action({
 
 ### 2C. Incremental Updates
 
-- On report upload → auto-index new data
+- On report upload → use the **Proses Index ke AI Chat** button after import
 - On data edit → re-index affected records
 - Periodic re-index for consistency
 
@@ -212,7 +221,7 @@ Gunakan data di atas untuk menjawab pertanyaan user secara akurat.`;
 ## Phase 5: UI Integration
 
 ### Settings
-- Show embedding model in provider config (already done)
+- Show embedding model and embedding base URL in provider config
 - "Index Data" button per report in upload page
 - Indexing status indicator (indexed/pending)
 

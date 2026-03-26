@@ -30,6 +30,13 @@ type FormData = {
   defaultModel: string;
   isActive: boolean;
   customHeaders: string;
+  embeddingModel: string;
+  embeddingBaseUrl: string;
+};
+
+const DEFAULT_EMBEDDING_MODELS: Partial<Record<AiProviderType, string>> = {
+  openrouter: "openai/text-embedding-3-small",
+  openai: "text-embedding-3-small",
 };
 
 function defaultFormForProvider(type: AiProviderType, isActive: boolean): FormData {
@@ -42,6 +49,8 @@ function defaultFormForProvider(type: AiProviderType, isActive: boolean): FormDa
     defaultModel: def?.models[0]?.id || "",
     isActive,
     customHeaders: "",
+    embeddingModel: DEFAULT_EMBEDDING_MODELS[type] || "",
+    embeddingBaseUrl: "",
   };
 }
 
@@ -73,7 +82,7 @@ export function AiProviderConfig() {
     setDialogOpen(true);
   };
 
-  const openEdit = (p: { _id: string; provider: string; displayName: string; baseUrl: string; apiKey: string; defaultModel: string; isActive: boolean; customHeaders?: string }) => {
+  const openEdit = (p: { _id: string; provider: string; displayName: string; baseUrl: string; apiKey: string; defaultModel: string; isActive: boolean; customHeaders?: string; embeddingModel?: string; embeddingBaseUrl?: string }) => {
     setEditId(p._id);
     const def = getProviderDef(p.provider);
     setForm({
@@ -84,6 +93,8 @@ export function AiProviderConfig() {
       defaultModel: p.defaultModel,
       isActive: p.isActive,
       customHeaders: p.customHeaders || "",
+      embeddingModel: p.embeddingModel || DEFAULT_EMBEDDING_MODELS[p.provider as AiProviderType] || "",
+      embeddingBaseUrl: p.embeddingBaseUrl || "",
     });
     setShowKey(false);
     // Show advanced if baseUrl differs from default
@@ -126,6 +137,8 @@ export function AiProviderConfig() {
         defaultModel: finalModel,
         isActive: form.isActive,
         customHeaders: form.customHeaders || undefined,
+        embeddingModel: form.embeddingModel.trim() || undefined,
+        embeddingBaseUrl: form.embeddingBaseUrl.trim() || undefined,
       });
       toast.success(editId ? "Provider diperbarui." : "Provider ditambahkan.");
       setDialogOpen(false);
@@ -416,6 +429,38 @@ export function AiProviderConfig() {
                     />
                     <p className="text-[10px] text-muted-foreground">
                       Default: {providerDef?.defaultBaseUrl}. Ubah hanya jika menggunakan custom endpoint.
+                    </p>
+                  </div>
+
+                  {/* Embedding Model */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Embedding Model</Label>
+                    <Input
+                      value={form.embeddingModel}
+                      onChange={(e) => setForm((f) => ({ ...f, embeddingModel: e.target.value }))}
+                      placeholder={
+                        form.provider === "openrouter"
+                          ? "openai/text-embedding-3-small"
+                          : form.provider === "openai"
+                            ? "text-embedding-3-small"
+                            : "Isi model embedding yang didukung endpoint Anda"
+                      }
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Wajib diisi agar RAG bisa mengindeks dan mencari data Convex. Untuk OpenRouter/OpenAI, gunakan model embedding kompatibel OpenAI.
+                    </p>
+                  </div>
+
+                  {/* Embedding Base URL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Embedding Base URL</Label>
+                    <Input
+                      value={form.embeddingBaseUrl}
+                      onChange={(e) => setForm((f) => ({ ...f, embeddingBaseUrl: e.target.value }))}
+                      placeholder={providerDef?.defaultBaseUrl}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Kosongkan jika endpoint embedding sama dengan Base URL utama. Isi jika embedding endpoint berbeda.
                     </p>
                   </div>
 

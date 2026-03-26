@@ -39,4 +39,6 @@ export interface AiProviderConfig {
   defaultModel: string;
   isActive: boolean;
   customHeaders?: string;
+  embeddingModel?: string;
+  embeddingBaseUrl?: string;
 }

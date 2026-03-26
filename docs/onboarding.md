@@ -125,6 +125,14 @@ Sistem menjalankan 8 validasi otomatis:
 2. Tunggu progress bar selesai
 3. Setelah sukses, lihat ringkasan import
 
+#### Step 6: Aktifkan RAG untuk Chat AI
+1. Buka **Settings → AI Provider**
+2. Pastikan provider aktif adalah OpenAI, OpenRouter, atau endpoint OpenAI-compatible
+3. Buka **Pengaturan Lanjutan**
+4. Isi **Embedding Model** dan, bila perlu, **Embedding Base URL**
+5. Setelah upload selesai, klik **Proses Index ke AI Chat**
+6. Cek halaman Chat AI dan pastikan indikator **RAG aktif** muncul
+
 ### Duplikat Periode
 Jika periode yang sama sudah pernah di-upload:
 - Sistem akan menampilkan **peringatan duplikat**

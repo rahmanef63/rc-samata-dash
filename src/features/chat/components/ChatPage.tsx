@@ -6,7 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   Bot, Send, Plus, Loader2, AlertCircle, MessageSquare, Trash2, Settings,
-  History, X, ChevronLeft, ChevronRight, Paperclip, Image as ImageIcon, FileText, Search, Database
+  History, X, ChevronLeft, ChevronRight, Image as ImageIcon, FileText, Search, Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,12 +42,14 @@ export default function ChatPage() {
 
   const sessions = useQuery(api.features.ai.queries.listChatSessions);
   const aiConfig = useQuery(api.features.ai.queries.getAiConfig);
+  const branches = useQuery(api.features.masterData.queries.listBranches);
   const createSession = useMutation(api.features.ai.mutations.createChatSession);
   const deleteSession = useMutation(api.features.ai.mutations.deleteChatSession);
 
   const activeProvider = aiConfig?.provider ?? null;
   const activeInstruction = aiConfig?.instruction ?? null;
   const enabledTools = aiConfig?.tools ?? [];
+  const branchId = branches?.[0]?._id;
 
   // Build system prompt from active instruction + enabled tools
   const systemPrompt = activeInstruction?.content || FALLBACK_SYSTEM_PROMPT;
@@ -91,17 +93,17 @@ export default function ChatPage() {
       return;
     }
 
-    await sendMessage(msg, systemPrompt);
-  }, [input, isLoading, activeProvider, sessionId, createSession, sendMessage, systemPrompt]);
+    await sendMessage(msg, systemPrompt, branchId);
+  }, [input, isLoading, activeProvider, sessionId, createSession, sendMessage, systemPrompt, branchId]);
 
   // Send pending message after session is created
   useEffect(() => {
     if (sessionId && pendingMsgRef.current) {
       const msg = pendingMsgRef.current;
       pendingMsgRef.current = null;
-      sendMessage(msg, systemPrompt);
+      sendMessage(msg, systemPrompt, branchId);
     }
-  }, [sessionId, sendMessage, systemPrompt]);
+  }, [sessionId, sendMessage, systemPrompt, branchId]);
 
   const handleDeleteSession = async (sid: Id<"aiChatSessions">) => {
     await deleteSession({ sessionId: sid });
