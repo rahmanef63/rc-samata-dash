@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Analytics queries — cross-table business intelligence.
  *
@@ -5,7 +6,7 @@
  * insight: profitabilitas produk, efisiensi pembelian, waste, cash flow, dll.
  */
 
-import { query } from "../../_generated/server";
+import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName, matchItemNames } from "../../shared/helpers";
@@ -388,6 +389,92 @@ export const getWasteAnalysis = query({
   },
 });
 
+export const getWasteAnalysisInternal = internalQuery({
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+    await requireAuth(ctx);
+
+    const [leftover, invVal, hpp] = await Promise.all([
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+    ]);
+
+    const priceMap = new Map<string, number>();
+    for (const inv of invVal) {
+      priceMap.set(normalizeItemName(inv.itemName), inv.unitPrice);
+    }
+    for (const h of hpp) {
+      if (!priceMap.has(normalizeItemName(h.productName))) {
+        priceMap.set(normalizeItemName(h.productName), h.totalHPP);
+      }
+    }
+
+    const wasteByItem = new Map<string, { itemName: string; totalQty: number; estimatedCost: number }>();
+    const dailyTrend = new Map<string, { date: string; totalQty: number; totalCost: number }>();
+
+    for (const lo of leftover) {
+      const norm = normalizeItemName(lo.itemName);
+      let unitPrice = priceMap.get(norm) ?? 0;
+      if (unitPrice === 0) {
+        for (const [pn, price] of priceMap) {
+          if (matchItemNames(norm, pn)) {
+            unitPrice = price;
+            break;
+          }
+        }
+      }
+
+      const cost = lo.qty * unitPrice;
+
+      const existing = wasteByItem.get(norm);
+      if (existing) {
+        existing.totalQty += lo.qty;
+        existing.estimatedCost += cost;
+      } else {
+        wasteByItem.set(norm, { itemName: lo.itemName, totalQty: lo.qty, estimatedCost: cost });
+      }
+
+      const dayEntry = dailyTrend.get(lo.businessDate);
+      if (dayEntry) {
+        dayEntry.totalQty += lo.qty;
+        dayEntry.totalCost += cost;
+      } else {
+        dailyTrend.set(lo.businessDate, { date: lo.businessDate, totalQty: lo.qty, totalCost: cost });
+      }
+    }
+
+    const topWastedItems = Array.from(wasteByItem.values())
+      .sort((a, b) => b.estimatedCost - a.estimatedCost)
+      .map((item) => ({
+        ...item,
+        estimatedCost: Math.round(item.estimatedCost),
+      }));
+
+    const topWastedByQty = Array.from(wasteByItem.values())
+      .sort((a, b) => b.totalQty - a.totalQty)
+      .map((item) => ({
+        ...item,
+        estimatedCost: Math.round(item.estimatedCost),
+      }));
+
+    const dailyData = Array.from(dailyTrend.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({ ...d, totalCost: Math.round(d.totalCost) }));
+
+    const totalWasteCost = topWastedItems.reduce((s: number, i: any) => s + i.estimatedCost, 0);
+    const totalWasteQty = topWastedItems.reduce((s: number, i: any) => s + i.totalQty, 0);
+
+    return {
+      topWastedItems,
+      topWastedByQty,
+      dailyTrend: dailyData,
+      totalWasteCost,
+      totalWasteQty,
+    };
+  },
+});
+
 // ─── 5. Cash Flow Summary ─────────────────────────────────────
 
 export const getCashFlowSummary = query({
@@ -479,13 +566,11 @@ export const getPriorityItems = query({
   handler: async (ctx, { reportId, branchId, timeFilter }) => {
     await requireAuth(ctx);
 
-    const [leftover, hpp, sales, vendor, costAn, invVal] = await Promise.all([
+    const [leftover, hpp, vendor, costAn] = await Promise.all([
       fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
       fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
       fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
       fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
     ]);
 
     // Build item universe (all unique items across tables)

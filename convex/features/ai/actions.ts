@@ -249,6 +249,14 @@ function detectReportIntent(query: string): "pettyCash" | "kpi" | "trend" | "cas
   return null;
 }
 
+function detectDirectAnalyticIntent(query: string): "waste" | null {
+  const q = normalizeQueryText(query);
+  if (q.includes("waste") || q.includes("sisa bahan") || q.includes("bahan paling sering waste") || q.includes("bahan apa yang paling sering waste")) {
+    return "waste";
+  }
+  return null;
+}
+
 async function requestModelCompletion(
   provider: {
     provider: string;
@@ -672,6 +680,45 @@ export const chatCompletion = action({
     }
 
     const branchId = args.branchId ? String(args.branchId) : undefined;
+    const directIntent = detectDirectAnalyticIntent(messages.find((m) => m.role === "user")?.content ?? "");
+    if (directIntent === "waste" && branchId) {
+      const waste = await ctx.runQuery(internal.features.reports.analytics.getWasteAnalysisInternal, {
+        branchId: branchId as never,
+      }) as {
+        topWastedItems: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        topWastedByQty: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        totalWasteCost: number;
+        totalWasteQty: number;
+      };
+
+      const topByQty = waste.topWastedByQty?.[0];
+      const topByCost = waste.topWastedItems?.[0];
+
+      if (!topByQty && !topByCost) {
+        return {
+          content: "Tidak ada data waste untuk cabang ini.",
+          model,
+          ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+        };
+      }
+
+      const answerLines = [
+        topByQty
+          ? `Bahan yang paling sering waste adalah ${topByQty.itemName} (${topByQty.totalQty} unit).`
+          : null,
+        topByCost
+          ? `Dari sisi biaya, yang paling besar waste-nya adalah ${topByCost.itemName} (${formatNumber(topByCost.estimatedCost)}).`
+          : null,
+        `Total waste tercatat: ${waste.totalWasteQty} unit dengan estimasi biaya ${formatNumber(waste.totalWasteCost)}.`,
+      ].filter(Boolean);
+
+      return {
+        content: answerLines.join("\n"),
+        model,
+        ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+      };
+    }
+
     let workingMessages = [...messages];
     let tokenUsage: { promptTokens: number; completionTokens: number } | undefined;
     let finalContent = "Tidak ada respons dari AI.";
