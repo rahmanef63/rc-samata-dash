@@ -39,7 +39,8 @@ function buildOpenAIRequest(
   messages: Message[],
   customHeaders?: string,
   temperature = 0.7,
-  maxTokens = 4096
+  maxTokens = 4096,
+  jsonMode = false
 ) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -66,6 +67,7 @@ function buildOpenAIRequest(
         messages,
         max_tokens: maxTokens,
         temperature,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     },
   };
@@ -221,7 +223,7 @@ async function requestModelCompletion(
   },
   model: string,
   messages: Message[],
-  options?: { temperature?: number; maxTokens?: number }
+  options?: { temperature?: number; maxTokens?: number; jsonMode?: boolean }
 ): Promise<{
   content: string;
   tokenUsage?: { promptTokens: number; completionTokens: number };
@@ -229,10 +231,11 @@ async function requestModelCompletion(
   const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
   const temperature = options?.temperature ?? 0.7;
   const maxTokens = options?.maxTokens ?? 4096;
+  const jsonMode = options?.jsonMode ?? false;
   const req =
     provider.provider === "anthropic"
       ? buildAnthropicRequest(baseUrl, provider.apiKey, model, messages, temperature, maxTokens)
-      : buildOpenAIRequest(baseUrl, provider.apiKey, model, messages, provider.customHeaders ?? undefined, temperature, maxTokens);
+      : buildOpenAIRequest(baseUrl, provider.apiKey, model, messages, provider.customHeaders ?? undefined, temperature, maxTokens, jsonMode);
 
   const response = await fetch(req.url, req.options);
   if (!response.ok) {
@@ -661,6 +664,7 @@ async function executeAgentFlow(
     const parsed = await requestModelCompletion(provider, model, workingMessages, {
       temperature: 0.2,
       maxTokens: 2048,
+      jsonMode: true,
     });
     tokenUsage = parsed.tokenUsage;
 
@@ -823,22 +827,16 @@ export const chatCompletion = action({
       }))
     );
 
-    if (routerPrompt) {
-      const systemIdx = messages.findIndex((m) => m.role === "system");
-      if (systemIdx >= 0) {
-        messages[systemIdx] = {
-          ...messages[systemIdx],
-          content: messages[systemIdx].content + routerPrompt,
-        };
-      } else {
-        messages.unshift({ role: "system", content: routerPrompt });
-      }
-    }
+    const routerMessages: Message[] = [
+      { role: "system", content: routerPrompt },
+      ...messages.filter((message) => message.role !== "system"),
+    ];
 
     const branchId = args.branchId ? String(args.branchId) : undefined;
-    const routerResponse = await requestModelCompletion(provider, model, messages, {
+    const routerResponse = await requestModelCompletion(provider, model, routerMessages, {
       temperature: 0,
       maxTokens: 1024,
+      jsonMode: true,
     });
 
     const routeDecision = parseToolRouteDecisionFromContent(routerResponse.content);
@@ -863,12 +861,12 @@ export const chatCompletion = action({
 
     if (routeDecision.mode === "agent") {
       const agentResponse = await executeAgentFlow(
-      ctx,
-      provider,
-      model,
-      messages,
-      branchId,
-      routeDecision.agentId
+        ctx,
+        provider,
+        model,
+        messages,
+        branchId,
+        routeDecision.agentId
       );
 
       return {

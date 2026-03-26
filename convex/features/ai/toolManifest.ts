@@ -250,6 +250,8 @@ export function buildExecutionRouterPrompt(
     `{"mode":"answer","answer":"..."}`,
     "Jika pertanyaan butuh data, analitik, kalkulasi, atau RAG, pilih tool yang paling spesifik.",
     "Jika pertanyaan butuh analisis multi-langkah, sintesis, atau keputusan berbasis beberapa data, pilih agent yang paling cocok.",
+    "Pertanyaan tentang bahan paling boros, waste terbanyak, atau item paling sering terbuang harus memakai waste_analysis.",
+    "Pertanyaan tentang petty cash bulanan harus memakai petty_cash_summary.",
     "Jangan pilih laporan_query jika ada tool spesifik yang cocok seperti petty_cash_summary, cashflow_summary, expense_breakdown, recent_transactions, waste_analysis, kpi_check, atau trend_analysis.",
     "Jika bisa dijawab tanpa tool atau agent, pilih mode answer dan jawab langsung.",
   ];
