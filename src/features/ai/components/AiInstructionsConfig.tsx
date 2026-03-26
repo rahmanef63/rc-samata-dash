@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { motion } from "framer-motion";
@@ -22,6 +22,7 @@ export function AiInstructionsConfig() {
   const upsertInstruction = useMutation(api.features.ai.mutations.upsertInstruction);
   const deleteInstruction = useMutation(api.features.ai.mutations.deleteInstruction);
   const setActive = useMutation(api.features.ai.mutations.setActiveInstruction);
+  const didSyncRef = useRef(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -29,12 +30,17 @@ export function AiInstructionsConfig() {
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Auto-seed default if none exist
+  // Sync the default instruction from the manifest-driven backend once per load.
   useEffect(() => {
-    if (instructions && instructions.length === 0) {
-      seedDefault({}).then((r) => {
-        if (r.seeded) toast.success("Instruksi default ditambahkan.");
-      });
+    if (instructions && !didSyncRef.current) {
+      didSyncRef.current = true;
+      seedDefault({})
+        .then((r) => {
+          if (r.seeded || r.updated) toast.success("Instruksi default disinkronkan.");
+        })
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : "Gagal sinkron instruksi.");
+        });
     }
   }, [instructions, seedDefault]);
 

@@ -1,6 +1,7 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { aiProviderValidator, aiToolCategoryValidator } from "./_schema";
+import { BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
 
 const now = () => new Date().toISOString();
 
@@ -180,116 +181,46 @@ export const seedDefaultTools = mutation({
   args: {},
   handler: async (ctx) => {
     const existing = await ctx.db.query("aiTools").collect();
-    const existingIds = new Set(existing.map((t) => t.toolId));
+    const existingByToolId = new Map(existing.map((tool) => [tool.toolId, tool]));
 
-    const defaults = [
-      {
-        toolId: "laporan_query",
-        name: "Query Laporan",
-        description: "Mengakses data laporan mingguan: penjualan, HPP, expense, cashflow, vendor, stok",
-        category: "data" as const,
-        syntaxGuide: `Gunakan skill ini untuk menjawab pertanyaan tentang data bisnis.
-Contoh query yang bisa dijawab:
-- "Berapa total omzet minggu ini?" → Referensi data productSales
-- "Apa food cost bulan ini?" → Referensi data costAnalysis
-- "Vendor mana yang paling banyak pembelian?" → Referensi data vendorPurchases
-- "Berapa saldo kas?" → Referensi data dailyCashSummary
+    let inserted = 0;
+    let updated = 0;
 
-Format jawaban: Gunakan angka spesifik dari data, format Rupiah dengan separator ribuan.`,
-      },
-      {
-        toolId: "kpi_check",
-        name: "KPI & Target",
-        description: "Memeriksa KPI aktual vs target: food cost %, gross margin, waste, sales achievement",
-        category: "data" as const,
-        syntaxGuide: `Gunakan skill ini untuk analisis performa bisnis.
-KPI standar QSR:
-- Food Cost: target <33%, warning 38%, danger >42%
-- Gross Margin: target >67%, warning <60%, danger <55%
-- Waste: target <1.5%, warning >2.5%, danger >4%
-- Sales Achievement: target 100%, warning <85%, danger <70%
-
-Format: Tampilkan status (Baik/Perhatian/Bahaya) dengan warna indikator.`,
-      },
-      {
-        toolId: "memory_notes",
-        name: "Catatan & Memori",
-        description: "Menyimpan dan mengingat catatan penting tentang bisnis, keputusan, dan insight",
-        category: "memory" as const,
-        syntaxGuide: `Gunakan skill ini untuk mengingat konteks percakapan sebelumnya.
-Kemampuan:
-- Mengingat insight penting dari analisis sebelumnya
-- Menyimpan keputusan yang sudah diambil owner
-- Mengingat pola atau tren yang ditemukan
-
-Contoh: "Ingat bahwa vendor X sering telat kirim" atau "Bulan lalu food cost naik karena harga ayam naik"`,
-      },
-      {
-        toolId: "calculator",
-        name: "Kalkulator Bisnis",
-        description: "Menghitung food cost, margin, break-even, ROI, dan metrik keuangan lainnya",
-        category: "calculation" as const,
-        syntaxGuide: `Gunakan skill ini untuk perhitungan keuangan.
-Formula yang tersedia:
-- Food Cost % = (COGS / Revenue) × 100
-- Gross Margin % = ((Revenue - COGS) / Revenue) × 100
-- Break Even = Fixed Cost / (1 - Variable Cost Ratio)
-- ROI = (Gain - Cost) / Cost × 100
-- Inventory Turnover = COGS / Average Inventory
-
-Format: Tampilkan formula, input, dan hasil dengan format Rupiah.`,
-      },
-      {
-        toolId: "rag_database",
-        name: "RAG Database",
-        description: "Retrieval-Augmented Generation dari database Convex untuk jawaban akurat berbasis data",
-        category: "data" as const,
-        syntaxGuide: `Skill ini secara otomatis mengambil data relevan dari database Convex.
-
-Tabel yang tersedia untuk RAG:
-- productSales: Data penjualan produk (qty, amount, productName)
-- vendorPurchases: Data pembelian vendor (commodity, qty, price)
-- costAnalysis: Analisis biaya (opening, purchase, usage, closing, variance)
-- dailyCashSummary: Ringkasan kas harian (grossSales, expenses, netSales)
-- dailyCashFlow: Arus kas harian (inflow, outflow, balance)
-- inventoryValuation: Valuasi stok (item, qty, value)
-- productHPP: HPP per produk (cost breakdown, selling price)
-- expenses: Data pengeluaran per kategori
-- leftoverItems: Data sisa/waste harian
-
-Syntax untuk query:
-[DATA:tabel_name] → ambil semua data dari tabel
-[DATA:tabel_name:filter_field=value] → ambil data dengan filter
-[AGGREGATE:tabel_name:sum:field_name] → agregasi data`,
-      },
-      {
-        toolId: "trend_analysis",
-        name: "Analisis Tren",
-        description: "Menganalisis tren penjualan, biaya, dan performa dari waktu ke waktu",
-        category: "utility" as const,
-        syntaxGuide: `Gunakan skill ini untuk analisis tren dan forecasting.
-Kemampuan:
-- Perbandingan periode (minggu ini vs minggu lalu)
-- Tren harian dalam satu minggu
-- Identifikasi anomali (lonjakan/penurunan tidak wajar)
-- Prediksi sederhana berdasarkan tren
-
-Format: Gunakan persentase perubahan, tanda ↑/↓, dan highlight anomali.`,
-      },
-    ];
-
-    for (const tool of defaults) {
-      if (!existingIds.has(tool.toolId)) {
+    for (const tool of BUILTIN_AI_TOOL_MANIFEST) {
+      const existingTool = existingByToolId.get(tool.toolId);
+      if (!existingTool) {
         await ctx.db.insert("aiTools", {
           ...tool,
           isBuiltIn: true,
           isEnabled: true,
           createdAt: now(),
         });
+        inserted += 1;
+        continue;
+      }
+
+      const nextValues = {
+        name: tool.name,
+        description: tool.description,
+        category: tool.category,
+        syntaxGuide: tool.syntaxGuide,
+        isBuiltIn: true,
+      };
+
+      const changed =
+        existingTool.name !== nextValues.name ||
+        existingTool.description !== nextValues.description ||
+        existingTool.category !== nextValues.category ||
+        existingTool.syntaxGuide !== nextValues.syntaxGuide ||
+        existingTool.isBuiltIn !== true;
+
+      if (changed) {
+        await ctx.db.patch(existingTool._id, nextValues);
+        updated += 1;
       }
     }
 
-    return { seeded: defaults.filter((t) => !existingIds.has(t.toolId)).length };
+    return { seeded: inserted, updated };
   },
 });
 
@@ -372,11 +303,7 @@ export const seedDefaultInstruction = mutation({
       .withIndex("by_default", (q) => q.eq("isDefault", true))
       .first();
 
-    if (existing) return { seeded: false, id: existing._id };
-
-    const id = await ctx.db.insert("aiCustomInstructions", {
-      name: "RC Samata Default",
-      content: `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
+    const defaultContent = `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
 Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow, HPP, dan laporan keuangan.
 
 ## Panduan Respons
@@ -387,11 +314,10 @@ Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow
 - Berikan rekomendasi actionable berdasarkan data
 
 ## Skills yang Tersedia
-Kamu memiliki akses ke skills berikut untuk membantu menjawab:
+Kamu memiliki akses ke tools berikut. Gunakan manifest dan tool call protocol secara konsisten.
 
 ### 1. Query Laporan [DATA]
 Akses data laporan: penjualan, HPP, expense, cashflow, vendor, stok.
-Syntax: Referensikan data dari tabel yang sesuai.
 
 ### 2. KPI & Target [KPI]
 Evaluasi performa: food cost %, margin, waste, sales achievement.
@@ -411,11 +337,39 @@ dailyCashFlow, inventoryValuation, productHPP, expenses, leftoverItems.
 ### 6. Analisis Tren [TREND]
 Analisis tren waktu: perbandingan periode, anomali, forecasting.
 
+## Tool Call Protocol
+Jika perlu memakai data atau kalkulasi, jangan berhenti di teks placeholder.
+Keluarkan satu blok code fence berlabel \`tool-call\` berisi JSON valid.
+Contoh:
+\`\`\`tool-call
+{"toolId":"laporan_query","query":"Berapa petty cash bulan Februari?"}
+\`\`\`
+
+Setelah tool result diberikan kembali oleh sistem, jawab final secara ringkas dan langsung ke inti.
+
 ## Konteks Bisnis
 - Rocket Chicken: franchise ayam goreng
 - Cabang: RC Samata Gowa (Sulawesi Selatan)
 - Metrik utama: omzet harian, food cost %, gross margin, waste rate
-- Periode laporan: mingguan (Senin-Minggu)`,
+- Periode laporan: mingguan (Senin-Minggu)`;
+
+    if (existing) {
+      const needsUpdate = existing.content !== defaultContent || !existing.isDefault;
+      if (needsUpdate) {
+        await ctx.db.patch(existing._id, {
+          name: "RC Samata Default",
+          content: defaultContent,
+          isDefault: true,
+          isActive: true,
+          updatedAt: now(),
+        });
+      }
+      return { seeded: false, id: existing._id, updated: needsUpdate };
+    }
+
+    const id = await ctx.db.insert("aiCustomInstructions", {
+      name: "RC Samata Default",
+      content: defaultContent,
       isDefault: true,
       isActive: true,
       createdAt: now(),

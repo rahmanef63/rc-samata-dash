@@ -14,7 +14,6 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
     api.features.ai.queries.getChatMessages,
     sessionId ? { sessionId } : "skip"
   );
-  const activeProvider = useQuery(api.features.ai.queries.getActiveProvider);
 
   const addMessage = useMutation(api.features.ai.mutations.addChatMessage);
   const chatCompletion = useAction(api.features.ai.actions.chatCompletion);
@@ -73,6 +72,5 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
     error,
     clearError: () => setError(null),
     sendMessage,
-    activeProvider,
   };
 }

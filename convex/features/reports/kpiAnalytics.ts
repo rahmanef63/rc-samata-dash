@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * KPI Analytics — target vs actual benchmarks for QSR operations.
  *
@@ -5,7 +6,7 @@
  * waste %, sales achievement, purchase efficiency, cash tight days, etc.
  */
 
-import { query, mutation } from "../../_generated/server";
+import { query, mutation, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName } from "../../shared/helpers";
@@ -170,7 +171,6 @@ export const getKPIDashboard = query({
       costAn,
       cashFlow,
       incentives,
-      vendor,
     ] = await Promise.all([
       fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
       fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
@@ -180,7 +180,6 @@ export const getKPIDashboard = query({
       fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
       fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
       fetchData(ctx, "employeeIncentives", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
     ]);
 
     // ── Compute actuals ──
@@ -243,6 +242,121 @@ export const getKPIDashboard = query({
     const inventoryTurnover = totalInventoryValue > 0 ? totalCOGS / totalInventoryValue : 0;
 
     // ── Build KPI results ──
+    const actuals: Record<string, number> = {
+      food_cost_pct: Math.round(foodCostPct * 10) / 10,
+      gross_margin_pct: Math.round(grossMarginPct * 10) / 10,
+      waste_pct: Math.round(wastePct * 10) / 10,
+      sales_achievement_pct: Math.round(avgAchievement * 10) / 10,
+      purchase_efficiency: Math.round(purchaseEfficiency * 100) / 100,
+      cash_tight_days: cashTightDays,
+      labor_cost_pct: Math.round(laborCostPct * 10) / 10,
+      variance_rate_pct: Math.round(varianceRatePct * 10) / 10,
+      avg_spending_power: Math.round(avgSpendingPower),
+      inventory_turnover: Math.round(inventoryTurnover * 10) / 10,
+    };
+
+    const kpis = DEFAULT_KPIS.map((def) => {
+      const target = targetMap.get(def.kpiCode);
+      const actual = actuals[def.kpiCode] ?? 0;
+      const t = target ?? def;
+
+      return {
+        kpiCode: def.kpiCode,
+        kpiLabel: def.kpiLabel,
+        unit: def.unit,
+        direction: def.direction,
+        actual,
+        target: t.targetValue,
+        warningThreshold: t.warningThreshold,
+        dangerThreshold: t.dangerThreshold,
+        status: evaluateKPI(actual, t.targetValue, t.warningThreshold, t.dangerThreshold, def.direction),
+        targetId: target?._id ?? null,
+      };
+    });
+
+    return { kpis, hasTargets: targets.length > 0 };
+  },
+});
+
+export const getKPIDashboardInternal = internalQuery({
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+    await requireAuth(ctx);
+
+    let targetBranchId = branchId;
+    
+    if (reportId && reportId !== "all") {
+      const report = await ctx.db.get(reportId as any) as any;
+      if (report) targetBranchId = report.branchId;
+    }
+
+    if (!targetBranchId) return { kpis: [], hasTargets: false };
+
+    const targets = await ctx.db
+      .query("kpiTargets")
+      .withIndex("by_branch", (q) => q.eq("branchId", targetBranchId))
+      .collect();
+
+    const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
+
+    const [
+      sales,
+      fcSummary,
+      salesCtrl,
+      leftover,
+      invVal,
+      costAn,
+      cashFlow,
+      incentives,
+    ] = await Promise.all([
+      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "employeeIncentives", { reportId, branchId, timeFilter }),
+    ]);
+
+    const allChannelSales = sales.filter((s: any) => !s.channel || s.channel === "all");
+    const totalRevenue = allChannelSales.reduce((s: number, item: any) => s + item.amount, 0);
+    const totalCOGS = fcSummary.reduce((s: number, item: any) => s + item.usageValue, 0);
+    const foodCostPct = totalRevenue > 0 ? (totalCOGS / totalRevenue) * 100 : 0;
+    const grossMarginPct = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0;
+
+    const priceMap = new Map<string, number>();
+    for (const inv of invVal) {
+      priceMap.set(normalizeItemName(inv.itemName), inv.unitPrice);
+    }
+    let totalWasteCost = 0;
+    for (const lo of leftover) {
+      const price = priceMap.get(normalizeItemName(lo.itemName)) ?? 0;
+      totalWasteCost += lo.qty * price;
+    }
+    const wastePct = totalRevenue > 0 ? (totalWasteCost / totalRevenue) * 100 : 0;
+
+    const avgAchievement = salesCtrl.length > 0
+      ? (salesCtrl.reduce((s: number, item: any) => s + item.achievementPct, 0) / salesCtrl.length) * 100
+      : 0;
+
+    const itemsWithPurchase = costAn.filter((c: any) => c.purchaseQty > 0);
+    const purchaseEfficiency = itemsWithPurchase.length > 0
+      ? itemsWithPurchase.reduce((s: number, c: any) => s + (c.usageQty / c.purchaseQty), 0) / itemsWithPurchase.length
+      : 0;
+
+    const cashTightDays = cashFlow.filter((d: any) => d.closingBalance < 500000).length;
+    const totalIncentives = incentives.reduce((s: number, item: any) => s + item.amount, 0);
+    const laborCostPct = totalRevenue > 0 ? (totalIncentives / totalRevenue) * 100 : 0;
+    const totalPurchaseValue = costAn.reduce((s: number, c: any) => s + c.purchaseValue, 0);
+    const totalVariance = costAn.reduce((s: number, c: any) => s + Math.abs(c.variance), 0);
+    const varianceRatePct = totalPurchaseValue > 0 ? (totalVariance / totalPurchaseValue) * 100 : 0;
+    const avgSpendingPower = salesCtrl.length > 0
+      ? salesCtrl.reduce((s: number, item: any) => s + item.spendingPower, 0) / salesCtrl.length
+      : 0;
+    const totalInventoryValue = invVal.reduce((s: number, item: any) => s + item.totalValue, 0);
+    const inventoryTurnover = totalInventoryValue > 0 ? totalCOGS / totalInventoryValue : 0;
+
     const actuals: Record<string, number> = {
       food_cost_pct: Math.round(foodCostPct * 10) / 10,
       gross_margin_pct: Math.round(grossMarginPct * 10) / 10,

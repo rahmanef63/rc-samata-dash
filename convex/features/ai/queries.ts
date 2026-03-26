@@ -60,6 +60,17 @@ export const listTools = query({
   },
 });
 
+/** Internal: list enabled tools for server-side prompt building */
+export const listEnabledToolsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("aiTools")
+      .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
+      .collect();
+  },
+});
+
 /** List enabled tools */
 export const listEnabledTools = query({
   args: {},
@@ -78,6 +89,17 @@ export const listInstructions = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("aiCustomInstructions").collect();
+  },
+});
+
+/** Internal: get the active instruction for server-side bootstrap */
+export const getActiveInstructionInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("aiCustomInstructions")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first();
   },
 });
 

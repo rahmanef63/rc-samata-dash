@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { motion } from "framer-motion";
@@ -27,13 +27,26 @@ export function AiToolsConfig() {
   const tools = useQuery(api.features.ai.queries.listTools);
   const seedTools = useMutation(api.features.ai.mutations.seedDefaultTools);
   const toggleTool = useMutation(api.features.ai.mutations.toggleTool);
+  const didSyncRef = useRef(false);
 
-  // Auto-seed default tools if none exist
+  // Sync manifest-driven built-in tools once per load.
   useEffect(() => {
-    if (tools && tools.length === 0) {
-      seedTools({}).then((r) => {
-        if (r.seeded > 0) toast.success(`${r.seeded} tools bawaan ditambahkan.`);
-      });
+    if (tools && !didSyncRef.current) {
+      didSyncRef.current = true;
+      seedTools({})
+        .then((r) => {
+          if (r.seeded > 0 || r.updated > 0) {
+            toast.success(
+              [
+                r.seeded > 0 ? `${r.seeded} tools ditambahkan` : null,
+                r.updated > 0 ? `${r.updated} tools diperbarui` : null,
+              ].filter(Boolean).join(", ") + "."
+            );
+          }
+        })
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : "Gagal sinkron tools.");
+        });
     }
   }, [tools, seedTools]);
 
@@ -47,8 +60,8 @@ export function AiToolsConfig() {
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Wrench className="h-4 w-4 text-primary" /> Skills & Tools
         </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Aktifkan/nonaktifkan skills yang tersedia untuk AI Assistant
+      <p className="text-xs text-muted-foreground mt-0.5">
+          Manifest built-in disinkronkan otomatis dari code, lalu kamu bisa aktif/nonaktifkan di sini.
         </p>
       </div>
 
