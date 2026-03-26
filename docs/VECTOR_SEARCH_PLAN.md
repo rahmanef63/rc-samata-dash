@@ -96,12 +96,13 @@ OpenRouter and OpenAI. Other providers can configure manually.
 
 ### 1D. Where the embedding config lives
 
-The embedding model is stored in Convex as fields on `aiProviders`:
+The embedding model is stored in Convex as a backend default, not as a frontend field.
+For this project, the default embedding model is:
 
-- `embeddingModel`
-- `embeddingBaseUrl`
+- `openai/text-embedding-3-small` for OpenRouter
+- `text-embedding-3-small` for OpenAI
 
-Set them from **Settings → AI Provider → Pengaturan Lanjutan**. They are not separate `.env` variables.
+Users do not need to input embedding settings in the UI.
 
 ## Phase 2: Data Indexing Pipeline
 
@@ -221,7 +222,7 @@ Gunakan data di atas untuk menjawab pertanyaan user secara akurat.`;
 ## Phase 5: UI Integration
 
 ### Settings
-- Show embedding model and embedding base URL in provider config
+- Keep embedding model hidden in UI; it is configured in code
 - "Index Data" button per report in upload page
 - Indexing status indicator (indexed/pending)
 

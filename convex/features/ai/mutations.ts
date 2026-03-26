@@ -55,7 +55,7 @@ export const upsertProvider = mutation({
     // Auto-enable embedding model for OpenRouter
     const embeddingModel = args.embeddingModel
       || DEFAULT_EMBEDDING_MODELS[args.provider]
-      || undefined;
+      || "text-embedding-3-small";
 
     if (args.id) {
       const update: Record<string, unknown> = {

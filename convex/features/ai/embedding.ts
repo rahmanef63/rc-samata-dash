@@ -14,6 +14,11 @@ const DEFAULT_EMBEDDING_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
 };
 
+const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
+  openrouter: "openai/text-embedding-3-small",
+  openai: "text-embedding-3-small",
+};
+
 /** Resolve the embedding API base URL */
 function resolveEmbeddingUrl(provider: {
   provider: string;
@@ -35,7 +40,7 @@ export const generateEmbedding = internalAction({
     if (!provider) throw new Error("No active AI provider for embeddings");
 
     const embeddingModel =
-      provider.embeddingModel || "openai/text-embedding-3-small";
+      provider.embeddingModel || DEFAULT_EMBEDDING_MODELS[provider.provider] || "text-embedding-3-small";
     const baseUrl = resolveEmbeddingUrl(provider);
 
     const response = await fetch(
@@ -76,7 +81,7 @@ export const generateBatchEmbeddings = internalAction({
     if (!provider) throw new Error("No active AI provider for embeddings");
 
     const embeddingModel =
-      provider.embeddingModel || "openai/text-embedding-3-small";
+      provider.embeddingModel || DEFAULT_EMBEDDING_MODELS[provider.provider] || "text-embedding-3-small";
     const baseUrl = resolveEmbeddingUrl(provider);
 
     // Batch in chunks of 100 to avoid timeouts
