@@ -71,6 +71,38 @@ export const listEnabledToolsInternal = internalQuery({
   },
 });
 
+// ─── Agent Queries ──────────────────────────────────────────
+
+/** List all agents */
+export const listAgents = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("aiAgents").collect();
+  },
+});
+
+/** Internal: list enabled agents for server-side prompt building */
+export const listEnabledAgentsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("aiAgents")
+      .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
+      .collect();
+  },
+});
+
+/** Internal: get agent by agentId */
+export const getAgentByAgentIdInternal = internalQuery({
+  args: { agentId: v.string() },
+  handler: async (ctx, { agentId }) => {
+    return await ctx.db
+      .query("aiAgents")
+      .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
+      .first();
+  },
+});
+
 /** List enabled tools */
 export const listEnabledTools = query({
   args: {},

@@ -56,6 +56,21 @@ export const aiTables = {
     .index("by_toolId", ["toolId"])
     .index("by_enabled", ["isEnabled"]),
 
+  /** Agents are higher-level workflows/personalities that can use tools */
+  aiAgents: defineTable({
+    agentId: v.string(),           // "business_analyst", "ops_planner", etc.
+    name: v.string(),
+    description: v.string(),
+    systemPrompt: v.string(),
+    allowedToolIds: v.array(v.string()),
+    isBuiltIn: v.boolean(),
+    isEnabled: v.boolean(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_agentId", ["agentId"])
+    .index("by_enabled", ["isEnabled"]),
+
   /** Custom instructions — default + user-defined */
   aiCustomInstructions: defineTable({
     name: v.string(),              // "Default RC Samata", "Custom"

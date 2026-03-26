@@ -1,7 +1,7 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { aiProviderValidator, aiToolCategoryValidator } from "./_schema";
-import { BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
+import { BUILTIN_AI_AGENT_MANIFEST, BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
 
 const now = () => new Date().toISOString();
 
@@ -163,6 +163,119 @@ export const toggleTool = mutation({
   args: { id: v.id("aiTools"), isEnabled: v.boolean() },
   handler: async (ctx, { id, isEnabled }) => {
     await ctx.db.patch(id, { isEnabled });
+  },
+});
+
+// ─── Agent Mutations ────────────────────────────────────────
+
+/** Upsert an agent definition */
+export const upsertAgent = mutation({
+  args: {
+    id: v.optional(v.id("aiAgents")),
+    agentId: v.string(),
+    name: v.string(),
+    description: v.string(),
+    systemPrompt: v.string(),
+    allowedToolIds: v.array(v.string()),
+    isBuiltIn: v.boolean(),
+    isEnabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    if (args.id) {
+      await ctx.db.patch(args.id, {
+        agentId: args.agentId,
+        name: args.name,
+        description: args.description,
+        systemPrompt: args.systemPrompt,
+        allowedToolIds: args.allowedToolIds,
+        isEnabled: args.isEnabled,
+        updatedAt: now(),
+      });
+      return args.id;
+    }
+
+    return await ctx.db.insert("aiAgents", {
+      agentId: args.agentId,
+      name: args.name,
+      description: args.description,
+      systemPrompt: args.systemPrompt,
+      allowedToolIds: args.allowedToolIds,
+      isBuiltIn: args.isBuiltIn,
+      isEnabled: args.isEnabled,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+  },
+});
+
+/** Toggle an agent on/off */
+export const toggleAgent = mutation({
+  args: { id: v.id("aiAgents"), isEnabled: v.boolean() },
+  handler: async (ctx, { id, isEnabled }) => {
+    await ctx.db.patch(id, { isEnabled, updatedAt: now() });
+  },
+});
+
+/** Delete an agent (only non-built-in) */
+export const deleteAgent = mutation({
+  args: { id: v.id("aiAgents") },
+  handler: async (ctx, { id }) => {
+    const agent = await ctx.db.get(id);
+    if (agent?.isBuiltIn) throw new Error("Tidak bisa menghapus agent bawaan.");
+    await ctx.db.delete(id);
+  },
+});
+
+/** Seed default built-in agents (idempotent) */
+export const seedDefaultAgents = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const existing = await ctx.db.query("aiAgents").collect();
+    const existingByAgentId = new Map(existing.map((agent) => [agent.agentId, agent]));
+
+    let inserted = 0;
+    let updated = 0;
+
+    for (const agent of BUILTIN_AI_AGENT_MANIFEST) {
+      const existingAgent = existingByAgentId.get(agent.agentId);
+      if (!existingAgent) {
+        await ctx.db.insert("aiAgents", {
+          agentId: agent.agentId,
+          name: agent.name,
+          description: agent.description,
+          systemPrompt: agent.systemPrompt,
+          allowedToolIds: agent.allowedToolIds ?? [],
+          isBuiltIn: true,
+          isEnabled: true,
+          createdAt: now(),
+          updatedAt: now(),
+        });
+        inserted += 1;
+        continue;
+      }
+
+      const nextValues = {
+        name: agent.name,
+        description: agent.description,
+        systemPrompt: agent.systemPrompt,
+        allowedToolIds: agent.allowedToolIds || [],
+        isBuiltIn: true,
+      };
+
+      const changed =
+        existingAgent.name !== nextValues.name ||
+        existingAgent.description !== nextValues.description ||
+        existingAgent.systemPrompt !== nextValues.systemPrompt ||
+        JSON.stringify(existingAgent.allowedToolIds || []) !== JSON.stringify(nextValues.allowedToolIds) ||
+        existingAgent.isBuiltIn !== true;
+
+      if (changed) {
+        await ctx.db.patch(existingAgent._id, { ...nextValues, updatedAt: now() });
+        updated += 1;
+      }
+    }
+
+    return { seeded: inserted, updated };
   },
 });
 
@@ -337,12 +450,16 @@ dailyCashFlow, inventoryValuation, productHPP, expenses, leftoverItems.
 ### 6. Analisis Tren [TREND]
 Analisis tren waktu: perbandingan periode, anomali, forecasting.
 
+### 7. Agents
+Agent adalah workflow multi-langkah. Gunakan kalau perlu analisis bertahap atau sintesis beberapa data.
+
 ## Tool Call Protocol
+Router akan memilih tool, agent, atau jawaban langsung.
 Jika perlu memakai data atau kalkulasi, jangan berhenti di teks placeholder.
 Keluarkan satu blok code fence berlabel \`tool-call\` berisi JSON valid.
 Contoh:
 \`\`\`tool-call
-{"toolId":"laporan_query","query":"Berapa petty cash bulan Februari?"}
+{"mode":"tool","toolId":"petty_cash_summary","query":"Berapa petty cash bulan Februari?"}
 \`\`\`
 
 Setelah tool result diberikan kembali oleh sistem, jawab final secara ringkas dan langsung ke inti.

@@ -8,7 +8,7 @@ import { action } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { v } from "convex/values";
 import {
-  buildToolRouterPrompt,
+  buildExecutionRouterPrompt,
   extractToolRouteDecision,
   type AiToolCall,
   type AiRouteDecision,
@@ -253,6 +253,17 @@ async function requestModelCompletion(
 
 function parseToolRouteDecisionFromContent(content: string): AiRouteDecision | null {
   return extractToolRouteDecision(content);
+}
+
+function formatToolResult(result: ToolExecutionResult): string {
+  return [
+    `TOOL_RESULT: ${result.toolId}`,
+    `TITLE: ${result.title}`,
+    result.summary,
+    result.raw ? `RAW: ${JSON.stringify(result.raw, null, 2)}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 async function executeToolCall(
@@ -580,6 +591,144 @@ async function executeToolCall(
   }
 }
 
+async function executeAgentFlow(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: any,
+  provider: {
+    provider: string;
+    apiKey: string;
+    baseUrl: string;
+    defaultModel: string;
+    customHeaders?: string | null;
+  },
+  model: string,
+  messages: Message[],
+  branchId: string | undefined,
+  agentId: string
+): Promise<{
+  content: string;
+  tokenUsage?: { promptTokens: number; completionTokens: number };
+}> {
+  const agent = await ctx.runQuery(internal.features.ai.queries.getAgentByAgentIdInternal, { agentId }) as
+    | {
+        agentId: string;
+        name: string;
+        description: string;
+        systemPrompt: string;
+        allowedToolIds: string[];
+        isEnabled: boolean;
+      }
+    | null;
+
+  if (!agent || !agent.isEnabled) {
+    return {
+      content: `Agent ${agentId} tidak tersedia.`,
+    };
+  }
+
+  const enabledTools = await ctx.runQuery(internal.features.ai.queries.listEnabledToolsInternal, {});
+  const filteredTools = agent.allowedToolIds.length > 0
+    ? enabledTools.filter((tool: { toolId: string }) => agent.allowedToolIds.includes(tool.toolId))
+    : enabledTools;
+  const toolPrompt = buildExecutionRouterPrompt(
+    filteredTools.map((tool: { toolId: string; name: string; description: string; syntaxGuide: string }) => ({
+      toolId: tool.toolId,
+      name: tool.name,
+      description: tool.description,
+      syntaxGuide: tool.syntaxGuide,
+    })),
+    []
+  );
+
+  const workingMessages: Message[] = [
+    ...messages,
+    {
+      role: "system",
+      content: [
+        `Kamu sedang menjalankan agent: ${agent.name} (${agent.agentId}).`,
+        "Abaikan instruksi router sebelumnya dan fokus pada tugas agent ini.",
+        agent.systemPrompt,
+        toolPrompt,
+        "Jika kamu memakai tool, keluarkan JSON `tool-call` yang valid.",
+        "Jika tugas sudah cukup jelas dari data, jawab langsung tanpa placeholder.",
+      ].join("\n\n"),
+    },
+  ];
+
+  let tokenUsage: { promptTokens: number; completionTokens: number } | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parsed = await requestModelCompletion(provider, model, workingMessages, {
+      temperature: 0.2,
+      maxTokens: 2048,
+    });
+    tokenUsage = parsed.tokenUsage;
+
+    const routeDecision = parseToolRouteDecisionFromContent(parsed.content);
+    if (!routeDecision) {
+      return {
+        content: parsed.content,
+        tokenUsage,
+      };
+    }
+
+    if (routeDecision.mode === "answer") {
+      return {
+        content: routeDecision.answer,
+        tokenUsage,
+      };
+    }
+
+    if (routeDecision.mode === "agent") {
+      return {
+        content: `Agent ${agentId} meminta agent lain, tetapi nested agent routing belum diizinkan.`,
+        tokenUsage,
+      };
+    }
+
+    const toolResult = await executeToolCall(
+      ctx,
+      {
+        toolId: routeDecision.toolId,
+        query: routeDecision.query,
+        action: routeDecision.action,
+        args: routeDecision.args,
+        branchId: routeDecision.branchId,
+        reportId: routeDecision.reportId,
+        period: routeDecision.period,
+        month: routeDecision.month,
+        year: routeDecision.year,
+        expression: routeDecision.expression,
+      },
+      branchId
+    );
+
+    if (!toolResult) {
+      return {
+        content: parsed.content,
+        tokenUsage,
+      };
+    }
+
+    workingMessages.push(
+      { role: "assistant", content: parsed.content },
+      {
+        role: "system",
+        content: [
+          "Hasil tool untuk agent:",
+          formatToolResult(toolResult),
+          "Jawab final tanpa menampilkan placeholder, JSON, atau proses berpikir.",
+        ].join("\n\n"),
+      }
+    );
+  }
+
+  return {
+    content: "Agent belum menghasilkan jawaban final.",
+    tokenUsage,
+  };
+}
+
 /** Send a chat completion request (with optional RAG) */
 export const chatCompletion = action({
   args: {
@@ -655,25 +804,34 @@ export const chatCompletion = action({
       }
     }
 
-    const enabledTools = await ctx.runQuery(internal.features.ai.queries.listEnabledToolsInternal, {});
-    const toolPrompt = buildToolRouterPrompt(
+    const [enabledTools, enabledAgents] = await Promise.all([
+      ctx.runQuery(internal.features.ai.queries.listEnabledToolsInternal, {}),
+      ctx.runQuery(internal.features.ai.queries.listEnabledAgentsInternal, {}),
+    ]);
+    const routerPrompt = buildExecutionRouterPrompt(
       enabledTools.map((tool) => ({
         toolId: tool.toolId,
         name: tool.name,
         description: tool.description,
         syntaxGuide: tool.syntaxGuide,
+      })),
+      enabledAgents.map((agent) => ({
+        agentId: agent.agentId,
+        name: agent.name,
+        description: agent.description,
+        systemPrompt: agent.systemPrompt,
       }))
     );
 
-    if (toolPrompt) {
+    if (routerPrompt) {
       const systemIdx = messages.findIndex((m) => m.role === "system");
       if (systemIdx >= 0) {
         messages[systemIdx] = {
           ...messages[systemIdx],
-          content: messages[systemIdx].content + toolPrompt,
+          content: messages[systemIdx].content + routerPrompt,
         };
       } else {
-        messages.unshift({ role: "system", content: toolPrompt });
+        messages.unshift({ role: "system", content: routerPrompt });
       }
     }
 
@@ -699,6 +857,24 @@ export const chatCompletion = action({
         content: routeDecision.answer,
         model,
         tokenUsage: routerResponse.tokenUsage,
+        ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+      };
+    }
+
+    if (routeDecision.mode === "agent") {
+      const agentResponse = await executeAgentFlow(
+      ctx,
+      provider,
+      model,
+      messages,
+      branchId,
+      routeDecision.agentId
+      );
+
+      return {
+        content: agentResponse.content,
+        model,
+        tokenUsage: agentResponse.tokenUsage ?? routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
       };
     }

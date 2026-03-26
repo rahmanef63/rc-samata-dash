@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { useRouter } from "next/navigation";
-import { AiProviderConfig, AiToolsConfig, AiInstructionsConfig } from "@/features/ai";
+import { AiProviderConfig, AiToolsConfig, AiInstructionsConfig, AiAgentsConfig } from "@/features/ai";
 
 const permissions = [
   { label: "Supervisor Access", description: "Akses penuh ke semua fitur dan data", enabled: true, iconName: "Shield" },
@@ -60,6 +60,9 @@ export function SettingsPanel() {
 
       {/* AI Tools & Skills */}
       <AiToolsConfig />
+
+      {/* AI Agents */}
+      <AiAgentsConfig />
 
       {/* AI Custom Instructions */}
       <AiInstructionsConfig />
