@@ -20,6 +20,7 @@
 
 ```bash
 NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
+NEXT_PUBLIC_SITE_URL=https://rcsamata.rahmanef.com
 ```
 
 ### Convex Backend (Dokploy → Convex service → Environment)
@@ -33,6 +34,17 @@ JWKS=<JSON Web Key Set>
 CONVEX_SITE_ORIGIN=https://site-rcsamata.rahmanef.com
 CONVEX_CLOUD_ORIGIN=https://api-rcsamata.rahmanef.com
 ```
+
+### AI Provider Config
+
+These are **not** environment variables. Set them in the app:
+
+- Settings → AI Provider
+- Provider: `openrouter` or `openai`
+- API key
+- Chat model
+- Base URL if custom endpoint is used
+- Embedding model is configured in code and defaults automatically
 
 ### Generate JWT Keys
 
