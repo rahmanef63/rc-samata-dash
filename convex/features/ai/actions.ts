@@ -8,10 +8,10 @@ import { action } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { v } from "convex/values";
 import {
-  buildToolManifestPrompt,
-  extractLegacyDataQuery,
-  extractToolCall,
+  buildToolRouterPrompt,
+  extractToolRouteDecision,
   type AiToolCall,
+  type AiRouteDecision,
 } from "./toolManifest";
 
 type Message = { role: "user" | "assistant" | "system"; content: string };
@@ -37,7 +37,9 @@ function buildOpenAIRequest(
   apiKey: string,
   model: string,
   messages: Message[],
-  customHeaders?: string
+  customHeaders?: string,
+  temperature = 0.7,
+  maxTokens = 4096
 ) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -62,8 +64,8 @@ function buildOpenAIRequest(
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: 4096,
-        temperature: 0.7,
+        max_tokens: maxTokens,
+        temperature,
       }),
     },
   };
@@ -74,7 +76,9 @@ function buildAnthropicRequest(
   baseUrl: string,
   apiKey: string,
   model: string,
-  messages: Message[]
+  messages: Message[],
+  temperature = 0.7,
+  maxTokens = 4096
 ) {
   const systemMsg = messages.find((m) => m.role === "system");
   const chatMsgs = messages.filter((m) => m.role !== "system");
@@ -90,7 +94,8 @@ function buildAnthropicRequest(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
+        temperature,
         ...(systemMsg ? { system: systemMsg.content } : {}),
         messages: chatMsgs.map((m) => ({ role: m.role, content: m.content })),
       }),
@@ -206,57 +211,6 @@ function parseYearMonthFromQuery(query: string): string | null {
   return `${year}-${month}`;
 }
 
-function detectReportIntent(query: string): "pettyCash" | "kpi" | "trend" | "cashflow" | "expense" | "recent" | "rag" | null {
-  const q = normalizeQueryText(query);
-
-  if (
-    q.includes("petty cash") ||
-    q.includes("kas kecil") ||
-    q.includes("kas petty")
-  ) {
-    return "pettyCash";
-  }
-  if (
-    q.includes("kpi") ||
-    q.includes("food cost") ||
-    q.includes("gross margin") ||
-    q.includes("waste") ||
-    q.includes("sales achievement")
-  ) {
-    return "kpi";
-  }
-  if (
-    q.includes("tren") ||
-    q.includes("trend") ||
-    q.includes("perbandingan") ||
-    q.includes("bulan ini vs") ||
-    q.includes("minggu ini vs")
-  ) {
-    return "trend";
-  }
-  if (q.includes("cashflow") || q.includes("arus kas") || q.includes("aliran kas")) {
-    return "cashflow";
-  }
-  if (q.includes("expense") || q.includes("pengeluaran") || q.includes("biaya")) {
-    return "expense";
-  }
-  if (q.includes("transaksi terbaru") || q.includes("recent transaction") || q.includes("terakhir")) {
-    return "recent";
-  }
-  if (q.includes("rag") || q.includes("database") || q.includes("cari konteks") || q.includes("semantik")) {
-    return "rag";
-  }
-  return null;
-}
-
-function detectDirectAnalyticIntent(query: string): "waste" | null {
-  const q = normalizeQueryText(query);
-  if (q.includes("waste") || q.includes("sisa bahan") || q.includes("bahan paling sering waste") || q.includes("bahan apa yang paling sering waste")) {
-    return "waste";
-  }
-  return null;
-}
-
 async function requestModelCompletion(
   provider: {
     provider: string;
@@ -266,16 +220,19 @@ async function requestModelCompletion(
     customHeaders?: string | null;
   },
   model: string,
-  messages: Message[]
+  messages: Message[],
+  options?: { temperature?: number; maxTokens?: number }
 ): Promise<{
   content: string;
   tokenUsage?: { promptTokens: number; completionTokens: number };
 }> {
   const baseUrl = resolveBaseUrl(provider.provider, provider.baseUrl);
+  const temperature = options?.temperature ?? 0.7;
+  const maxTokens = options?.maxTokens ?? 4096;
   const req =
     provider.provider === "anthropic"
-      ? buildAnthropicRequest(baseUrl, provider.apiKey, model, messages)
-      : buildOpenAIRequest(baseUrl, provider.apiKey, model, messages, provider.customHeaders ?? undefined);
+      ? buildAnthropicRequest(baseUrl, provider.apiKey, model, messages, temperature, maxTokens)
+      : buildOpenAIRequest(baseUrl, provider.apiKey, model, messages, provider.customHeaders ?? undefined, temperature, maxTokens);
 
   const response = await fetch(req.url, req.options);
   if (!response.ok) {
@@ -294,27 +251,8 @@ async function requestModelCompletion(
   return provider.provider === "anthropic" ? parseAnthropicResponse(data) : parseOpenAIResponse(data);
 }
 
-function formatToolResult(result: ToolExecutionResult): string {
-  return [
-    `TOOL_RESULT: ${result.toolId}`,
-    `TITLE: ${result.title}`,
-    result.summary,
-    result.raw ? `RAW: ${JSON.stringify(result.raw, null, 2)}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function parseToolCallFromContent(content: string): AiToolCall | null {
-  const toolCall = extractToolCall(content);
-  if (toolCall) return toolCall;
-
-  const legacy = extractLegacyDataQuery(content);
-  if (legacy) {
-    return { toolId: "laporan_query", query: legacy };
-  }
-
-  return null;
+function parseToolRouteDecisionFromContent(content: string): AiRouteDecision | null {
+  return extractToolRouteDecision(content);
 }
 
 async function executeToolCall(
@@ -437,108 +375,168 @@ async function executeToolCall(
       };
     }
 
-    case "laporan_query": {
-      const intent = detectReportIntent(queryText);
-
-      if (intent === "pettyCash") {
-        if (!branchId) {
-          return {
-            toolId: toolCall.toolId,
-            title: "Query Laporan",
-            summary: "Branch belum tersedia untuk menghitung petty cash.",
-          };
-        }
-
-        const yearMonth = parseYearMonthFromQuery(queryText) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-        const summary = await ctx.runQuery(
-          internal.features.pettyCash.queries.getMonthlySummaryInternal,
-          { branchId: branchId as never, yearMonth } as never
-        ) as PettyCashMonthlySummary;
-
-        if (!summary.count) {
-          return {
-            toolId: toolCall.toolId,
-            title: "Query Laporan",
-            summary: `Tidak ada data petty cash untuk ${yearMonth}.`,
-            raw: summary,
-          };
-        }
-
-        const statusParts = Object.entries(summary.byStatus)
-          .map(([status, total]) => `${status}: ${formatNumber(Number(total))}`)
-          .join(", ");
-
+    case "petty_cash_summary": {
+      if (!branchId) {
         return {
           toolId: toolCall.toolId,
-          title: "Query Laporan",
-          summary: [
-            `Ringkasan petty cash ${yearMonth}:`,
-            `- Total request: ${formatNumber(summary.totalRequested)}`,
-            `- Total approved: ${formatNumber(summary.totalApproved)}`,
-            `- Total actual: ${formatNumber(summary.totalActual)}`,
-            `- Jumlah pengajuan: ${summary.count}`,
-            statusParts ? `- Per status: ${statusParts}` : null,
-          ].filter(Boolean).join("\n"),
+          title: "Ringkasan Petty Cash",
+          summary: "Branch belum tersedia untuk menghitung petty cash.",
+        };
+      }
+
+      const explicitYearMonth =
+        toolCall.year && toolCall.month ? `${toolCall.year}-${String(toolCall.month).padStart(2, "0")}` : null;
+      const yearMonth = explicitYearMonth || parseYearMonthFromQuery(queryText) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
+      const summary = await ctx.runQuery(
+        internal.features.pettyCash.queries.getMonthlySummaryInternal,
+        { branchId: branchId as never, yearMonth } as never
+      ) as PettyCashMonthlySummary;
+
+      if (!summary.count) {
+        return {
+          toolId: toolCall.toolId,
+          title: "Ringkasan Petty Cash",
+          summary: `Tidak ada data petty cash untuk ${yearMonth}.`,
           raw: summary,
         };
       }
 
-      if (intent === "kpi") {
-        return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" }, branchId);
-      }
+      const statusParts = Object.entries(summary.byStatus)
+        .map(([status, total]) => `${status}: ${formatNumber(Number(total))}`)
+        .join(", ");
 
-      if (intent === "trend") {
-        return executeToolCall(ctx, { ...toolCall, toolId: "trend_analysis" }, branchId);
-      }
+      return {
+        toolId: toolCall.toolId,
+        title: "Ringkasan Petty Cash",
+        summary: [
+          `Ringkasan petty cash ${yearMonth}:`,
+          `- Total request: ${formatNumber(summary.totalRequested)}`,
+          `- Total approved: ${formatNumber(summary.totalApproved)}`,
+          `- Total actual: ${formatNumber(summary.totalActual)}`,
+          `- Jumlah pengajuan: ${summary.count}`,
+          statusParts ? `- Per status: ${statusParts}` : null,
+        ].filter(Boolean).join("\n"),
+        raw: summary,
+      };
+    }
 
-      if (intent === "cashflow") {
-        if (!branchId) return null;
-        const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getCashflowWaterfallInternal, {
-          branchId: branchId as never,
-        }) as Array<{ name: string; value: number }>;
+    case "cashflow_summary": {
+      if (!branchId) {
         return {
           toolId: toolCall.toolId,
-          title: "Cashflow Waterfall",
-          summary: result.map((row) => `- ${row.name}: ${formatNumber(row.value)}`).join("\n"),
-          raw: result,
+          title: "Ringkasan Cashflow",
+          summary: "Branch belum tersedia untuk menghitung cashflow.",
         };
       }
 
-      if (intent === "expense") {
-        if (!branchId) return null;
-        const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getExpenseBreakdownInternal, {
-          branchId: branchId as never,
-        }) as Array<{ name: string; value: number }>;
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getCashflowWaterfallInternal, {
+        branchId: branchId as never,
+      }) as Array<{ name: string; value: number }>;
+
+      return {
+        toolId: toolCall.toolId,
+        title: "Ringkasan Cashflow",
+        summary: result.length
+          ? result.map((row) => `- ${row.name}: ${formatNumber(row.value)}`).join("\n")
+          : "Tidak ada ringkasan cashflow yang tersedia.",
+        raw: result,
+      };
+    }
+
+    case "expense_breakdown": {
+      if (!branchId) {
         return {
           toolId: toolCall.toolId,
-          title: "Expense Breakdown",
-          summary: result.length
-            ? result.map((row) => `- ${row.name}: ${formatNumber(row.value)}`).join("\n")
-            : "Tidak ada breakdown expense yang tersedia.",
-          raw: result,
+          title: "Breakdown Expense",
+          summary: "Branch belum tersedia untuk menghitung expense.",
         };
       }
 
-      if (intent === "recent") {
-        if (!branchId) return null;
-        const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getRecentTransactionsInternal, {
-          branchId: branchId as never,
-        }) as Array<{ name: string; type: string; amount: string; time: string; status: string }>;
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getExpenseBreakdownInternal, {
+        branchId: branchId as never,
+      }) as Array<{ name: string; value: number }>;
+
+      return {
+        toolId: toolCall.toolId,
+        title: "Breakdown Expense",
+        summary: result.length
+          ? result.map((row) => `- ${row.name}: ${formatNumber(row.value)}`).join("\n")
+          : "Tidak ada breakdown expense yang tersedia.",
+        raw: result,
+      };
+    }
+
+    case "recent_transactions": {
+      if (!branchId) {
         return {
           toolId: toolCall.toolId,
-          title: "Recent Transactions",
-          summary: result.length
-            ? result.map((row) => `- ${row.time} | ${row.name} | ${row.amount} | ${row.status}`).join("\n")
-            : "Tidak ada transaksi terbaru yang ditemukan.",
-          raw: result,
+          title: "Transaksi Terbaru",
+          summary: "Branch belum tersedia untuk mengambil transaksi terbaru.",
         };
       }
 
-      if (intent === "rag" || (!intent && queryText)) {
-        return executeToolCall(ctx, { ...toolCall, toolId: "rag_database" }, branchId);
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getRecentTransactionsInternal, {
+        branchId: branchId as never,
+      }) as Array<{ name: string; type: string; amount: string; time: string; status: string }>;
+
+      return {
+        toolId: toolCall.toolId,
+        title: "Transaksi Terbaru",
+        summary: result.length
+          ? result.map((row) => `- ${row.time} | ${row.name} | ${row.amount} | ${row.status}`).join("\n")
+          : "Tidak ada transaksi terbaru yang ditemukan.",
+        raw: result,
+      };
+    }
+
+    case "waste_analysis": {
+      if (!branchId) {
+        return {
+          toolId: toolCall.toolId,
+          title: "Analisis Waste",
+          summary: "Branch belum tersedia untuk analisis waste.",
+        };
       }
 
-      return null;
+      const waste = await ctx.runQuery(internal.features.reports.analytics.getWasteAnalysisInternal, {
+        branchId: branchId as never,
+      }) as {
+        topWastedItems: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        topWastedByQty: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        totalWasteCost: number;
+        totalWasteQty: number;
+      };
+
+      const topByQty = waste.topWastedByQty?.[0];
+      const topByCost = waste.topWastedItems?.[0];
+
+      if (!topByQty && !topByCost) {
+        return {
+          toolId: toolCall.toolId,
+          title: "Analisis Waste",
+          summary: "Tidak ada data waste untuk cabang ini.",
+          raw: waste,
+        };
+      }
+
+      const answerLines = [
+        topByQty ? `Bahan yang paling sering waste adalah ${topByQty.itemName} (${topByQty.totalQty} unit).` : null,
+        topByCost ? `Dari sisi biaya, yang paling besar waste-nya adalah ${topByCost.itemName} (${formatNumber(topByCost.estimatedCost)}).` : null,
+        `Total waste tercatat: ${waste.totalWasteQty} unit dengan estimasi biaya ${formatNumber(waste.totalWasteCost)}.`,
+      ].filter(Boolean);
+
+      return {
+        toolId: toolCall.toolId,
+        title: "Analisis Waste",
+        summary: answerLines.join("\n"),
+        raw: waste,
+      };
+    }
+
+    case "laporan_query": {
+      if (!queryText) return null;
+      return executeToolCall(ctx, { ...toolCall, toolId: "rag_database" }, branchId);
     }
 
     case "calculator": {
@@ -658,7 +656,7 @@ export const chatCompletion = action({
     }
 
     const enabledTools = await ctx.runQuery(internal.features.ai.queries.listEnabledToolsInternal, {});
-    const toolPrompt = buildToolManifestPrompt(
+    const toolPrompt = buildToolRouterPrompt(
       enabledTools.map((tool) => ({
         toolId: tool.toolId,
         name: tool.name,
@@ -680,96 +678,61 @@ export const chatCompletion = action({
     }
 
     const branchId = args.branchId ? String(args.branchId) : undefined;
-    const directIntent = detectDirectAnalyticIntent(messages.find((m) => m.role === "user")?.content ?? "");
-    if (directIntent === "waste" && branchId) {
-      const waste = await ctx.runQuery(internal.features.reports.analytics.getWasteAnalysisInternal, {
-        branchId: branchId as never,
-      }) as {
-        topWastedItems: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
-        topWastedByQty: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
-        totalWasteCost: number;
-        totalWasteQty: number;
-      };
+    const routerResponse = await requestModelCompletion(provider, model, messages, {
+      temperature: 0,
+      maxTokens: 1024,
+    });
 
-      const topByQty = waste.topWastedByQty?.[0];
-      const topByCost = waste.topWastedItems?.[0];
+    const routeDecision = parseToolRouteDecisionFromContent(routerResponse.content);
 
-      if (!topByQty && !topByCost) {
-        return {
-          content: "Tidak ada data waste untuk cabang ini.",
-          model,
-          ragContext: ragTexts.length > 0 ? ragTexts : undefined,
-        };
-      }
-
-      const answerLines = [
-        topByQty
-          ? `Bahan yang paling sering waste adalah ${topByQty.itemName} (${topByQty.totalQty} unit).`
-          : null,
-        topByCost
-          ? `Dari sisi biaya, yang paling besar waste-nya adalah ${topByCost.itemName} (${formatNumber(topByCost.estimatedCost)}).`
-          : null,
-        `Total waste tercatat: ${waste.totalWasteQty} unit dengan estimasi biaya ${formatNumber(waste.totalWasteCost)}.`,
-      ].filter(Boolean);
-
+    if (!routeDecision) {
       return {
-        content: answerLines.join("\n"),
+        content: routerResponse.content,
         model,
+        tokenUsage: routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
       };
     }
 
-    let workingMessages = [...messages];
-    let tokenUsage: { promptTokens: number; completionTokens: number } | undefined;
-    let finalContent = "Tidak ada respons dari AI.";
-    let lastToolResult: ToolExecutionResult | null = null;
+    if (routeDecision.mode === "answer") {
+      return {
+        content: routeDecision.answer,
+        model,
+        tokenUsage: routerResponse.tokenUsage,
+        ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+      };
+    }
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const parsed = await requestModelCompletion(provider, model, workingMessages);
-      tokenUsage = parsed.tokenUsage;
-      finalContent = parsed.content;
+    const toolResult = await executeToolCall(
+      ctx,
+      {
+        toolId: routeDecision.toolId,
+        query: routeDecision.query,
+        action: routeDecision.action,
+        args: routeDecision.args,
+        branchId: routeDecision.branchId,
+        reportId: routeDecision.reportId,
+        period: routeDecision.period,
+        month: routeDecision.month,
+        year: routeDecision.year,
+        expression: routeDecision.expression,
+      },
+      branchId
+    );
 
-      const toolCall = parseToolCallFromContent(parsed.content);
-      if (!toolCall) {
-        return {
-          content: parsed.content,
-          model,
-          tokenUsage,
-          ragContext: ragTexts.length > 0 ? ragTexts : undefined,
-        };
-      }
-
-      const toolResult = await executeToolCall(ctx, toolCall, branchId);
-      if (!toolResult) {
-        return {
-          content: parsed.content,
-          model,
-          tokenUsage,
-          ragContext: ragTexts.length > 0 ? ragTexts : undefined,
-        };
-      }
-      lastToolResult = toolResult;
-
-      workingMessages = [
-        ...workingMessages,
-        { role: "assistant", content: parsed.content },
-        {
-          role: "system",
-          content: [
-            "Hasil tool yang harus dipakai untuk jawaban final:",
-            formatToolResult(toolResult),
-            "Jawab user secara final tanpa menampilkan placeholder atau JSON tool-call.",
-          ].join("\n\n"),
-        },
-      ];
+    if (!toolResult) {
+      return {
+        content: `Tool ${routeDecision.toolId} belum bisa dieksekusi.`,
+        model,
+        tokenUsage: routerResponse.tokenUsage,
+        ragContext: ragTexts.length > 0 ? ragTexts : undefined,
+      };
     }
 
     return {
-      content: lastToolResult
-        ? `${lastToolResult.title}:\n${lastToolResult.summary}`
-        : finalContent,
+      content: toolResult.summary,
       model,
-      tokenUsage,
+      tokenUsage: routerResponse.tokenUsage,
       ragContext: ragTexts.length > 0 ? ragTexts : undefined,
     };
   },

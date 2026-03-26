@@ -22,16 +22,35 @@ export type AiToolCall = {
   expression?: string;
 };
 
+export type AiRouteDecision =
+  | {
+      mode: "tool";
+      toolId: string;
+      query?: string;
+      action?: string;
+      args?: Record<string, unknown>;
+      branchId?: string;
+      reportId?: string;
+      period?: string;
+      month?: string;
+      year?: string;
+      expression?: string;
+    }
+  | {
+      mode: "answer";
+      answer: string;
+    };
+
 export const BUILTIN_AI_TOOL_MANIFEST: AiToolManifestItem[] = [
   {
     toolId: "laporan_query",
     name: "Query Laporan",
-    description: "Mengakses data laporan mingguan dan ringkasan operasional dari Convex.",
+    description: "Fallback untuk pertanyaan data umum yang belum cocok ke tool spesifik.",
     category: "data",
     syntaxGuide: `Gunakan tool ini untuk pertanyaan operasional yang butuh data aktual.
 Output tool call yang valid:
 \`\`\`tool-call
-{"toolId":"laporan_query","query":"pertanyaan user"}
+{"mode":"tool","toolId":"laporan_query","query":"pertanyaan user"}
 \`\`\`
 
 Contoh:
@@ -39,7 +58,7 @@ Contoh:
 - "Berapa petty cash bulan Februari?"
 - "Tampilkan expense breakdown bulan ini"
 
-Tool ini akan otomatis diarahkan ke query Convex yang paling relevan.`,
+Gunakan tool ini hanya jika tool yang lebih spesifik tidak tersedia.`,
   },
   {
     toolId: "kpi_check",
@@ -53,6 +72,52 @@ Output tool call:
 \`\`\`
 
 Jika user menyebut periode tertentu, sertakan di query.`,
+  },
+  {
+    toolId: "petty_cash_summary",
+    name: "Ringkasan Petty Cash",
+    description: "Mengambil ringkasan petty cash bulanan dari Convex.",
+    category: "data",
+    syntaxGuide: `Gunakan tool ini untuk pertanyaan petty cash per bulan.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"petty_cash_summary","query":"petty cash bulan Februari"}
+\`\`\`
+
+Jika user menyebut bulan dan tahun, sertakan di query.`,
+  },
+  {
+    toolId: "cashflow_summary",
+    name: "Ringkasan Cashflow",
+    description: "Menampilkan ringkasan cashflow dan aliran kas dari Convex.",
+    category: "data",
+    syntaxGuide: `Gunakan tool ini untuk pertanyaan tentang arus kas, cashflow, atau aliran kas.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"cashflow_summary","query":"ringkasan cashflow minggu ini"}
+\`\`\``,
+  },
+  {
+    toolId: "expense_breakdown",
+    name: "Breakdown Expense",
+    description: "Menampilkan rincian expense atau biaya yang tercatat di Convex.",
+    category: "data",
+    syntaxGuide: `Gunakan tool ini untuk pertanyaan tentang pengeluaran, biaya, atau expense breakdown.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"expense_breakdown","query":"expense breakdown bulan ini"}
+\`\`\``,
+  },
+  {
+    toolId: "recent_transactions",
+    name: "Transaksi Terbaru",
+    description: "Menampilkan transaksi terbaru dari data operasional.",
+    category: "data",
+    syntaxGuide: `Gunakan tool ini untuk pertanyaan tentang transaksi terakhir atau transaksi terbaru.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"recent_transactions","query":"transaksi terbaru"}
+\`\`\``,
   },
   {
     toolId: "memory_notes",
@@ -106,33 +171,48 @@ Output tool call:
 
 Jika user menyebut periode harian, mingguan, atau bulanan, sertakan di query.`,
   },
+  {
+    toolId: "waste_analysis",
+    name: "Analisis Waste",
+    description: "Menganalisis bahan atau item yang paling sering waste berdasarkan qty dan estimasi biaya.",
+    category: "data",
+    syntaxGuide: `Gunakan tool ini untuk pertanyaan tentang bahan paling boros, waste terbanyak, atau item paling sering terbuang.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"waste_analysis","query":"bahan paling boros"}
+\`\`\`
+
+Pakai tool ini untuk pertanyaan seperti:
+- "Bahan paling boros?"
+- "Item mana yang paling sering waste?"
+- "Apa bahan yang paling banyak terbuang bulan ini?"`,
+  },
 ];
 
-export function buildToolManifestPrompt(tools: Array<Pick<AiToolManifestItem, "toolId" | "name" | "description" | "syntaxGuide">>): string {
+export function buildToolRouterPrompt(tools: Array<Pick<AiToolManifestItem, "toolId" | "name" | "description" | "syntaxGuide">>): string {
   if (tools.length === 0) return "";
 
   const lines = [
-    "## Tool Manifest",
-    "Kamu memiliki akses ke tools berikut. Gunakan hanya jika memang diperlukan.",
+    "## Tool Router",
+    "Kamu adalah router yang memilih tool paling tepat atau menjawab langsung jika tidak butuh tool.",
+    "Jangan memberi penjelasan proses. Jangan bilang 'saya akan cek' atau 'tunggu sebentar'.",
+    "Keluarkan HANYA satu blok code fence `tool-call` berisi JSON valid dengan salah satu bentuk berikut:",
+    `{"mode":"tool","toolId":"...","query":"..."}`,
+    `{"mode":"answer","answer":"..."}`,
+    "Jika pertanyaan butuh data, analitik, kalkulasi, atau RAG, pilih tool yang paling spesifik.",
+    "Jangan pilih laporan_query jika ada tool spesifik yang cocok seperti petty_cash_summary, cashflow_summary, expense_breakdown, recent_transactions, waste_analysis, kpi_check, atau trend_analysis.",
+    "Jika bisa dijawab tanpa tool, pilih mode answer dan jawab langsung.",
     ...tools.flatMap((tool, index) => [
       `### ${index + 1}. ${tool.name} (${tool.toolId})`,
       tool.description,
       tool.syntaxGuide,
     ]),
-    "## Tool Call Protocol",
-    "Jika perlu memakai tool, jangan jawab dengan placeholder seperti [DATA QUERY: ...].",
-    "Sebagai gantinya, keluarkan satu blok code fence berlabel `tool-call` berisi JSON valid.",
-    "Contoh:",
-    "```tool-call",
-    '{"toolId":"laporan_query","query":"Berapa petty cash bulan Februari?"}',
-    "```",
-    "Setelah tool hasilnya diberikan kembali oleh sistem, jawab user secara final dan ringkas.",
   ];
 
   return `\n\n${lines.join("\n")}`;
 }
 
-export function extractToolCall(content: string): AiToolCall | null {
+export function extractToolRouteDecision(content: string): AiRouteDecision | null {
   const blockMatch = content.match(/```(?:tool-call|json)?\s*([\s\S]*?)```/i);
   const raw = (blockMatch?.[1] || content).trim();
 
@@ -140,15 +220,21 @@ export function extractToolCall(content: string): AiToolCall | null {
 
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const mode = typeof parsed.mode === "string" ? parsed.mode : "";
+
+    if (mode === "answer" && typeof parsed.answer === "string") {
+      return { mode: "answer", answer: parsed.answer.trim() };
+    }
+
     const toolId = typeof parsed.toolId === "string" ? parsed.toolId : typeof parsed.tool === "string" ? parsed.tool : "";
     if (!toolId) return null;
 
-    const call: AiToolCall = { toolId };
+    const call: AiRouteDecision = { mode: "tool", toolId };
     for (const key of ["query", "action", "branchId", "reportId", "period", "month", "year", "expression"] as const) {
-      if (typeof parsed[key] === "string") call[key] = parsed[key];
+      if (typeof parsed[key] === "string") (call as Extract<AiRouteDecision, { mode: "tool" }>)[key] = parsed[key];
     }
     if (parsed.args && typeof parsed.args === "object" && !Array.isArray(parsed.args)) {
-      call.args = parsed.args as Record<string, unknown>;
+      (call as Extract<AiRouteDecision, { mode: "tool" }>).args = parsed.args as Record<string, unknown>;
     }
     return call;
   } catch {
