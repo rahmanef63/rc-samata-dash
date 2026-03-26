@@ -432,12 +432,15 @@ export default function ChatPage({ preloadedAiConfig, preloadedSessions }: Prelo
                   <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 shadow-sm">
                     <Bot className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="bg-card shadow-sm border border-border/50 rounded-[20px] rounded-tl-sm px-5 py-4">
-                    <div className="flex gap-1.5 items-center h-2">
-                      <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" />
-                      <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:0.4s]" />
+                  <div className="bg-card shadow-sm border border-border/50 rounded-[20px] rounded-tl-sm px-5 py-4 min-w-[240px] space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                      <p className="text-sm font-semibold text-foreground">AI sedang memproses data</p>
                     </div>
+                    <progress className="w-full h-2 overflow-hidden rounded-full bg-muted [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary" />
+                    <p className="text-xs text-muted-foreground">
+                      Menunggu jawaban final dari Convex atau model AI.
+                    </p>
                   </div>
                 </motion.div>
               )}
@@ -538,6 +541,11 @@ export default function ChatPage({ preloadedAiConfig, preloadedSessions }: Prelo
               )}
             </Button>
           </div>
+          {isLoading && (
+            <div className="max-w-4xl mx-auto mt-3">
+              <progress className="w-full h-1.5 overflow-hidden rounded-full bg-muted [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary" />
+            </div>
+          )}
           {activeProvider && (
             <p className="text-[10px] text-muted-foreground text-center mt-2.5 font-medium opacity-60">
               ⚡ {activeProvider.displayName} {activeProvider.defaultModel ? `· ${activeProvider.defaultModel}` : ""}
