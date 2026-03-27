@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const columns: Column<Payable>[] = [
 ];
 
 export function PayablesOverview() {
+  const [todayMs] = useState(() => Date.now());
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const currentBranchId = branches?.[0]?._id;
 
@@ -49,37 +51,40 @@ export function PayablesOverview() {
 
   const rawPayables = usePayables(currentBranchId || "");
   const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  type ReportPayable = NonNullable<typeof reportPayables>[number];
 
   const manualPayables = (rawPayables || []).map(p => ({
     ...p,
     id: p._id,
-    agingDays: p.dueDate ? Math.max(0, Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000)) : 0,
+    agingDays: p.dueDate ? Math.max(0, Math.floor((todayMs - new Date(p.dueDate).getTime()) / 86400000)) : 0,
   })) as unknown as Payable[];
-  const reportData: Payable[] = (reportPayables || []).map((p: any) => ({
+  const reportData: Payable[] = (reportPayables || []).map((p: ReportPayable) => ({
     id: p._id,
     _id: p._id,
     vendorName: p.supplierName ?? "",
     description: p.itemName ?? "",
     amount: p.totalAmount ?? 0,
     paidAmount: 0,
-    invoiceDate: p.businessDate ?? "",
+    invoiceDate: p.purchaseDate ?? "",
     dueDate: p.dueDate ?? "",
-    agingDays: p.dueDate ? Math.max(0, Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000)) : 0,
+    agingDays: p.dueDate ? Math.max(0, Math.floor((todayMs - new Date(p.dueDate).getTime()) / 86400000)) : 0,
     status: "open" as const,
     branchId: p.branchId,
     _creationTime: p._creationTime,
   })) as unknown as Payable[];
-  const payablesData = manualPayables.length > 0 ? manualPayables : reportData;
+  const payablesData = [...manualPayables, ...reportData];
 
-  const mutations = {
-    createMutation: useCreatePayable(),
-    updateMutation: useUpdatePayable(),
-    deleteMutation: useDeletePayable(),
-  };
-  const crud = useConvexCrudState<Payable>(mutations as any);
+  const createPayable = useCreatePayable();
+  const updatePayable = useUpdatePayable();
+  const deletePayable = useDeletePayable();
+  const crud = useConvexCrudState<Payable>({
+    createMutation: createPayable,
+    updateMutation: updatePayable,
+    deleteMutation: deletePayable,
+  });
   const table = useTableState(payablesData, ["vendorName", "description", "status"]);
 
-  const customCreate = async (data: any) => {
+  const customCreate = async (data: Payable) => {
     if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const vendor = rawVendors?.find(v => v.name === data.vendorName);
     await crud.onCreate({

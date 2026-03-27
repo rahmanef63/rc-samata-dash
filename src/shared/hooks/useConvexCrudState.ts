@@ -3,6 +3,21 @@ import { useState, useCallback } from "react";
 
 import { type CrudMode } from "./useCrudState";
 
+type CrudRecord = {
+  id?: string;
+  _id?: string;
+};
+
+type AsyncMutation = (data: never) => Promise<unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getItemId(item: CrudRecord | null | undefined) {
+  return item?._id ?? item?.id;
+}
+
 export interface ConvexCrudState<T> {
   mode: CrudMode;
   isOpen: boolean;
@@ -11,15 +26,17 @@ export interface ConvexCrudState<T> {
   openEdit: (item: T) => void;
   openDelete: (item: T) => void;
   close: () => void;
-  onCreate: (data: any) => Promise<void>;
-  onUpdate: (data: any) => Promise<void>;
-  onDelete: (data: any) => Promise<void>;
+  onCreate: (data: unknown) => Promise<void>;
+  onUpdate: (data: unknown) => Promise<void>;
+  onDelete: (data: unknown) => Promise<void>;
 }
 
-export function useConvexCrudState<T = any>(config: {
-  createMutation: (data: any) => Promise<any>;
-  updateMutation: (data: Record<string, any>) => Promise<any>;
-  deleteMutation: (data: { id: string }) => Promise<any>;
+export function useConvexCrudState<
+  T extends CrudRecord = CrudRecord
+>(config: {
+  createMutation: AsyncMutation;
+  updateMutation: AsyncMutation;
+  deleteMutation: AsyncMutation;
 }): ConvexCrudState<T> {
   const [selectedItem, setSelectedItem] = useState<T | null>(null);
   const [mode, setMode] = useState<CrudMode>(null);
@@ -47,33 +64,35 @@ export function useConvexCrudState<T = any>(config: {
   }, []);
 
   const onCreate = useCallback(
-    async (data: any) => {
-      await config.createMutation(data);
+    async (data: unknown) => {
+      await config.createMutation(data as never);
       close();
     },
     [config, close]
   );
 
   const onUpdate = useCallback(
-    async (data: any) => {
+    async (data: unknown) => {
       // Typically the dialog returns all fields including id.
       // But convex expects `id` to be passed to uniquely identify the document.
       // E.g., { id: selectedItem._id, ...data }
-      const payload = { ...data };
-      if (selectedItem) {
-        payload.id = (selectedItem as any)._id || (selectedItem as any).id;
+      const payload: Record<string, unknown> = isRecord(data) ? { ...data } : {};
+      const selectedId = getItemId(selectedItem);
+      if (selectedId) {
+        payload.id = selectedId;
       }
-      await config.updateMutation(payload);
+      await config.updateMutation(payload as never);
       close();
     },
     [config, selectedItem, close]
   );
 
   const onDelete = useCallback(
-    async (data: any) => {
-      const id = data._id || data.id || (selectedItem && ((selectedItem as any)._id || (selectedItem as any).id));
+    async (data: unknown) => {
+      const dataRecord = isRecord(data) ? (data as CrudRecord) : null;
+      const id = getItemId(dataRecord) ?? getItemId(selectedItem);
       if (id) {
-        await config.deleteMutation({ id });
+        await config.deleteMutation({ id } as never);
       }
       close();
     },

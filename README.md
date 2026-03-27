@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RC Samata Dashboard
 
-## Getting Started
+Operational dashboard for RC Samata built with Next.js 16 and self-hosted Convex on Dokploy.
 
-First, run the development server:
+## What It Does
+
+- Upload and parse weekly Excel reports from the business
+- Aggregate sales, expenses, payables, petty cash, inventory, and reporting views
+- Manage master data and operational workflows in one dashboard
+- Provide AI chat over indexed report data with authenticated, user-scoped chat sessions
+
+## Stack
+
+- Frontend: Next.js 16.2.1, React 19, Tailwind CSS v4, shadcn/ui, Framer Motion
+- Backend: Convex 1.34+ self-hosted on Dokploy
+- Auth: `@convex-dev/auth` with password provider
+- Package manager: `pnpm`
+
+## Local Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Required frontend env:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
+NEXT_PUBLIC_SITE_URL=https://rcsamata.rahmanef.com
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Backend auth env for the Convex service is documented in [docs/deployment.md](docs/deployment.md).
 
-## Learn More
+## Common Commands
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Dev
+pnpm dev
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Type check
+npx tsc --noEmit
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Production build
+pnpm build
 
-## Deploy on Vercel
+# Lint
+pnpm run lint
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Architecture Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Route protection is handled client-side by `AuthGuard` because Convex auth tokens live in browser memory.
+- Security headers are applied through `src/proxy.ts` (Next.js 16 proxy, formerly middleware).
+- AI config, chat, and indexing endpoints are authenticated in Convex, and chat sessions are scoped to the current user.
+- The Docker build context is constrained by `.dockerignore` so local `.env*`, `_data`, and build artifacts are not copied into the image context.
+
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md)
+- [docs/deployment.md](docs/deployment.md)
+- [docs/developer.md](docs/developer.md)
+- [docs/onboarding.md](docs/onboarding.md)

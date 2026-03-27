@@ -1,5 +1,6 @@
 import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
 
 // ─── Provider Queries ───────────────────────────────────────
 
@@ -7,6 +8,7 @@ import { v } from "convex/values";
 export const listProviders = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const providers = await ctx.db.query("aiProviders").collect();
     return providers.map((p) => ({
       ...p,
@@ -19,6 +21,7 @@ export const listProviders = query({
 export const getActiveProvider = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const provider = await ctx.db
       .query("aiProviders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -56,6 +59,7 @@ export const getActiveProviderWithKey = internalQuery({
 export const listTools = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.db.query("aiTools").collect();
   },
 });
@@ -77,6 +81,7 @@ export const listEnabledToolsInternal = internalQuery({
 export const listAgents = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.db.query("aiAgents").collect();
   },
 });
@@ -107,6 +112,7 @@ export const getAgentByAgentIdInternal = internalQuery({
 export const listEnabledTools = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.db
       .query("aiTools")
       .withIndex("by_enabled", (q) => q.eq("isEnabled", true))
@@ -120,6 +126,7 @@ export const listEnabledTools = query({
 export const listInstructions = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.db.query("aiCustomInstructions").collect();
   },
 });
@@ -139,6 +146,7 @@ export const getActiveInstructionInternal = internalQuery({
 export const getActiveInstruction = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.db
       .query("aiCustomInstructions")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -152,9 +160,10 @@ export const getActiveInstruction = query({
 export const listChatSessions = query({
   args: {},
   handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
     return await ctx.db
       .query("aiChatSessions")
-      .withIndex("by_created")
+      .withIndex("by_user_created", (q) => q.eq("userId", userId as never))
       .order("desc")
       .take(50);
   },
@@ -164,6 +173,11 @@ export const listChatSessions = query({
 export const getChatMessages = query({
   args: { sessionId: v.id("aiChatSessions") },
   handler: async (ctx, { sessionId }) => {
+    const userId = await requireAuth(ctx);
+    const session = await ctx.db.get(sessionId);
+    if (!session || session.userId !== userId) {
+      throw new Error("Chat session not found.");
+    }
     return await ctx.db
       .query("aiChatMessages")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
@@ -175,6 +189,7 @@ export const getChatMessages = query({
 export const getAiConfig = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const provider = await ctx.db
       .query("aiProviders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -212,6 +227,7 @@ export const getAiConfig = query({
 export const getEmbeddingStats = query({
   args: { reportId: v.optional(v.id("weeklyReports")) },
   handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
     if (reportId) {
       const docs = await ctx.db
         .query("aiEmbeddings")

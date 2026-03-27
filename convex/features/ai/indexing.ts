@@ -7,6 +7,7 @@
 import { action, internalMutation } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
 
 const now = () => new Date().toISOString();
 
@@ -159,6 +160,8 @@ export const indexReportData = action({
     indexed: number;
     tables: Record<string, number>;
   }> => {
+    await requireAuth(ctx);
+
     // 1. Get report header for period info
     const report = await ctx.runQuery(
       internal.features.reports.queries.getReportById,

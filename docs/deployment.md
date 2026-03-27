@@ -2,51 +2,49 @@
 
 ## Prerequisites
 
-- Dokploy server with Docker & Docker Compose
-- Domain pointed to Dokploy (e.g., `rcsamata.rahmanef.com`)
-- Git repository (GitHub)
+- Dokploy server with Docker and Docker Compose
+- Domain pointed to Dokploy
+- Git repository connected to Dokploy
 
 ## Infrastructure
 
 | Service | Domain | Type |
 |---------|--------|------|
-| Next.js Frontend | `rcsamata.rahmanef.com` | Docker (standalone) |
+| Next.js Frontend | `rcsamata.rahmanef.com` | Docker |
 | Convex Backend API | `api-rcsamata.rahmanef.com` | Docker Compose |
 | Convex Site (HTTP) | `site-rcsamata.rahmanef.com` | Docker Compose |
 
 ## Environment Variables
 
-### Frontend (.env.local / Dokploy env)
+### Frontend
 
 ```bash
 NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
 NEXT_PUBLIC_SITE_URL=https://rcsamata.rahmanef.com
 ```
 
-### Convex Backend (Dokploy → Convex service → Environment)
+### Convex Backend
 
 ```bash
-# Required for auth
 JWT_PRIVATE_KEY=<RSA private key PEM>
 JWKS=<JSON Web Key Set>
-
-# Set in docker-compose
 CONVEX_SITE_ORIGIN=https://site-rcsamata.rahmanef.com
 CONVEX_CLOUD_ORIGIN=https://api-rcsamata.rahmanef.com
 ```
 
+On self-hosted Convex, `CONVEX_SITE_ORIGIN` and `CONVEX_CLOUD_ORIGIN` are exposed to the auth library as `CONVEX_SITE_URL` and `CONVEX_CLOUD_URL`.
+
 ### AI Provider Config
 
-These are **not** environment variables. Set them in the app:
+These are configured in-app, not as frontend env vars:
 
 - Settings → AI Provider
-- Provider: `openrouter` or `openai`
+- Active provider (`openai` or `openrouter`)
 - API key
+- Base URL if needed
 - Chat model
-- Base URL if custom endpoint is used
-- Embedding model is configured in code and defaults automatically
 
-### Generate JWT Keys
+## Generate JWT Keys
 
 ```bash
 node -e "
@@ -63,17 +61,25 @@ console.log('JWKS:', JSON.stringify({ keys: [jwk] }));
 "
 ```
 
+## Frontend Build Notes
+
+The frontend is built from the repo `Dockerfile`.
+
+The repository now includes `.dockerignore` to keep the Docker build context clean. That excludes:
+
+- `.env*`
+- `_data/`
+- `node_modules/`
+- `.next/`
+- other local build/debug artifacts
+
+This matters because the repo can contain local business files and development-only env values that should never be sent into the image build context.
+
 ## Deploying Frontend
 
-### Dockerfile (already in repo)
-
-The Next.js app is built with `output: "standalone"` and deployed as a Docker container.
-
 ```bash
-# Build
 docker build -t rc-samata-dash .
 
-# Run
 docker run -p 3000:3000 \
   -e NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com \
   rc-samata-dash
@@ -81,47 +87,47 @@ docker run -p 3000:3000 \
 
 ### Dokploy Setup
 
-1. Create new Application in Dokploy
-2. Connect GitHub repository
-3. Set build type: Dockerfile
-4. Add environment variable: `NEXT_PUBLIC_CONVEX_URL`
-5. Set domain: `rcsamata.rahmanef.com`
-6. Enable HTTPS (Let's Encrypt)
-7. Deploy
+1. Create a new application.
+2. Connect the Git repository.
+3. Use `Dockerfile` as the build type.
+4. Add frontend env vars.
+5. Set the app domain.
+6. Enable HTTPS.
+7. Deploy.
 
 ## Deploying Convex Backend
 
-Convex self-hosted runs via Docker Compose on Dokploy.
-
-1. Create new Compose service in Dokploy
-2. Use the existing docker-compose.yml
-3. Set environment variables:
+1. Create a new compose service in Dokploy.
+2. Use the existing `docker-compose.yml`.
+3. Set:
    - `JWT_PRIVATE_KEY`
    - `JWKS`
    - `CONVEX_SITE_ORIGIN`
    - `CONVEX_CLOUD_ORIGIN`
-4. Set domains for API and Site endpoints
-5. Deploy
+4. Attach API and Site domains.
+5. Deploy.
 
 ## Post-Deploy Checks
 
-1. **Health check**: Visit `https://rcsamata.rahmanef.com` — should show landing or login
-2. **Auth check**: Sign in with test credentials
-3. **API check**: `https://api-rcsamata.rahmanef.com` should respond
-4. **JWKS check**: `https://site-rcsamata.rahmanef.com/.well-known/jwks.json` should return keys
-5. **PWA check**: Open DevTools → Application → Service Worker should be registered
-6. **PWA install**: On mobile Chrome, "Add to Home Screen" should work
+1. Visit the site root and confirm the landing page loads.
+2. Sign in and confirm dashboard routes render.
+3. Confirm `https://api-rcsamata.rahmanef.com` responds.
+4. Confirm `https://site-rcsamata.rahmanef.com/.well-known/jwks.json` returns keys.
+5. Upload a report and verify import succeeds.
+6. Open `/chat` after signing in and confirm sessions load only for the current user.
+7. Check `sitemap.xml` only exposes public pages.
 
 ## Updating
 
 ```bash
 git push origin main
-# Dokploy auto-deploys on push (if configured)
-# Or manually trigger deploy from Dokploy dashboard
 ```
+
+If Dokploy auto-deploy is enabled, that push should trigger a deployment automatically.
 
 ## Rollback
 
-1. Go to Dokploy → Application → Deployments
-2. Select previous successful deployment
-3. Click "Redeploy"
+1. Open Dokploy.
+2. Go to the application deployment history.
+3. Select the last known-good deployment.
+4. Redeploy it.

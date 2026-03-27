@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,10 +48,11 @@ export function DailySalesForm() {
 
   const rawSales = useDailySales(currentBranchId || "");
   const reportSales = useQuery(api.features.reports.queries.getSalesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  type ReportSale = NonNullable<typeof reportSales>[number];
 
   // Merge manual entries + uploaded report data (transformed to DailySale shape)
   const manualData = (rawSales || []).map(s => ({ ...s, id: s._id })) as unknown as DailySale[];
-  const reportData: DailySale[] = (reportSales || []).map((s: any) => ({
+  const reportData: DailySale[] = (reportSales || []).map((s: ReportSale) => ({
     id: s._id,
     _id: s._id,
     businessDate: s.businessDate ?? "",
@@ -66,24 +67,29 @@ export function DailySalesForm() {
     branchId: s.branchId,
     _creationTime: s._creationTime,
   })) as unknown as DailySale[];
-  const salesData = manualData.length > 0 ? manualData : reportData;
+  const salesData = [...manualData, ...reportData];
 
-  const mutations = {
-    createMutation: useCreateSale(),
-    updateMutation: useUpdateSale(),
-    deleteMutation: useDeleteSale(),
-  };
-
-  const crud = useConvexCrudState<DailySale>(mutations as any);
+  const createSale = useCreateSale();
+  const updateSale = useUpdateSale();
+  const deleteSale = useDeleteSale();
+  const crud = useConvexCrudState<DailySale>({
+    createMutation: createSale,
+    updateMutation: updateSale,
+    deleteMutation: deleteSale,
+  });
   // Auto-inject branchId for creates
-  const customCrudCreate = async (data: any) => {
+  const customCrudCreate = async (data: DailySale) => {
     if(!currentBranchId) { toast.error("Cabang belum tersedia. Tambahkan di Master Data."); return; }
-    await crud.onCreate({ ...data, branchId: currentBranchId, netAmount: data.grossAmount - (data.platformFee||0) - (data.promoCost||0) });
+    await crud.onCreate({
+      ...data,
+      branchId: currentBranchId,
+      netAmount: data.grossAmount - (data.platformFee || 0) - (data.promoCost || 0),
+    });
   };
 
   const table = useTableState(salesData, ["channelName", "businessDate", "referenceNo"]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
   const todaySales = salesData.filter(i => i.businessDate === today);
   const totalGross = todaySales.reduce((s, i) => s + i.grossAmount, 0);
   const totalNet = todaySales.reduce((s, i) => s + i.netAmount, 0);

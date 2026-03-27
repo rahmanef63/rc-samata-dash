@@ -7,151 +7,169 @@
 | Frontend | Next.js (App Router) | 16.2.1 |
 | UI | Tailwind CSS v4 + shadcn/ui + Framer Motion | - |
 | Backend | Convex (self-hosted on Dokploy) | 1.34+ |
-| Auth | @convex-dev/auth (Password provider) | 0.0.91 |
+| Auth | `@convex-dev/auth` (Password provider) | 0.0.91 |
 | Package Manager | pnpm | - |
-| Deployment | Docker (standalone) on Dokploy | - |
+| Deployment | Docker on Dokploy | - |
+
+## High-Level Shape
+
+This app is centered on report ingestion. Weekly Excel files are parsed in the browser, validated, and imported into Convex tables. Dashboard, finance, analytics, and AI features all read from that imported data plus a smaller set of manual operational records.
+
+The codebase is split vertically:
+
+- `src/features/*` for frontend feature slices
+- `convex/features/*` for backend feature slices
+
+That keeps data shape, UI, and business logic grouped by domain instead of by framework layer alone.
 
 ## Directory Structure
 
-```
+```text
 rc-samata-dash/
-├── convex/                      # Convex backend
-│   ├── _generated/              # Auto-generated types & API
-│   ├── features/                # Feature modules
-│   │   ├── audit/               # Audit tables & functions
-│   │   ├── closing/             # Closing & setoran
-│   │   ├── expenses/            # Expense tracking
-│   │   ├── inventory/           # Inventory management
-│   │   ├── masterData/          # Branches, master products, ingredients
-│   │   ├── payables/            # Vendor payables
-│   │   ├── pettyCash/           # Petty cash requests
-│   │   ├── reports/             # Weekly reports, analytics, dashboard queries
-│   │   └── sales/               # Sales data
-│   ├── shared/                  # Shared helpers, auth, validators
-│   ├── auth.ts                  # Auth config
-│   ├── http.ts                  # HTTP routes
-│   └── schema.ts                # Database schema (imports from features)
-├── docs/                        # Documentation
-├── public/                      # Static assets, PWA files
+├── convex/
+│   ├── _generated/              # Generated Convex types and API bindings
+│   ├── features/
+│   │   ├── ai/                  # AI config, chat, indexing, actions
+│   │   ├── audit/
+│   │   ├── closing/
+│   │   ├── expenses/
+│   │   ├── inventory/
+│   │   ├── masterData/
+│   │   ├── payables/
+│   │   ├── pettyCash/
+│   │   ├── reports/
+│   │   └── sales/
+│   ├── shared/                  # Shared auth and helper utilities
+│   ├── auth.ts                  # Convex auth configuration
+│   ├── auth.config.ts           # OpenID/auth config
+│   ├── http.ts                  # HTTP router
+│   └── schema.ts                # Merged schema
+├── docs/
 ├── src/
-│   ├── app/                     # Next.js App Router
-│   │   ├── (dashboard)/         # Protected routes (AuthGuard)
-│   │   │   ├── layout.tsx       # DashboardLayout + AuthGuard
-│   │   │   ├── loading.tsx      # Loading state
-│   │   │   ├── error.tsx        # Error boundary
-│   │   │   ├── page.tsx         # Dashboard (/)
-│   │   │   ├── finance/         # Finance routes
-│   │   │   ├── laporan/         # Report upload + analytics
-│   │   │   │   ├── upload/      # NEW LAP weekly report upload
-│   │   │   │   ├── upload-pergantian/  # Pergantian produk upload
-│   │   │   │   └── upload-tunjangan/  # Tunjangan khusus upload
-│   │   │   ├── operation/       # Operations routes
-│   │   │   ├── report/          # Report overview
-│   │   │   └── chat/            # AI chat
+│   ├── app/
+│   │   ├── (dashboard)/         # Dashboard routes guarded client-side
 │   │   ├── landing/             # Public landing page
 │   │   ├── login/               # Login/signup page
-│   │   ├── layout.tsx           # Root layout (metadata, PWA, ConvexProvider)
-│   │   ├── not-found.tsx        # Custom 404
-│   │   └── sitemap.ts           # Dynamic sitemap
+│   │   ├── ConvexClientProvider.tsx
+│   │   └── sitemap.ts           # Public sitemap entries only
 │   ├── components/
 │   │   ├── auth/                # AuthGuard
-│   │   ├── layout/              # AppSidebar, TopHeader, BottomNav, DashboardLayout
-│   │   └── ui/                  # shadcn/ui components + TagSelect
-│   ├── config/
-│   │   └── routes.ts            # Route definitions
+│   │   ├── layout/              # Layout shell and navigation
+│   │   └── ui/                  # Reusable UI components
 │   ├── features/
-│   │   ├── analytics/           # AnalyticsPage, ReportDataBrowser
-│   │   ├── dashboard/           # Dashboard components (KPI, charts, etc.)
-│   │   ├── report/              # Report overview
-│   │   └── report-upload/       # Excel parsers, validators, ImportPreview
-│   ├── hooks/                   # Custom hooks
-│   ├── shared/                  # Shared utilities, constants
-│   └── middleware.ts             # Security headers middleware
-└── next.config.ts               # Next.js config
+│   │   ├── analytics/
+│   │   ├── chat/
+│   │   ├── dashboard/
+│   │   ├── expenses/
+│   │   ├── payables/
+│   │   ├── petty-cash/
+│   │   ├── report/
+│   │   ├── report-upload/
+│   │   └── sales/
+│   ├── shared/
+│   └── proxy.ts                 # Next.js 16 proxy for security headers
+├── .dockerignore                # Excludes env files, data dumps, build artifacts
+└── Dockerfile
 ```
 
-## Feature Module Pattern (Convex)
+## Convex Feature Pattern
 
-Each feature in `convex/features/` follows this structure:
+Most feature folders in `convex/features/` follow:
 
-```
+```text
 features/<name>/
-├── _schema.ts       # Table definitions (defineTable)
-├── mutations.ts     # Write operations (mutation, internalMutation)
-└── queries.ts       # Read operations (query, internalQuery)
+├── _schema.ts
+├── mutations.ts
+└── queries.ts
 ```
 
-The root `convex/schema.ts` imports and merges all `_schema.ts` files.
+Some features add extra modules when needed:
+
+- `actions.ts` for provider-backed or long-running work
+- `indexing.ts` for report embedding/index pipelines
+- `analytics.ts` or other helpers for aggregate/report-specific logic
 
 ## Data Flow
 
-```
+```text
 Excel File (.xlsx)
-    ↓ [Client: parse with xlsx library]
-ParsedData (15 arrays)
-    ↓ [Client: validateParsedData()]
-ValidationWarnings
-    ↓ [Client: user edits tags in ImportPreview]
-    ↓ [Client: ImportPreview → TagSelect dropdowns]
-EditedData
-    ↓ [Client → Convex: batch mutations in chunks of 50]
-    ↓ [createWeeklyReport → importBatch × N → finalizeReport]
-Convex Database (14 tables)
-    ↓ [Convex: dashboard queries aggregate across reports]
-Dashboard Charts / Analytics / Data Browser
+    ↓ client-side parsing
+Parsed arrays
+    ↓ validation and user review
+Edited import payload
+    ↓ Convex mutations in batches
+Weekly report + normalized row tables
+    ↓ aggregate queries
+Dashboard / Finance / Analytics UI
+    ↓ optional indexing
+AI retrieval + chat
 ```
 
 ## Authentication Flow
 
+```text
+User → /login
+    ↓ signIn("password", ...)
+    ↓ Convex auth action
+    ↓ JWT signed on self-hosted Convex
+    ↓ token held in browser session
+Client-side AuthGuard checks auth state
+    ↓ protected dashboard routes render
+Sensitive Convex functions call requireAuth(ctx)
 ```
-User → /login (or AuthGuard redirect)
-    ↓ useAuthActions().signIn("password", {email, password})
-    ↓ Convex action: auth:signIn
-    ↓ Password provider authorize()
-    ↓ JWT signed with JWT_PRIVATE_KEY (RS256)
-    ↓ Token returned to client
-Client stores token → ConvexReactClient authenticated
-    ↓ All subsequent queries/mutations include auth token
-    ↓ requireAuth(ctx) validates on each request
-```
 
-## Database Tables
+Important implementation detail:
 
-### Core Tables
-| Table | Description | Key Indexes |
-|-------|-----------|------------|
-| weeklyReports | Uploaded report metadata | by_branch, by_branch_period |
-| productSales | Product sales per day/channel | by_report, by_branch_date |
-| expenses | Petty cash expenses (LPKK) | by_report, by_branch_date |
-| vendorPurchases | Vendor stock purchases | by_report |
-| inventoryValuation | Weekly food cost inventory | by_report |
-| leftoverItems | Daily leftover waste | by_report |
-| dailyCashSummary | Daily cash summary | by_report, by_branch_date |
-| dailyCashFlow | Daily cash flow | by_report, by_branch_date |
-| salesControl | Daily sales targets | by_report |
-| creditPurchases | Credit purchases | by_report |
-| foodCostSummary | FC summary per category | by_report, by_branch_period |
-| transferItems | Transfer TO/TI | by_report |
-| productHPP | HPP per product | by_report |
-| costAnalysis | Cost analysis per item | by_report |
-| employeeIncentives | Employee incentives | by_report, by_branch_period |
-| productChanges | Pergantian produk/bahan expired | by_branch, by_branch_period |
-| employeeAllowances | Tunjangan khusus karyawan | by_branch, by_employee |
+- Route gating is client-side because auth tokens are managed in the browser.
+- Because of that, protected pages should avoid unauthenticated server preloads of sensitive data.
+- `ConvexClientProvider` routes `auth:` actions over HTTP to avoid Dokploy/WebSocket disconnect issues during auth flows.
 
-### Master Data Tables
-| Table | Description |
-|-------|-----------|
-| branches | Branch info (name, code, address) |
-| masterProducts | Product registry (PRD-001) with aliases |
-| masterIngredients | Ingredient registry (ING-001) with aliases |
+## AI Architecture
 
-### Auth Tables
-Managed by `@convex-dev/auth` — users, sessions, accounts, etc.
+The AI feature has four main parts:
 
-## Security
+- Provider/config storage
+- Chat sessions and messages
+- Report indexing and embeddings
+- Chat completion action
 
-- **Middleware**: Security headers (HSTS, X-Frame-Options, CSP, etc.)
-- **Auth**: JWT RS256 tokens via `@convex-dev/auth`
-- **Query protection**: Every Convex query/mutation calls `requireAuth(ctx)`
-- **Next.js**: `poweredByHeader: false`, standalone output
-- **PWA**: Service worker with network-first for navigation, cache-first for static
+Current security model:
+
+- AI queries, mutations, actions, and indexing require authentication
+- Chat sessions are stored with `userId`
+- Session listing and message reads are filtered by current user ownership
+
+## Security Model
+
+- `src/proxy.ts` adds security headers and marks internal API routes `noindex`
+- `AuthGuard` redirects unauthenticated users to `/landing`
+- Sensitive Convex surfaces use `requireAuth(ctx)` instead of relying on UI-only checks
+- `/chat` loads AI state client-side to avoid server-side preload exposure
+- `src/app/sitemap.ts` only publishes public routes
+- `.dockerignore` excludes `.env*`, `_data`, `node_modules`, `.next`, and other non-runtime files from Docker build context
+
+## Database Notes
+
+The main business data comes from report ingestion tables such as:
+
+- `weeklyReports`
+- `productSales`
+- `expenses`
+- `vendorPurchases`
+- `creditPurchases`
+- `dailyCashSummary`
+- `dailyCashFlow`
+- `foodCostSummary`
+- `employeeIncentives`
+
+Manual operational workflows write to tables such as:
+
+- `dailySales`
+- `payables`
+- `pettyCashRequests`
+- `branches`
+- `vendors`
+- `incomeChannels`
+- `expenseCategories`
+
+AI stores its own configuration and chat tables under `convex/features/ai`.

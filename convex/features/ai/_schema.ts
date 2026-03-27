@@ -106,6 +106,7 @@ export const aiTables = {
 
   aiChatSessions: defineTable({
     title: v.string(),
+    userId: v.optional(v.id("users")),
     providerId: v.optional(v.id("aiProviders")),
     model: v.optional(v.string()),
     systemPrompt: v.optional(v.string()),
@@ -113,7 +114,9 @@ export const aiTables = {
     enabledToolIds: v.optional(v.array(v.string())),
     createdAt: v.string(),
     updatedAt: v.string(),
-  }).index("by_created", ["createdAt"]),
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_user_created", ["userId", "createdAt"]),
 
   aiChatMessages: defineTable({
     sessionId: v.id("aiChatSessions"),

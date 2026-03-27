@@ -47,7 +47,13 @@ function formatDate() {
 
 export function TopHeader() {
   const isMobile = useIsMobile();
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const theme = window.localStorage.getItem("theme");
+    return theme === "dark" || (!theme && document.documentElement.classList.contains("dark"));
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   
   const user = useQuery(api.users.current);
@@ -55,17 +61,6 @@ export function TopHeader() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check initial theme
-    const theme = localStorage.getItem("theme");
-    if (theme === "dark" || (!theme && document.documentElement.classList.contains("dark"))) {
-      setIsDark(true);
-      document.documentElement.classList.add("dark");
-    } else {
-      setIsDark(false);
-      document.documentElement.classList.remove("dark");
-    }
-
-    // Command + K for Search Dialog
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -75,6 +70,10 @@ export function TopHeader() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
 
   const toggleDark = () => {
     if (isDark) {
@@ -145,8 +144,8 @@ export function TopHeader() {
               <CommandItem onSelect={() => { router.push("/finance/expenses"); setSearchOpen(false); }}>
                 Expenses
               </CommandItem>
-              <CommandItem onSelect={() => { router.push("/finance/cashflow"); setSearchOpen(false); }}>
-                Cashflow
+              <CommandItem onSelect={() => { router.push("/report"); setSearchOpen(false); }}>
+                Report
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />

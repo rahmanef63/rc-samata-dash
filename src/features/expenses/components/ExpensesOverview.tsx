@@ -33,9 +33,10 @@ export function ExpensesOverview() {
 
   const rawExpenses = useExpenses(currentBranchId || "");
   const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  type ReportExpense = NonNullable<typeof reportExpenses>[number];
 
   const manualExpenses = (rawExpenses || []).map(e => ({ ...e, id: e._id })) as unknown as Expense[];
-  const reportData: Expense[] = (reportExpenses || []).map((e: any) => ({
+  const reportData: Expense[] = (reportExpenses || []).map((e: ReportExpense) => ({
     id: e._id,
     _id: e._id,
     expenseDate: e.expenseDate ?? "",
@@ -49,14 +50,16 @@ export function ExpensesOverview() {
     branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as Expense[];
-  const expensesData = manualExpenses.length > 0 ? manualExpenses : reportData;
+  const expensesData = [...manualExpenses, ...reportData];
 
-  const mutations = {
-    createMutation: useCreateExpense(),
-    updateMutation: useUpdateExpense(),
-    deleteMutation: useDeleteExpense(),
-  };
-  const crud = useConvexCrudState<Expense>(mutations as any);
+  const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
+  const crud = useConvexCrudState<Expense>({
+    createMutation: createExpense,
+    updateMutation: updateExpense,
+    deleteMutation: deleteExpense,
+  });
   const table = useTableState(expensesData, ["description", "categoryName", "vendorName", "status"]);
 
   const categoryOptions = (rawCategories || []).map(c => ({ label: c.name, value: c.name }));
@@ -88,7 +91,7 @@ export function ExpensesOverview() {
     { key: "expenseDate", label: "Tanggal", type: "date" },
   ];
 
-  const customCreate = async (data: any) => {
+  const customCreate = async (data: Expense) => {
     if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const category = rawCategories?.find(c => c.name === data.categoryName);
     const vendor = rawVendors?.find(v => v.name === data.vendorName);

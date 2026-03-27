@@ -61,9 +61,10 @@ export function PettyCashOverview() {
 
   const rawRequests = usePettyCashRequests(currentBranchId || "");
   const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  type ReportExpense = NonNullable<typeof reportExpenses>[number];
 
   const manualData = (rawRequests || []).map(r => ({ ...r, id: r._id })) as unknown as PettyCashRequest[];
-  const reportData: PettyCashRequest[] = (reportExpenses || []).map((e: any) => ({
+  const reportData: PettyCashRequest[] = (reportExpenses || []).map((e: ReportExpense) => ({
     id: e._id,
     _id: e._id,
     requestDate: e.expenseDate ?? "",
@@ -77,17 +78,19 @@ export function PettyCashOverview() {
     branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as PettyCashRequest[];
-  const requestsData = manualData.length > 0 ? manualData : reportData;
+  const requestsData = [...manualData, ...reportData];
 
-  const mutations = {
-    createMutation: useCreatePettyCashRequest(),
-    updateMutation: useUpdatePettyCashRequest(),
-    deleteMutation: useDeletePettyCashRequest(),
-  };
-  const crud = useConvexCrudState<PettyCashRequest>(mutations as any);
+  const createPettyCashRequest = useCreatePettyCashRequest();
+  const updatePettyCashRequest = useUpdatePettyCashRequest();
+  const deletePettyCashRequest = useDeletePettyCashRequest();
+  const crud = useConvexCrudState<PettyCashRequest>({
+    createMutation: createPettyCashRequest,
+    updateMutation: updatePettyCashRequest,
+    deleteMutation: deletePettyCashRequest,
+  });
   const table = useTableState(requestsData, ["requestedBy", "purposeCategory", "notes", "status"]);
 
-  const customCreate = async (data: any) => {
+  const customCreate = async (data: PettyCashRequest) => {
     if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     await crud.onCreate({
       ...data,

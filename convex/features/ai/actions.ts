@@ -7,6 +7,7 @@
 import { action } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
 import {
   buildExecutionRouterPrompt,
   extractToolRouteDecision,
@@ -753,6 +754,8 @@ export const chatCompletion = action({
     tokenUsage?: { promptTokens: number; completionTokens: number };
     ragContext?: string[];
   }> => {
+    await requireAuth(ctx);
+
     // Get provider config (with raw API key)
     let provider;
     if (args.providerId) {

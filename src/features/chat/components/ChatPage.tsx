@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { usePreloadedQuery, type Preloaded } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -32,12 +31,7 @@ const suggestions = [
   "Tips meningkatkan omzet harian",
 ];
 
-type PreloadedChatPageProps = {
-  preloadedAiConfig: Preloaded<typeof api.features.ai.queries.getAiConfig>;
-  preloadedSessions: Preloaded<typeof api.features.ai.queries.listChatSessions>;
-};
-
-export default function ChatPage({ preloadedAiConfig, preloadedSessions }: PreloadedChatPageProps) {
+export default function ChatPage() {
   const router = useRouter();
   const [sessionId, setSessionId] = useState<Id<"aiChatSessions"> | null>(null);
   const [input, setInput] = useState("");
@@ -46,8 +40,8 @@ export default function ChatPage({ preloadedAiConfig, preloadedSessions }: Prelo
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const sessions = usePreloadedQuery(preloadedSessions);
-  const aiConfig = usePreloadedQuery(preloadedAiConfig);
+  const sessions = useQuery(api.features.ai.queries.listChatSessions);
+  const aiConfig = useQuery(api.features.ai.queries.getAiConfig);
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const createSession = useMutation(api.features.ai.mutations.createChatSession);
   const deleteSession = useMutation(api.features.ai.mutations.deleteChatSession);

@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { aiProviderValidator, aiToolCategoryValidator } from "./_schema";
 import { BUILTIN_AI_AGENT_MANIFEST, BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
+import { requireAuth } from "../../shared/auth";
 
 const now = () => new Date().toISOString();
 
@@ -37,6 +38,7 @@ export const upsertProvider = mutation({
     embeddingBaseUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     if (args.isActive) {
       const active = await ctx.db
         .query("aiProviders")
@@ -97,6 +99,7 @@ export const upsertProvider = mutation({
 export const deleteProvider = mutation({
   args: { id: v.id("aiProviders") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     await ctx.db.delete(id);
   },
 });
@@ -105,6 +108,7 @@ export const deleteProvider = mutation({
 export const setActiveProvider = mutation({
   args: { id: v.id("aiProviders") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     const all = await ctx.db
       .query("aiProviders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -132,6 +136,7 @@ export const upsertTool = mutation({
     parameters: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     if (args.id) {
       await ctx.db.patch(args.id, {
         toolId: args.toolId,
@@ -162,6 +167,7 @@ export const upsertTool = mutation({
 export const toggleTool = mutation({
   args: { id: v.id("aiTools"), isEnabled: v.boolean() },
   handler: async (ctx, { id, isEnabled }) => {
+    await requireAuth(ctx);
     await ctx.db.patch(id, { isEnabled });
   },
 });
@@ -181,6 +187,7 @@ export const upsertAgent = mutation({
     isEnabled: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     if (args.id) {
       await ctx.db.patch(args.id, {
         agentId: args.agentId,
@@ -212,6 +219,7 @@ export const upsertAgent = mutation({
 export const toggleAgent = mutation({
   args: { id: v.id("aiAgents"), isEnabled: v.boolean() },
   handler: async (ctx, { id, isEnabled }) => {
+    await requireAuth(ctx);
     await ctx.db.patch(id, { isEnabled, updatedAt: now() });
   },
 });
@@ -220,6 +228,7 @@ export const toggleAgent = mutation({
 export const deleteAgent = mutation({
   args: { id: v.id("aiAgents") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     const agent = await ctx.db.get(id);
     if (agent?.isBuiltIn) throw new Error("Tidak bisa menghapus agent bawaan.");
     await ctx.db.delete(id);
@@ -230,6 +239,7 @@ export const deleteAgent = mutation({
 export const seedDefaultAgents = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const existing = await ctx.db.query("aiAgents").collect();
     const existingByAgentId = new Map(existing.map((agent) => [agent.agentId, agent]));
 
@@ -283,6 +293,7 @@ export const seedDefaultAgents = mutation({
 export const deleteTool = mutation({
   args: { id: v.id("aiTools") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     const tool = await ctx.db.get(id);
     if (tool?.isBuiltIn) throw new Error("Tidak bisa menghapus tool bawaan.");
     await ctx.db.delete(id);
@@ -293,6 +304,7 @@ export const deleteTool = mutation({
 export const seedDefaultTools = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const existing = await ctx.db.query("aiTools").collect();
     const existingByToolId = new Map(existing.map((tool) => [tool.toolId, tool]));
 
@@ -349,6 +361,7 @@ export const upsertInstruction = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     // If setting active, deactivate others
     if (args.isActive) {
       const active = await ctx.db
@@ -386,6 +399,7 @@ export const upsertInstruction = mutation({
 export const deleteInstruction = mutation({
   args: { id: v.id("aiCustomInstructions") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     const inst = await ctx.db.get(id);
     if (inst?.isDefault) throw new Error("Tidak bisa menghapus instruksi default.");
     await ctx.db.delete(id);
@@ -396,6 +410,7 @@ export const deleteInstruction = mutation({
 export const setActiveInstruction = mutation({
   args: { id: v.id("aiCustomInstructions") },
   handler: async (ctx, { id }) => {
+    await requireAuth(ctx);
     const all = await ctx.db
       .query("aiCustomInstructions")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -411,6 +426,7 @@ export const setActiveInstruction = mutation({
 export const seedDefaultInstruction = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     const existing = await ctx.db
       .query("aiCustomInstructions")
       .withIndex("by_default", (q) => q.eq("isDefault", true))
@@ -506,6 +522,7 @@ export const createChatSession = mutation({
     systemPrompt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
     const active = await ctx.db
       .query("aiProviders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -525,6 +542,7 @@ export const createChatSession = mutation({
 
     return await ctx.db.insert("aiChatSessions", {
       title: args.title || "Chat baru",
+      userId: userId as never,
       providerId: active?._id,
       model: active?.defaultModel,
       systemPrompt: args.systemPrompt || instruction?.content,
@@ -551,8 +569,13 @@ export const addChatMessage = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.userId !== userId) {
+      throw new Error("Chat session not found.");
+    }
+
     if (args.role === "user") {
-      const session = await ctx.db.get(args.sessionId);
       if (session?.title === "Chat baru") {
         const title = args.content.slice(0, 60) + (args.content.length > 60 ? "..." : "");
         await ctx.db.patch(args.sessionId, { title, updatedAt: now() });
@@ -574,6 +597,12 @@ export const addChatMessage = mutation({
 export const deleteChatSession = mutation({
   args: { sessionId: v.id("aiChatSessions") },
   handler: async (ctx, { sessionId }) => {
+    const userId = await requireAuth(ctx);
+    const session = await ctx.db.get(sessionId);
+    if (!session || session.userId !== userId) {
+      throw new Error("Chat session not found.");
+    }
+
     const messages = await ctx.db
       .query("aiChatMessages")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
