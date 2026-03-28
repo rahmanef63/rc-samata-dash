@@ -318,6 +318,19 @@ export default function LaporanUploadPage() {
       setLastReportId(reportId);
       setStep("done");
       toast.success("Import berhasil!");
+
+      // Auto-index for AI if provider has embedding model
+      if (aiConfig?.provider?.embeddingModel) {
+        setIndexingStatus("indexing");
+        indexReport({ reportId })
+          .then((res) => {
+            setIndexingStatus("done");
+            toast.success(`AI index selesai: ${res.indexed} record di-embed`);
+          })
+          .catch(() => {
+            setIndexingStatus("error");
+          });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error saat import. Silakan coba lagi.");
       setStep("error");

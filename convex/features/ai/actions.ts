@@ -773,11 +773,15 @@ export const chatCompletion = action({
     const model = args.model || provider.defaultModel;
     const messages = [...args.messages] as Message[];
 
+    // Separate system message (custom instruction) from chat history
+    const customInstruction = messages.find((m) => m.role === "system")?.content || "";
+    const chatMessages = messages.filter((m) => m.role !== "system");
+
     // RAG: If enabled and provider has embedding model, search for relevant data
     let ragTexts: string[] = [];
+    let ragContextStr = "";
     if (args.useRag !== false && provider.embeddingModel) {
-      // Get the last user message for search query
-      const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+      const lastUserMsg = [...chatMessages].reverse().find((m) => m.role === "user");
       if (lastUserMsg) {
         try {
           const searchResults: Array<{ text: string; score: number; sourceTable: string; periodKey: string }> =
@@ -792,21 +796,11 @@ export const chatCompletion = action({
 
           if (searchResults.length > 0) {
             ragTexts = searchResults.map((r) => r.text);
-            const ragContext = `\n\n## Data Konteks dari Database (RAG):\n${ragTexts.map((t) => `- ${t}`).join("\n")}\n\nGunakan data di atas untuk menjawab pertanyaan user secara akurat. Jika data tidak relevan, abaikan.`;
-
-            // Inject RAG context into system message
-            const systemIdx = messages.findIndex((m) => m.role === "system");
-            if (systemIdx >= 0) {
-              messages[systemIdx] = {
-                ...messages[systemIdx],
-                content: messages[systemIdx].content + ragContext,
-              };
-            } else {
-              messages.unshift({ role: "system", content: ragContext });
-            }
+            ragContextStr = `\n\n## Data Konteks dari Database (RAG):\n${ragTexts.map((t) => `- ${t}`).join("\n")}\n\nGunakan data di atas untuk menjawab pertanyaan user secara akurat. Jika data tidak relevan, abaikan.`;
           }
-        } catch {
-          // RAG failure should not block chat — just continue without context
+        } catch (ragErr) {
+          // RAG failure should not block chat — log for debugging
+          console.warn("[RAG] Semantic search gagal:", ragErr instanceof Error ? ragErr.message : String(ragErr));
         }
       }
     }
@@ -830,9 +824,14 @@ export const chatCompletion = action({
       }))
     );
 
+    // Build router system: custom instruction + router prompt + RAG context
+    const routerSystemContent = [customInstruction, routerPrompt, ragContextStr]
+      .filter(Boolean)
+      .join("\n\n");
+
     const routerMessages: Message[] = [
-      { role: "system", content: routerPrompt },
-      ...messages.filter((message) => message.role !== "system"),
+      { role: "system", content: routerSystemContent },
+      ...chatMessages,
     ];
 
     const branchId = args.branchId ? String(args.branchId) : undefined;
@@ -867,7 +866,7 @@ export const chatCompletion = action({
         ctx,
         provider,
         model,
-        messages,
+        chatMessages,
         branchId,
         routeDecision.agentId
       );
@@ -906,10 +905,25 @@ export const chatCompletion = action({
       };
     }
 
-    return {
-      content: toolResult.summary,
+    // Second LLM pass: synthesize tool result into natural language response
+    const synthesisSystemContent = [
+      customInstruction,
+      ragContextStr,
+      `\n\n## Hasil Tool "${toolResult.title}":\n${toolResult.summary}`,
+      "\nBerikan jawaban final dalam Bahasa Indonesia yang ringkas dan natural berdasarkan data di atas. Jangan tampilkan JSON, format teknis, atau proses berpikir.",
+    ].filter(Boolean).join("\n\n");
+
+    const synthesisResponse = await requestModelCompletion(
+      provider,
       model,
-      tokenUsage: routerResponse.tokenUsage,
+      [{ role: "system", content: synthesisSystemContent }, ...chatMessages],
+      { temperature: 0.7, maxTokens: 2048 }
+    );
+
+    return {
+      content: synthesisResponse.content,
+      model,
+      tokenUsage: synthesisResponse.tokenUsage ?? routerResponse.tokenUsage,
       ragContext: ragTexts.length > 0 ? ragTexts : undefined,
     };
   },

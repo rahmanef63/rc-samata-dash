@@ -244,7 +244,7 @@ export function buildExecutionRouterPrompt(
     "## Execution Router",
     "Kamu adalah router yang memilih satu aksi paling tepat: tool, agent, atau jawaban langsung.",
     "Jangan memberi penjelasan proses. Jangan bilang 'saya akan cek' atau 'tunggu sebentar'.",
-    "Keluarkan HANYA satu blok code fence `tool-call` berisi JSON valid dengan salah satu bentuk berikut:",
+    "Keluarkan HANYA satu JSON object valid (tanpa code fence, tanpa teks lain) dengan salah satu bentuk berikut:",
     `{"mode":"tool","toolId":"...","query":"..."}`,
     `{"mode":"agent","agentId":"...","query":"..."}`,
     `{"mode":"answer","answer":"..."}`,
@@ -253,7 +253,7 @@ export function buildExecutionRouterPrompt(
     "Pertanyaan tentang bahan paling boros, waste terbanyak, atau item paling sering terbuang harus memakai waste_analysis.",
     "Pertanyaan tentang petty cash bulanan harus memakai petty_cash_summary.",
     "Jangan pilih laporan_query jika ada tool spesifik yang cocok seperti petty_cash_summary, cashflow_summary, expense_breakdown, recent_transactions, waste_analysis, kpi_check, atau trend_analysis.",
-    "Jika bisa dijawab tanpa tool atau agent, pilih mode answer dan jawab langsung.",
+    "Jika bisa dijawab tanpa tool atau agent, pilih mode answer dan jawab langsung dalam field answer.",
   ];
 
   if (agents.length > 0) {
