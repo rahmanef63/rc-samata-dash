@@ -10,7 +10,10 @@
  *     Col 6: TARGET
  *     Col 7: % achievement
  *
- * periodStart dipakai untuk konversi hari-ke-tanggal penuh.
+ * PENTING: Sheet ini bersifat MTD (Month-to-Date / akumulasi bulanan).
+ * File "8-14" selalu memuat baris dari tanggal 1 s/d 14.
+ * Kita hanya mengambil baris yang masuk dalam periode file (periodStart–periodEnd)
+ * agar tidak duplikat dengan laporan minggu sebelumnya.
  */
 
 import { getSheetRows, toNumber } from "../lib/xlsxHelpers";
@@ -27,7 +30,7 @@ export type SalesControlItem = {
 
 const DATA_START = 12; // row 13
 
-export function parseSalesControl(wb: XLSX.WorkBook, periodStart: string): SalesControlItem[] {
+export function parseSalesControl(wb: XLSX.WorkBook, periodStart: string, periodEnd?: string): SalesControlItem[] {
   const sheetName = wb.SheetNames.find((n) => n.toUpperCase().includes("SALES CONTROL"));
   if (!sheetName || !periodStart) return [];
 
@@ -46,9 +49,14 @@ export function parseSalesControl(wb: XLSX.WorkBook, periodStart: string): Sales
     if (netSales <= 0) continue;
 
     const businessDate = `${year}-${month}-${String(day).padStart(2, "0")}`;
-    const customerCount = toNumber(row[2]);
-    const spendingPower = toNumber(row[3]);
-    const targetSales   = toNumber(row[6]);
+
+    // Filter MTD: hanya ambil baris dalam rentang periode file ini
+    if (businessDate < periodStart) continue;
+    if (periodEnd && businessDate > periodEnd) continue;
+
+    const customerCount  = toNumber(row[2]);
+    const spendingPower  = toNumber(row[3]);
+    const targetSales    = toNumber(row[6]);
     const achievementPct = toNumber(row[7]);
 
     result.push({

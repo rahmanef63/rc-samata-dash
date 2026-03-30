@@ -180,7 +180,7 @@ export default function LaporanUploadPage() {
         weeklyFc:        parseWeeklyFC(wb),
         leftover:        parseLeftOver(wb),
         kasPeriode:      parseLaporanKasPeriode(wb),
-        salesControl:    parseSalesControl(wb, start),
+        salesControl:    parseSalesControl(wb, start, end),
         pembelianKredit: parsePembelianKredit(wb),
         ikhtisarFC:      parseIkhtisarFC(wb),
         transferTOTI:    parseTransferTOTI(wb),
