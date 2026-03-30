@@ -92,6 +92,40 @@ export default function LaporanUploadPage() {
     branchId ? { branchId } : "skip"
   );
 
+  // ─── Cek duplikat secara reaktif saat parsed atau recentReports berubah ─────
+  useEffect(() => {
+    if (!parsed || !recentReports) return;
+
+    setValidationWarnings((prev) => {
+      const filtered = prev.filter((w) => w.category !== "Duplikat Periode");
+
+      if (!parsed.periodStart) return filtered;
+
+      const existing = recentReports.find((r) => r.periodStart === parsed.periodStart);
+      if (!existing) return filtered;
+
+      const uploadedDate = new Date(existing.uploadedAt).toLocaleDateString("id-ID", {
+        day: "numeric", month: "long", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+
+      const dupWarning: ValidationWarning = {
+        severity: "warning",
+        category: "Duplikat Periode",
+        message: `Periode ${parsed.periodStart} sudah ada di database`,
+        tip: `File "${existing.fileName}" dengan periode yang sama sudah pernah diupload. Jika kamu tetap klik Import, akan muncul konfirmasi untuk menimpa atau membatalkan.`,
+        details: [
+          `File lama   : ${existing.fileName}`,
+          `Periode     : ${existing.periodStart}${existing.periodEnd ? ` → ${existing.periodEnd}` : ""}`,
+          `Diupload    : ${uploadedDate}`,
+          `ID laporan  : #${existing._id.slice(-8).toUpperCase()}`,
+        ],
+      };
+
+      return [dupWarning, ...filtered];
+    });
+  }, [parsed, recentReports]);
+
   const createBranch      = useMutation(api.features.masterData.mutations.createBranch);
 
   // Auto-seed default branch if none exists
