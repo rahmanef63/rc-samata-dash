@@ -26,7 +26,9 @@ import { validateParsedData, type ValidationWarning } from "@/features/report-up
 import { formatRpFull } from "@/shared/lib";
 import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert, ClipboardList } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { X } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -84,6 +86,9 @@ export default function LaporanUploadPage() {
   const [lastReportId, setLastReportId] = useState<Id<"weeklyReports"> | null>(null);
   const [indexingStatus, setIndexingStatus] = useState<"idle" | "indexing" | "done" | "error">("idle");
   const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<Id<"weeklyReports"> | null>(null);
+  const [updateTargetId, setUpdateTargetId] = useState<Id<"weeklyReports"> | null>(null);
+  const updateFileInputRef = useRef<HTMLInputElement>(null);
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -207,6 +212,13 @@ export default function LaporanUploadPage() {
 
   const checkAndImport = async () => {
     if (!parsed || !branchId) return;
+    // Mode update: langsung hapus laporan lama lalu import tanpa dialog konfirmasi
+    if (updateTargetId) {
+      await deleteReport({ reportId: updateTargetId });
+      setUpdateTargetId(null);
+      await runImport();
+      return;
+    }
     // Hanya cek duplikat jika periode berhasil terdeteksi dari nama file
     if (parsed.periodStart) {
       const existing = recentReports?.find((r) => r.periodStart === parsed.periodStart);
@@ -395,6 +407,7 @@ export default function LaporanUploadPage() {
     setProgress({ current: 0, total: 0, label: "" });
     setLastReportId(null);
     setIndexingStatus("idle");
+    setUpdateTargetId(null);
   };
 
   const handleIndexForAi = async () => {
@@ -430,6 +443,19 @@ export default function LaporanUploadPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Main Content Area */}
+        {/* Hidden file input untuk update dari riwayat */}
+        <input
+          ref={updateFileInputRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFileSelect(file);
+            e.currentTarget.value = "";
+          }}
+        />
+
         <div className="lg:col-span-2 space-y-6 flex flex-col">
           {/* ─── Idle ─── */}
           {(step === "idle" || step === "parsing") && (
@@ -512,6 +538,32 @@ export default function LaporanUploadPage() {
           {/* ─── Preview ─── */}
           {step === "preview" && parsed && !duplicateReport && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+              {/* Banner mode update */}
+              {updateTargetId && (() => {
+                const target = recentReports?.find((r) => r._id === updateTargetId);
+                return (
+                  <div className="flex items-center gap-3 rounded-xl border border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-4 py-3">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">Mode Update</p>
+                      {target && (
+                        <p className="text-xs text-blue-700/70 dark:text-blue-300/70 truncate">
+                          Mengganti: <span className="font-medium">{target.fileName}</span> ({target.periodStart})
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setUpdateTargetId(null)}
+                      className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shrink-0"
+                      title="Batalkan mode update"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-border p-4 bg-card shadow-sm flex flex-col justify-center">
                   <span className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">File</span>
@@ -592,7 +644,7 @@ export default function LaporanUploadPage() {
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                 >
                   <Upload className="h-4 w-4" />
-                  Import {totalParsed} Record
+                  {updateTargetId ? `Update Laporan` : `Import ${totalParsed} Record`}
                   {validationWarnings.length > 0 && (
                     <span className="text-xs opacity-75 font-normal bg-black/10 px-1.5 py-0.5 rounded">
                       ({validationWarnings.length} catatan)
@@ -745,7 +797,7 @@ export default function LaporanUploadPage() {
                     const shortId = r._id.slice(-8).toUpperCase();
                     const totalRecords = (r.expenseCount ?? 0) + (r.salesCount ?? 0) + (r.vendorCount ?? 0) + (r.inventoryCount ?? 0) + (r.leftoverCount ?? 0) + (r.kasPeriodeCount ?? 0) + (r.salesControlCount ?? 0) + (r.creditPurchaseCount ?? 0) + (r.foodCostSummaryCount ?? 0) + (r.transferCount ?? 0) + (r.hppCount ?? 0) + (r.costAnalysisCount ?? 0) + (r.cashFlowCount ?? 0) + (r.incentiveCount ?? 0);
                     return (
-                      <div key={r._id} className="flex gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors group">
+                      <div key={r._id} className="flex gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors group cursor-pointer" onClick={() => setSelectedHistoryId(r._id)}>
                         <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                           r.status === "processed" ? "bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400" :
                           r.status === "error" ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400" : 
@@ -793,7 +845,8 @@ export default function LaporanUploadPage() {
                           </p>
                         </div>
                         <button
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
                             if (!confirm(`Hapus laporan #${shortId} "${r.fileName}"?\n\nSemua data terkait akan ikut terhapus.`)) return;
                             await deleteReport({ reportId: r._id });
                             toast.success(`Laporan #${shortId} dihapus`);
