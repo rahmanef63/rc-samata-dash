@@ -24,7 +24,9 @@ import { UploadDropzone } from "@/features/report-upload/components/UploadDropzo
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert, ClipboardList } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type ParsedData = {
@@ -81,6 +83,7 @@ export default function LaporanUploadPage() {
   const [duplicateReport, setDuplicateReport] = useState<{ _id: Id<"weeklyReports">; fileName: string; periodStart: string } | null>(null);
   const [lastReportId, setLastReportId] = useState<Id<"weeklyReports"> | null>(null);
   const [indexingStatus, setIndexingStatus] = useState<"idle" | "indexing" | "done" | "error">("idle");
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -151,7 +154,7 @@ export default function LaporanUploadPage() {
         fileName:        file.name,
       };
       setParsed(data);
-      const warnings = validateParsedData(data);
+      const warnings = validateParsedData(data, file.name);
       setValidationWarnings(warnings);
       setStep("preview");
       const total = Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
@@ -170,11 +173,13 @@ export default function LaporanUploadPage() {
 
   const checkAndImport = async () => {
     if (!parsed || !branchId) return;
-    // Cek duplikat via query langsung
-    const existing = recentReports?.find((r) => r.periodStart === parsed.periodStart);
-    if (existing) {
-      setDuplicateReport({ _id: existing._id, fileName: existing.fileName, periodStart: existing.periodStart });
-      return;
+    // Hanya cek duplikat jika periode berhasil terdeteksi dari nama file
+    if (parsed.periodStart) {
+      const existing = recentReports?.find((r) => r.periodStart === parsed.periodStart);
+      if (existing) {
+        setDuplicateReport({ _id: existing._id, fileName: existing.fileName, periodStart: existing.periodStart });
+        return;
+      }
     }
     await runImport();
   };
@@ -405,16 +410,56 @@ export default function LaporanUploadPage() {
           )}
 
           {/* ─── Duplicate Warning Modal ─── */}
-          {duplicateReport && (
+          {duplicateReport && parsed && (
             <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-6 space-y-4 shadow-sm animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
                 <AlertTriangle className="h-6 w-6 shrink-0" />
                 <p className="text-lg font-bold">Laporan periode ini sudah ada!</p>
               </div>
-              <p className="text-sm text-yellow-800/80 dark:text-yellow-200/80 font-medium">
-                File <strong className="text-yellow-900 dark:text-yellow-100">{duplicateReport.fileName}</strong> dengan periode mulai{" "}
-                <strong className="text-yellow-900 dark:text-yellow-100">{duplicateReport.periodStart}</strong> sudah pernah diupload.
-                Timpa data lama atau batalkan?
+
+              {/* File baru */}
+              <div className="rounded-lg bg-white/60 dark:bg-black/20 border border-yellow-200 dark:border-yellow-800/50 p-3 space-y-1.5">
+                <p className="text-xs font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">File baru (yang kamu upload)</p>
+                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 break-all">{parsed.fileName}</p>
+                {parsed.periodStart ? (
+                  <p className="text-xs text-yellow-800/70 dark:text-yellow-200/70">
+                    Periode terdeteksi dari nama file:{" "}
+                    <span className="font-mono font-semibold">{parsed.periodStart}</span>
+                    {parsed.periodEnd && <> → <span className="font-mono font-semibold">{parsed.periodEnd}</span></>}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                      Periode tidak terdeteksi dari nama file ini.
+                    </p>
+                    {(() => {
+                      const exampleReport = recentReports?.find((r) => r.fileName && r.periodStart);
+                      return exampleReport ? (
+                        <p className="text-xs text-yellow-800/60 dark:text-yellow-200/60">
+                          Contoh format yang benar (dari laporan sebelumnya):{" "}
+                          <span className="font-mono font-semibold">{exampleReport.fileName}</span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-yellow-800/60 dark:text-yellow-200/60">
+                          Format yang diharapkan: <span className="font-mono">DD-DD MMM YYYY.xlsx</span> (pola tanggal dalam nama file)
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* File lama */}
+              <div className="rounded-lg bg-white/60 dark:bg-black/20 border border-yellow-200 dark:border-yellow-800/50 p-3 space-y-1.5">
+                <p className="text-xs font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">Laporan lama (sudah ada di database)</p>
+                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 break-all">{duplicateReport.fileName}</p>
+                <p className="text-xs text-yellow-800/70 dark:text-yellow-200/70">
+                  Periode mulai: <span className="font-mono font-semibold">{duplicateReport.periodStart}</span>
+                </p>
+              </div>
+
+              <p className="text-sm text-yellow-800/80 dark:text-yellow-200/80">
+                Kedua file memiliki periode yang sama. Timpa data lama dengan file baru, atau batalkan?
               </p>
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setDuplicateReport(null)} className="px-5 py-2.5 rounded-xl border border-yellow-300/50 bg-white/50 hover:bg-white dark:bg-black/20 dark:hover:bg-black/40 text-yellow-800 dark:text-yellow-200 text-sm font-semibold transition-colors">
@@ -473,45 +518,33 @@ export default function LaporanUploadPage() {
                 <ImportPreview data={parsed} activeTab={activeTab} onTabChange={setActiveTab} onDataChange={handleDataChange} />
               </div>
 
-              {/* ─── Validation Info ─── */}
+              {/* ─── Validation Summary Bar ─── */}
               {validationWarnings.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Validasi Data</h3>
-                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-full">Informatif — tidak memblokir upload</span>
-                  </div>
-                  {validationWarnings.map((w, i) => (
-                    <div
-                      key={i}
-                      className={`rounded-xl border p-4 text-sm shadow-sm ${
-                        w.severity === "warning"
-                          ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
-                          : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {w.severity === "warning" ? (
-                          <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-                        ) : (
-                          <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-foreground">
-                            <span className="text-xs text-muted-foreground font-mono bg-background/50 px-1.5 py-0.5 rounded mr-2">[{w.category}]</span>
-                            {w.message}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{w.tip}</p>
-                          {w.details && w.details.length > 0 && (
-                            <ul className="mt-2 text-xs text-muted-foreground space-y-1 bg-background/30 rounded-lg py-2 px-3">
-                              {w.details.map((d, j) => (
-                                <li key={j} className="truncate tracking-wide">• {d}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
+                <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 px-2 py-0.5 rounded-full">
+                          <AlertTriangle className="h-3 w-3" />
+                          {validationWarnings.filter((w) => w.severity === "warning").length} peringatan
+                        </span>
+                      )}
+                      {validationWarnings.filter((w) => w.severity === "info").length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-full">
+                          <Info className="h-3 w-3" />
+                          {validationWarnings.filter((w) => w.severity === "info").length} info
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">— tidak memblokir upload</span>
                     </div>
-                  ))}
+                  </div>
+                  <button
+                    onClick={() => setShowValidationDialog(true)}
+                    className="text-xs font-semibold text-primary hover:underline underline-offset-2 shrink-0 ml-2"
+                  >
+                    Lihat Detail
+                  </button>
                 </div>
               )}
 
@@ -573,6 +606,15 @@ export default function LaporanUploadPage() {
                   <h3 className="text-xl font-bold text-green-800 dark:text-green-300 mb-1">Import Berhasil</h3>
                   <p className="text-sm text-green-600/80 dark:text-green-400/80 font-medium">Laporan mingguan telah tersimpan ke database</p>
                 </div>
+                {validationWarnings.length > 0 && (
+                  <button
+                    onClick={() => setShowValidationDialog(true)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 px-3 py-1.5 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    {validationWarnings.length} catatan validasi — klik untuk lihat detail
+                  </button>
+                )}
               </div>
               
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-8">
@@ -736,6 +778,83 @@ export default function LaporanUploadPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── Validation Detail Dialog ─── */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b border-border">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              Detail Validasi File
+              {parsed && (
+                <span className="text-xs font-normal text-muted-foreground truncate ml-1">
+                  — {parsed.fileName}
+                </span>
+              )}
+            </DialogTitle>
+            <div className="flex items-center gap-2 mt-1">
+              {validationWarnings.filter((w) => w.severity === "warning").length > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 px-2 py-0.5 rounded-full">
+                  <AlertTriangle className="h-3 w-3" />
+                  {validationWarnings.filter((w) => w.severity === "warning").length} peringatan
+                </span>
+              )}
+              {validationWarnings.filter((w) => w.severity === "info").length > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-full">
+                  <Info className="h-3 w-3" />
+                  {validationWarnings.filter((w) => w.severity === "info").length} informasi
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">— tidak memblokir upload</span>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="px-6 py-4 space-y-3">
+              {validationWarnings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                  <CheckCircle className="h-8 w-8 text-green-500" />
+                  <p className="text-sm font-medium text-muted-foreground">Tidak ada catatan validasi</p>
+                </div>
+              ) : (
+                validationWarnings.map((w, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-xl border p-4 text-sm ${
+                      w.severity === "warning"
+                        ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800"
+                        : "border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {w.severity === "warning" ? (
+                        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                      ) : (
+                        <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                      )}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-mono font-semibold text-muted-foreground bg-background/70 px-1.5 py-0.5 rounded border border-border/50">
+                            {w.category}
+                          </span>
+                          <p className="font-semibold text-foreground text-sm">{w.message}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{w.tip}</p>
+                        {w.details && w.details.length > 0 && (
+                          <ul className="text-xs text-muted-foreground space-y-1 bg-background/50 rounded-lg py-2 px-3 border border-border/30">
+                            {w.details.map((d, j) => (
+                              <li key={j} className="tracking-wide break-words">• {d}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -44,7 +44,7 @@ function normalize(name: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function validateParsedData(data: ParsedDataForValidation): ValidationWarning[] {
+export function validateParsedData(data: ParsedDataForValidation, fileName?: string): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
 
   // 1. Period date validation
@@ -53,8 +53,15 @@ export function validateParsedData(data: ParsedDataForValidation): ValidationWar
       severity: "warning",
       category: "Periode",
       message: "Periode tidak terdeteksi dari nama file",
-      tip: "Format nama file harus: 'NEW LAP 1-7 JAN 2025.xlsx'. Tanpa periode, beberapa laporan mungkin tidak terkelompok dengan benar.",
-      details: ["Rename file sesuai format, lalu upload ulang jika perlu"],
+      tip: fileName
+        ? `"${fileName}" tidak mengandung pola tanggal yang dikenali. Nama file harus memuat format: DD-DD MMM YYYY (contoh: 1-7 JAN 2025).`
+        : "Nama file harus memuat format tanggal: DD-DD MMM YYYY (contoh: 1-7 JAN 2025).",
+      details: [
+        "Pola yang dicari: angka-angka BULAN TAHUN (misal: 24-30 MAR 2026)",
+        "Bulan valid: JAN FEB MAR APR MEI/MAY JUN JUL AGU/AUG SEP OKT/OCT NOV DES/DEC",
+        "Tanpa periode, laporan tidak bisa dicek duplikat dan pengelompokan mungkin salah",
+        "Rename file sesuai pola di atas, lalu upload ulang",
+      ],
     });
   }
 
