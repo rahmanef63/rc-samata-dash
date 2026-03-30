@@ -14,11 +14,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { SortState } from "../hooks/useTableState";
 import { exportToCsv, exportToJson, importFromCsv, importFromJson } from "../lib/export";
 
-export interface Column<T> {
-  key: keyof T & string;
+type ColumnConfig<T extends object, K extends keyof T & string> = {
+  key: K;
   label: string;
   sortable?: boolean;
-  render?: (value: any, item: T) => React.ReactNode;
+  render?: (value: T[K], item: T) => React.ReactNode;
   className?: string;
   /** Show this column in mobile card view (max 3-4 recommended) */
   mobileVisible?: boolean;
@@ -26,9 +26,13 @@ export interface Column<T> {
   mobileTitle?: boolean;
   /** Use as card subtitle on mobile */
   mobileSubtitle?: boolean;
-}
+};
 
-interface DataTableProps<T extends Record<string, any>> {
+export type Column<T extends object> = {
+  [K in keyof T & string]: ColumnConfig<T, K>;
+}[keyof T & string];
+
+interface DataTableProps<T extends object> {
   data: T[];
   columns: Column<T>[];
   search: string;
@@ -44,7 +48,7 @@ interface DataTableProps<T extends Record<string, any>> {
   draggable?: boolean;
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends object>({
   data, columns, search, onSearchChange, sort, onToggleSort,
   onReorder, onAdd, onEdit, onDelete, onImport,
   entityName = "Data", draggable = true,
@@ -98,6 +102,12 @@ export function DataTable<T extends Record<string, any>>({
   const subtitleCol = columns.find(c => c.mobileSubtitle) || columns[1];
   const visibleCols = columns.filter(c => c.mobileVisible);
   const extraCols = visibleCols.length > 0 ? visibleCols : columns.slice(2, 5);
+  const getRowKey = (item: T, idx: number) => {
+    if ("id" in item && (typeof item.id === "string" || typeof item.id === "number")) {
+      return item.id;
+    }
+    return idx;
+  };
 
   return (
     <div className="space-y-3">
@@ -112,19 +122,19 @@ export function DataTable<T extends Record<string, any>>({
             <>
               <input ref={fileRef} type="file" accept=".csv,.json" className="hidden" onChange={handleFileImport} />
               <Button variant="outline" size="sm" className="rounded-lg" onClick={() => fileRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5 mr-1" /> Import
+                <Upload className="h-3.5 w-3.5 mr-1" /> Impor
               </Button>
             </>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="rounded-lg">
-                <Download className="h-3.5 w-3.5 mr-1" /> Export
+                <Download className="h-3.5 w-3.5 mr-1" /> Ekspor
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportCsv}>Export CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportJson}>Export JSON</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCsv}>Ekspor CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJson}>Ekspor JSON</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {onAdd && (
@@ -145,7 +155,7 @@ export function DataTable<T extends Record<string, any>>({
           ) : (
             data.map((item, idx) => (
               <div
-                key={item.id || idx}
+                key={getRowKey(item, idx)}
                 className="bg-card rounded-xl shadow-card p-4 active:scale-[0.98] transition-transform"
                 onClick={() => onEdit?.(item)}
               >
@@ -210,7 +220,7 @@ export function DataTable<T extends Record<string, any>>({
               ) : (
                 data.map((item, idx) => (
                   <TableRow
-                    key={item.id || idx}
+                    key={getRowKey(item, idx)}
                     className={`transition-colors hover:bg-accent/30 ${overIdx === idx ? "bg-accent" : ""}`}
                     draggable={draggable && !!onReorder}
                     onDragStart={() => handleDragStart(idx)}

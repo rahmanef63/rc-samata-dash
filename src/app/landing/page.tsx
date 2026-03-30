@@ -84,12 +84,25 @@ export default function LandingPage() {
           </div>
           <span className="font-bold text-lg tracking-tight">RC Samata</span>
         </div>
-        <button
-          onClick={() => router.push("/login")}
-          className="px-5 py-2 rounded-xl bg-white/[0.08] border border-white/[0.12] text-sm font-medium hover:bg-white/[0.14] transition-colors"
-        >
-          Sign In
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-1 text-sm text-white/70">
+            <button onClick={() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" })} className="px-3 py-2 rounded-lg hover:bg-white/[0.06] transition-colors">
+              Preview
+            </button>
+            <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="px-3 py-2 rounded-lg hover:bg-white/[0.06] transition-colors">
+              Fitur
+            </button>
+            <button onClick={() => document.getElementById("cta")?.scrollIntoView({ behavior: "smooth" })} className="px-3 py-2 rounded-lg hover:bg-white/[0.06] transition-colors">
+              Kontak
+            </button>
+          </div>
+          <button
+            onClick={() => router.push("/login")}
+            className="px-5 py-2 rounded-xl bg-white/[0.08] border border-white/[0.12] text-sm font-medium hover:bg-white/[0.14] transition-colors"
+          >
+            Masuk
+          </button>
+        </div>
       </nav>
 
       {/* ─── Hero ─── */}
@@ -111,7 +124,7 @@ export default function LandingPage() {
           </span>
         </motion.h1>
 
-        <motion.p variants={fadeUp} className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto mb-10 leading-relaxed">
+        <motion.p variants={fadeUp} className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
           Upload laporan Excel mingguan, dapatkan insight real-time — omzet, food cost, HPP, margin, dan cashflow. Semua dalam satu dashboard.
         </motion.p>
 
@@ -127,7 +140,7 @@ export default function LandingPage() {
             onClick={() => {
               document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
             }}
-            className="flex items-center gap-2 px-6 py-4 rounded-2xl text-sm font-medium text-white/60 hover:text-white/90 transition-colors"
+            className="flex items-center gap-2 px-6 py-4 rounded-2xl border border-white/[0.12] bg-white/[0.06] text-sm font-medium text-white/75 hover:bg-white/[0.1] hover:text-white transition-colors"
           >
             Lihat Fitur
             <ChevronRight className="h-4 w-4" />
@@ -137,19 +150,25 @@ export default function LandingPage() {
 
       {/* ─── Dashboard Preview ─── */}
       <motion.section
+        id="preview"
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.7 }}
         className="relative z-10 max-w-5xl mx-auto px-6 pb-20"
       >
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-4 md:p-6 shadow-2xl">
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-4 md:p-6 shadow-2xl relative">
+          {/* Demo data badge — UX-05 */}
+          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/30 text-[10px] font-medium text-amber-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            Contoh Data
+          </div>
           <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
             {[
-              { label: "Total Sales", val: "Rp 42.5M", color: "from-blue-500 to-cyan-400" },
+              { label: "Total Penjualan", val: "Rp 42.5M", color: "from-blue-500 to-cyan-400" },
               { label: "Food Cost", val: "31.2%", color: "from-green-500 to-emerald-400" },
-              { label: "Net Profit", val: "Rp 8.7M", color: "from-purple-500 to-pink-400" },
-              { label: "Expenses", val: "Rp 33.8M", color: "from-orange-500 to-amber-400" },
+              { label: "Laba Bersih", val: "Rp 8.7M", color: "from-purple-500 to-pink-400" },
+              { label: "Pengeluaran", val: "Rp 33.8M", color: "from-orange-500 to-amber-400" },
             ].map((kpi) => (
               <div key={kpi.label} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 md:p-4">
                 <p className="text-[10px] md:text-xs text-white/40 uppercase tracking-wider">{kpi.label}</p>
@@ -193,8 +212,7 @@ export default function LandingPage() {
       <motion.section
         id="features"
         initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.2 }}
+        animate="visible"
         variants={stagger}
         className="relative z-10 max-w-6xl mx-auto px-6 pb-24"
       >
@@ -202,7 +220,7 @@ export default function LandingPage() {
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
             Semua yang Anda Butuhkan
           </h2>
-          <p className="text-white/40 max-w-xl mx-auto">
+          <p className="text-white/65 max-w-xl mx-auto">
             Dari upload Excel sampai analisis HPP — satu platform untuk seluruh operasional cabang.
           </p>
         </motion.div>
@@ -218,14 +236,14 @@ export default function LandingPage() {
                 <f.icon className="h-5 w-5 text-[#f97316]" />
               </div>
               <h3 className="text-base font-semibold mb-2">{f.title}</h3>
-              <p className="text-sm text-white/40 leading-relaxed">{f.desc}</p>
+              <p className="text-sm text-white/65 leading-relaxed">{f.desc}</p>
             </motion.div>
           ))}
         </div>
       </motion.section>
 
       {/* ─── CTA ─── */}
-      <section className="relative z-10 max-w-4xl mx-auto px-6 pb-20">
+      <section id="cta" className="relative z-10 max-w-4xl mx-auto px-6 pb-20">
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           whileInView={{ opacity: 1, scale: 1 }}
@@ -235,7 +253,7 @@ export default function LandingPage() {
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
             Siap Mengontrol Cabang Anda?
           </h2>
-          <p className="text-white/40 mb-8 max-w-lg mx-auto">
+          <p className="text-white/65 mb-8 max-w-lg mx-auto">
             Upload laporan pertama Anda dan lihat dashboard terisi data real dalam hitungan detik.
           </p>
           <button

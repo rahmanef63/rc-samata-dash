@@ -41,6 +41,16 @@ async function fetchData(ctx: any, tableName: string, args: { reportId?: string;
   return allData;
 }
 
+function hasReadableItemName(name: unknown): name is string {
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+
+  if (!trimmed) return false;
+  if (/^[\d.,+\-/%]+$/.test(trimmed)) return false;
+
+  return /[A-Za-z]/.test(trimmed);
+}
+
 
 // ─── 1. Overview KPI ──────────────────────────────────────────
 
@@ -584,37 +594,55 @@ export const getPriorityItems = query({
     }>();
 
     const getOrCreate = (name: string) => {
+      if (!hasReadableItemName(name)) return null;
+
+      const displayName = name.trim();
       const norm = normalizeItemName(name);
       if (!itemScores.has(norm)) {
         itemScores.set(norm, {
-          itemName: name,
+          itemName: displayName,
           wasteScore: 0,
           marginScore: 0,
           overPurchaseScore: 0,
           varianceScore: 0,
           signals: [],
         });
+      } else {
+        const existing = itemScores.get(norm)!;
+        if (displayName.length > existing.itemName.length) {
+          existing.itemName = displayName;
+        }
       }
       return itemScores.get(norm)!;
     };
 
     // 1. Waste scores (from leftover)
-    const wasteByItem = new Map<string, number>();
+    const wasteByItem = new Map<string, { qty: number; itemName: string }>();
     for (const lo of leftover) {
+      if (!hasReadableItemName(lo.itemName)) continue;
+
       const norm = normalizeItemName(lo.itemName);
-      wasteByItem.set(norm, (wasteByItem.get(norm) ?? 0) + lo.qty);
+      const existing = wasteByItem.get(norm);
+      if (existing) {
+        existing.qty += lo.qty;
+      } else {
+        wasteByItem.set(norm, { qty: lo.qty, itemName: lo.itemName.trim() });
+      }
     }
-    const maxWaste = Math.max(...Array.from(wasteByItem.values()), 1);
-    for (const [norm, qty] of wasteByItem) {
-      const item = getOrCreate(norm);
-      item.wasteScore = (qty / maxWaste) * 100;
-      if (item.wasteScore > 50) item.signals.push(`Waste tinggi: ${qty} unit`);
+    const maxWaste = Math.max(...Array.from(wasteByItem.values(), (entry) => entry.qty), 1);
+    for (const [, entry] of wasteByItem) {
+      const item = getOrCreate(entry.itemName);
+      if (!item) continue;
+
+      item.wasteScore = (entry.qty / maxWaste) * 100;
+      if (item.wasteScore > 50) item.signals.push(`Waste tinggi: ${entry.qty} unit`);
     }
 
     // 2. Margin scores (from HPP)
     for (const h of hpp) {
       if (!h.sellingPrice || h.sellingPrice <= 0) continue;
       const item = getOrCreate(h.productName);
+      if (!item) continue;
       const marginPct = ((h.sellingPrice - h.totalHPP) / h.sellingPrice) * 100;
       // Lower margin = higher score (worse)
       item.marginScore = Math.max(0, 100 - marginPct * 2);
@@ -626,6 +654,7 @@ export const getPriorityItems = query({
       if (v.usageQty <= 0) continue;
       const ratio = v.purchaseQty / v.usageQty;
       const item = getOrCreate(v.commodityName);
+      if (!item) continue;
       item.overPurchaseScore = Math.min(100, Math.max(0, (ratio - 1) * 200));
       if (ratio > 1.3) item.signals.push(`Over-purchase: ${ratio.toFixed(2)}x`);
     }
@@ -640,9 +669,10 @@ export const getPriorityItems = query({
     const maxVariance = Math.max(...absVariances, 1);
     for (const ca of costAn as CostAnalysisRow[]) {
       const item = getOrCreate(ca.itemName);
+      if (!item) continue;
       item.varianceScore = (Math.abs(ca.variance) / maxVariance) * 100;
       if (Math.abs(ca.variance) > maxVariance * 0.3) {
-        item.signals.push(`Variance: ${ca.variance > 0 ? "+" : ""}Rp ${Math.round(ca.variance).toLocaleString()}`);
+        item.signals.push(`Variance: ${ca.variance > 0 ? "+" : ""}Rp ${Math.round(ca.variance).toLocaleString("id-ID")}`);
       }
     }
 
@@ -661,6 +691,8 @@ export const getPriorityItems = query({
 
     const result: PriorityItem[] = [];
     for (const item of itemScores.values()) {
+      if (!hasReadableItemName(item.itemName)) continue;
+
       const priorityScore =
         item.wasteScore * 0.3 +
         item.marginScore * 0.25 +
@@ -684,6 +716,7 @@ export const getPriorityItems = query({
 
       result.push({
         ...item,
+        signals: Array.from(new Set(item.signals)),
         priorityScore: Math.round(priorityScore),
         priority,
         action,

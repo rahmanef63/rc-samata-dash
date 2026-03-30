@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -14,14 +16,23 @@ import {
 import { useMutation } from "convex/react";
 import { ReportDataBrowser } from "./ReportDataBrowser";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 
-const TABS = ["Overview", "KPI", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Waste", "Arus Kas"] as const;
+const TABS = ["Ikhtisar", "KPI", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Pemborosan", "Arus Kas"] as const;
 type Tab = typeof TABS[number];
 
+// Helper: filter out rows where itemName looks like a raw number (BUG-02)
+function isValidItemName(name: string): boolean {
+  if (!name || name.trim() === "") return false;
+  // Filter pure numeric strings or decimals that slipped through parsing
+  return isNaN(Number(name.trim()));
+}
+
 export default function AnalyticsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("Overview");
-  const [selectedReportId, setSelectedReportId] = useState<Id<"weeklyReports"> | "all" | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("Ikhtisar");
+  const [manualSelectedReportId, setManualSelectedReportId] = useState<Id<"weeklyReports"> | "all" | null>(null);
   const [timeFilter, setTimeFilter] = useState<string>("all");
+  const searchParams = useSearchParams();
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -29,6 +40,12 @@ export default function AnalyticsPage() {
     api.features.reports.queries.listWeeklyReports,
     branchId ? { branchId } : "skip"
   );
+  const reportFromQuery = searchParams.get("report");
+  const querySelectedReportId =
+    reportFromQuery && reports?.some((report) => report._id === reportFromQuery)
+      ? (reportFromQuery as Id<"weeklyReports">)
+      : null;
+  const selectedReportId = manualSelectedReportId ?? querySelectedReportId;
 
   // Auto-select first report if not 'all'
   const reportId = selectedReportId ?? reports?.[0]?._id ?? null;
@@ -63,14 +80,14 @@ export default function AnalyticsPage() {
             </select>
           )}
 
-          <select
-            className="px-3 py-2 rounded-xl border border-border bg-card text-sm max-w-[300px]"
-            value={selectedReportId ?? reports?.[0]?._id ?? ""}
-            onChange={(e) => setSelectedReportId(e.target.value as Id<"weeklyReports"> | "all")}
-          >
-            {!reports && <option>Loading...</option>}
+            <select
+              className="px-3 py-2 rounded-xl border border-border bg-card text-sm max-w-[300px]"
+              value={selectedReportId ?? reports?.[0]?._id ?? ""}
+              onChange={(e) => setManualSelectedReportId(e.target.value as Id<"weeklyReports"> | "all")}
+            >
+            {!reports && <option>Memuat...</option>}
             {reports?.length === 0 && <option>Belum ada laporan</option>}
-            <option value="all">Semua Laporan (All)</option>
+            <option value="all">Semua Laporan</option>
             {reports?.map((r) => (
               <option key={r._id} value={r._id}>
                 {r.fileName} ({r.periodStart} → {r.periodEnd})
@@ -104,12 +121,12 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          {activeTab === "Overview" && <OverviewTab args={queryArgs} />}
+          {activeTab === "Ikhtisar" && <OverviewTab args={queryArgs} />}
           {activeTab === "KPI" && <KPITab args={queryArgs} />}
-          {activeTab === "Data Browser" && (isAll ? <div className="p-8 text-center text-muted-foreground bg-card rounded-2xl border">Data Browser tidak tersedia untuk mode "Semua Laporan". Pilih satu laporan spesifik.</div> : <ReportDataBrowser reportId={reportId as any} />)}
+          {activeTab === "Data Browser" && (isAll ? <div className="p-8 text-center text-muted-foreground bg-card rounded-2xl border">Data Browser tidak tersedia untuk mode &quot;Semua Laporan&quot;. Pilih satu laporan spesifik.</div> : <ReportDataBrowser reportId={reportId as any} />)}
           {activeTab === "Profitabilitas" && <ProfitabilityTab args={queryArgs} />}
           {activeTab === "Efisiensi Beli" && <PurchaseTab args={queryArgs} />}
-          {activeTab === "Waste" && <WasteTab args={queryArgs} />}
+          {activeTab === "Pemborosan" && <WasteTab args={queryArgs} />}
           {activeTab === "Arus Kas" && <CashFlowTab args={queryArgs} />}
         </>
       )}
@@ -137,21 +154,28 @@ function OverviewTab({ args }: { args: any }) {
   if (!overview) return <LoadingSkeleton />;
 
   const kpis = [
-    { icon: DollarSign, label: "Total Revenue", value: formatRpFull(overview.totalRevenue), badge: `${overview.productCount} produk`, badgeColor: "success" as const },
-    { icon: ShoppingCart, label: "Total COGS", value: formatRpFull(overview.totalCOGS), badge: undefined, badgeColor: "warning" as const },
-    { icon: Percent, label: "Gross Margin", value: `${overview.grossMarginPct}%`, badge: overview.grossMarginPct >= 35 ? "Sehat" : "Perlu perhatian", badgeColor: overview.grossMarginPct >= 35 ? "success" as const : "destructive" as const },
-    { icon: TrendingDown, label: "Food Cost %", value: `${overview.foodCostPct}%`, badge: overview.foodCostPct <= 40 ? "OK" : "Tinggi!", badgeColor: overview.foodCostPct <= 40 ? "success" as const : "destructive" as const },
-    { icon: Trash2, label: "Waste Cost", value: formatRpFull(overview.totalWasteCost), badge: `${overview.wasteItemCount} record`, badgeColor: "destructive" as const },
-    { icon: Target, label: "Capaian Target", value: `${overview.avgAchievement}%`, badge: overview.avgAchievement >= 100 ? "On target" : "Below", badgeColor: overview.avgAchievement >= 100 ? "success" as const : "warning" as const },
-    { icon: Users, label: "Total Customer", value: overview.totalCustomers.toLocaleString(), badge: undefined, badgeColor: "primary" as const },
-    { icon: DollarSign, label: "Avg Spending", value: formatRpFull(overview.avgSpendingPower), badge: undefined, badgeColor: "primary" as const },
+    { icon: DollarSign, label: "Total Omzet", value: formatRpFull(overview.totalRevenue), badge: `${overview.productCount} produk`, badgeColor: "success" as const, tooltip: "Total pendapatan dari semua penjualan dalam periode ini" },
+    { icon: ShoppingCart, label: "Total Biaya Bahan", value: formatRpFull(overview.totalCOGS), badge: undefined, badgeColor: "warning" as const, tooltip: "Harga Pokok Penjualan (COGS) — total biaya produksi" },
+    { icon: Percent, label: "Margin Kotor", value: `${overview.grossMarginPct}%`, badge: overview.grossMarginPct >= 35 ? "Sehat" : "Perlu perhatian", badgeColor: overview.grossMarginPct >= 35 ? "success" as const : "destructive" as const, tooltip: "Persentase laba kotor dari total omzet. Target: ≥35%" },
+    { icon: TrendingDown, label: "Food Cost %", value: `${overview.foodCostPct}%`, badge: overview.foodCostPct <= 40 ? "OK" : "Tinggi!", badgeColor: overview.foodCostPct <= 40 ? "success" as const : "destructive" as const, tooltip: "Persentase biaya bahan makanan terhadap omzet. Target: ≤40%" },
+    { icon: Trash2, label: "Estimasi Biaya Pemborosan", value: formatRpFull(overview.totalWasteCost), badge: `${overview.wasteItemCount} item`, badgeColor: "destructive" as const, tooltip: "Estimasi kerugian akibat pemborosan bahan" },
+    { icon: Target, label: "Capaian Target", value: `${overview.avgAchievement}%`, badge: overview.avgAchievement >= 100 ? "Tercapai" : "Di bawah target", badgeColor: overview.avgAchievement >= 100 ? "success" as const : "warning" as const, tooltip: "Rata-rata capaian target penjualan dalam periode ini" },
+    { icon: Users, label: "Total Pelanggan", value: overview.totalCustomers.toLocaleString(), badge: undefined, badgeColor: "primary" as const, tooltip: "Estimasi jumlah transaksi / pelanggan terlayani" },
+    { icon: DollarSign, label: "Rata-rata Belanja", value: formatRpFull(overview.avgSpendingPower), badge: undefined, badgeColor: "primary" as const, tooltip: "Rata-rata nilai belanja per pelanggan (spending power)" },
   ];
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpis.map((kpi) => (
-          <KpiCard key={kpi.label} icon={<kpi.icon className="h-5 w-5 text-primary" />} label={kpi.label} value={kpi.value} badge={kpi.badge} badgeColor={kpi.badgeColor} />
+          <div key={kpi.label} className="relative group">
+            <KpiCard icon={<kpi.icon className="h-5 w-5 text-primary" />} label={kpi.label} value={kpi.value} badge={kpi.badge} badgeColor={kpi.badgeColor} />
+            {kpi.tooltip && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-popover border border-border text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 w-48 text-center">
+                {kpi.tooltip}
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
@@ -164,16 +188,19 @@ function OverviewTab({ args }: { args: any }) {
               <thead className="bg-muted/60">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Item</th>
-                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Waste</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Pemborosan</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Margin</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Beli</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Variance</th>
-                  <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Priority</th>
+                  <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Prioritas</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {priority.slice(0, 15).map((item, i) => (
+                {priority
+                  .filter((item) => isValidItemName(item.itemName))
+                  .slice(0, 15)
+                  .map((item, i) => (
                   <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-1.5 font-medium">{item.itemName}</td>
                     <td className="px-3 py-1.5 text-right">{Math.round(item.wasteScore)}</td>
@@ -186,7 +213,9 @@ function OverviewTab({ args }: { args: any }) {
                         item.priority === "high" ? "bg-orange-100 text-orange-700" :
                         item.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
                         "bg-green-100 text-green-700"
-                      }`}>{item.priority.toUpperCase()}</span>
+                      }`}>
+                        {item.priority === "critical" ? "KRITIS" : item.priority === "high" ? "TINGGI" : item.priority === "medium" ? "SEDANG" : "RENDAH"}
+                      </span>
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground">{item.action}</td>
                   </tr>
@@ -400,7 +429,7 @@ function WasteTab({ args }: { args: any }) {
 
       {/* Top Wasted Items */}
       <div className="bg-card rounded-xl shadow-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Top Wasted Items (by cost)</h3>
+        <h3 className="text-sm font-semibold mb-3">Item Pemborosan Terbesar (by cost)</h3>
         <div className="space-y-2">
           {data.topWastedItems.slice(0, 10).map((item, i) => {
             const maxCost = data.topWastedItems[0]?.estimatedCost ?? 1;
@@ -514,7 +543,7 @@ function KPITab({ args }: { args: any }) {
             onClick={handleSeedTargets}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            <Settings2 className="h-3 w-3" /> Set Default Targets
+            <Settings2 className="h-3 w-3" /> Atur Target Default
           </button>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, ReferenceLine } from "recharts";
-import { formatRp } from "@/shared/lib";
+import { formatRp, formatRpFull } from "@/shared/lib";
 import { CHART_AXIS_COLOR, CHART_GRID_COLOR } from "@/shared/constants";
 
 interface WaterfallItem {
@@ -15,23 +15,42 @@ interface WaterfallChartProps {
   headerRight?: React.ReactNode;
 }
 
+interface WaterfallChartDatum {
+  name: string;
+  base: number;
+  bar: number;
+  rawValue: number;
+  isPositive: boolean;
+  isTotal: boolean;
+}
+
 export function WaterfallChart({ data, title, subtitle, height = 220, headerRight }: WaterfallChartProps) {
-  // Transform data for waterfall: each bar needs a base (invisible) + visible part
-  let cumulative = 0;
-  const chartData = data.map((item, i) => {
-    const isTotal = i === data.length - 1;
-    const base = isTotal ? 0 : Math.min(cumulative, cumulative + item.value);
-    const barValue = isTotal ? item.value : Math.abs(item.value);
-    if (!isTotal) cumulative += item.value;
-    return {
-      name: item.name,
-      base,
-      bar: barValue,
-      rawValue: item.value,
-      isPositive: item.value >= 0,
-      isTotal,
-    };
-  });
+  const { items: chartData } = data.reduce<{
+    items: WaterfallChartDatum[];
+    cumulative: number;
+  }>(
+    (state, item, index) => {
+      const isTotal = index === data.length - 1;
+      const base = isTotal ? 0 : Math.min(state.cumulative, state.cumulative + item.value);
+      const barValue = isTotal ? item.value : Math.abs(item.value);
+      const nextCumulative = isTotal ? state.cumulative : state.cumulative + item.value;
+
+      state.items.push({
+        name: item.name,
+        base,
+        bar: barValue,
+        rawValue: item.value,
+        isPositive: item.value >= 0,
+        isTotal,
+      });
+
+      return {
+        items: state.items,
+        cumulative: nextCumulative,
+      };
+    },
+    { items: [], cumulative: 0 },
+  );
 
   return (
     <div className="bg-card rounded-xl shadow-card p-4 md:p-5">
@@ -48,9 +67,12 @@ export function WaterfallChart({ data, title, subtitle, height = 220, headerRigh
             <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke={CHART_AXIS_COLOR} />
             <YAxis tickFormatter={formatRp} tick={{ fontSize: 10 }} stroke={CHART_AXIS_COLOR} />
             <Tooltip
-              formatter={(value: number, name: string, props: any) => {
-                const raw = props.payload.rawValue;
-                return [`Rp ${(Math.abs(raw) / 1000000).toFixed(1)}M`, raw >= 0 ? "Inflow" : "Outflow"];
+              formatter={(_value: number, _name: string, props: { payload?: WaterfallChartDatum }) => {
+                const raw = props.payload?.rawValue ?? 0;
+                return [
+                  formatRpFull(raw),
+                  props.payload?.isTotal ? "Total Bersih" : raw >= 0 ? "Arus Masuk" : "Arus Keluar",
+                ];
               }}
               contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${CHART_GRID_COLOR}` }}
             />
@@ -64,10 +86,10 @@ export function WaterfallChart({ data, title, subtitle, height = 220, headerRigh
                   key={i}
                   fill={
                     entry.isTotal
-                      ? "hsl(var(--info))"
+                      ? "#3b82f6"
                       : entry.isPositive
-                      ? "hsl(var(--success))"
-                      : "hsl(var(--destructive))"
+                      ? "#10b981"
+                      : "#ef4444"
                   }
                 />
               ))}

@@ -1,11 +1,11 @@
-export function exportToCsv<T extends Record<string, unknown>>(
+export function exportToCsv<T extends object>(
   items: T[],
   columns: { key: keyof T; label: string }[],
   filename = "export.csv"
 ) {
   const header = columns.map((c) => c.label).join(",");
   const rows = items.map((item) =>
-    columns.map((c) => `"${String(item[c.key]).replace(/"/g, '""')}"`).join(",")
+    columns.map((c) => `"${String((item as Record<string, unknown>)[c.key as string]).replace(/"/g, '""')}"`).join(",")
   );
   const csv = [header, ...rows].join("\n");
   downloadBlob(csv, filename, "text/csv;charset=utf-8;");
@@ -26,7 +26,7 @@ function downloadBlob(content: string, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function importFromCsv<T extends Record<string, unknown>>(
+export function importFromCsv<T extends object>(
   file: File,
   columns: { key: keyof T; label: string }[]
 ): Promise<Partial<T>[]> {

@@ -1,6 +1,6 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_PRIMARY_COLOR, CHART_GRID_COLOR, CHART_AXIS_COLOR } from "@/shared/constants";
-import { formatRp } from "@/shared/lib";
+import { formatRp, formatRpFull } from "@/shared/lib";
 
 interface AreaChartCardProps {
   data: { label: string; value: number }[];
@@ -15,6 +15,8 @@ interface AreaChartCardProps {
   showTooltip?: boolean;
   tooltipLabel?: string;
   headerRight?: React.ReactNode;
+  fitRange?: boolean;
+  valueFormatter?: (value: number) => string;
 }
 
 export function AreaChartCard({
@@ -28,7 +30,18 @@ export function AreaChartCard({
   showTooltip = true,
   tooltipLabel = "Value",
   headerRight,
+  fitRange = false,
+  valueFormatter = formatRpFull,
 }: AreaChartCardProps) {
+  const values = data.map((item) => item.value).filter((value) => Number.isFinite(value));
+  const minValue = values.length > 0 ? Math.min(...values) : 0;
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+  const range = maxValue - minValue;
+  const padding = range > 0 ? range * 0.15 : Math.max(Math.abs(maxValue) * 0.15, 1_000);
+  const yDomain = fitRange
+    ? [Math.max(0, minValue - padding), maxValue + padding]
+    : undefined;
+
   return (
     <div className="bg-card rounded-xl shadow-card p-4 md:p-5">
       <div className="flex items-center justify-between mb-3">
@@ -49,10 +62,17 @@ export function AreaChartCard({
             </defs>
             {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />}
             <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke={CHART_AXIS_COLOR} />
-            {showYAxis && <YAxis tickFormatter={formatRp} tick={{ fontSize: 11 }} stroke={CHART_AXIS_COLOR} />}
+            {showYAxis && (
+              <YAxis
+                domain={yDomain}
+                tickFormatter={formatRp}
+                tick={{ fontSize: 11 }}
+                stroke={CHART_AXIS_COLOR}
+              />
+            )}
             {showTooltip && (
               <Tooltip
-                formatter={(value: number) => [`Rp ${(value / 1000000).toFixed(1)}M`, tooltipLabel]}
+                formatter={(value: number) => [valueFormatter(value), tooltipLabel]}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${CHART_GRID_COLOR}` }}
               />
             )}

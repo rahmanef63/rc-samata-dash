@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { KpiCard } from "@/components/ui/kpi-card";
-import { formatRpFull } from "@/shared/lib";
+import { formatLongDate, formatRpFull, getJakartaDateString } from "@/shared/lib";
 
 export function DashboardKpiCards() {
   const router = useRouter();
@@ -13,19 +13,31 @@ export function DashboardKpiCards() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
 
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const today = getJakartaDateString();
   const currentMonth = today.slice(0, 7);
 
-  const rawSalesToday = useQuery(
+  const monthlyTrend = useQuery(
+    api.features.reports.dashboardQueries.getMonthlySalesTrend,
+    branchId ? { branchId } : "skip"
+  );
+  const rawSales = useQuery(
     api.features.sales.queries.listByBranch,
-    branchId ? { branchId, businessDate: today } : "skip"
+    branchId ? { branchId } : "skip"
   );
   const rawExpenses = useQuery(
     api.features.expenses.queries.listByBranch,
     branchId ? { branchId } : "skip"
   );
+  const reportExpenses = useQuery(
+    api.features.reports.queries.getExpensesByBranch,
+    branchId ? { branchId } : "skip"
+  );
   const rawPayables = useQuery(
     api.features.payables.queries.listByBranch,
+    branchId ? { branchId } : "skip"
+  );
+  const reportPayables = useQuery(
+    api.features.reports.queries.getPayablesByBranch,
     branchId ? { branchId } : "skip"
   );
   const rawPettyCash = useQuery(
@@ -45,23 +57,35 @@ export function DashboardKpiCards() {
     branchId ? { branchId } : "skip"
   );
 
-  const isLoading = !branches;
+  const isLoading = [
+    branches,
+    monthlyTrend,
+    rawSales,
+    rawExpenses,
+    reportExpenses,
+    rawPayables,
+    reportPayables,
+    rawPettyCash,
+    rawTransfers,
+    rawStockItems,
+    rawClosings,
+  ].some((value) => value === undefined);
 
-  // Omzet Hari Ini
-  const omzetToday = (rawSalesToday || []).reduce((s, sale) => s + sale.grossAmount, 0);
+  const latestSalesPoint = monthlyTrend?.[monthlyTrend.length - 1];
+  const latestSalesDate = latestSalesPoint?.date ?? today;
+  const omzetLatest = latestSalesPoint?.value ?? 0;
 
-  // Expense Bulan Ini
-  const expensesThisMonth = (rawExpenses || [])
+  const expensesThisMonth = [...(rawExpenses || []), ...(reportExpenses || [])]
     .filter(e => e.expenseDate?.startsWith(currentMonth))
     .reduce((s, e) => s + e.amount, 0);
 
-  // Outstanding Payable
-  const outstanding = (rawPayables || [])
-    .filter(p => p.status !== "paid")
-    .reduce((s, p) => s + (p.amount - p.paidAmount), 0);
-  const overdueCount = (rawPayables || []).filter(p => p.status === "overdue").length;
+  const outstandingManual = (rawPayables || [])
+    .filter((payable) => payable.status !== "paid")
+    .reduce((sum, payable) => sum + (payable.amount - payable.paidAmount), 0);
+  const outstandingReport = (reportPayables || []).reduce((sum, payable) => sum + (payable.totalAmount ?? 0), 0);
+  const outstanding = outstandingManual + outstandingReport;
+  const overdueCount = (rawPayables || []).filter((payable) => payable.status === "overdue").length;
 
-  // Petty Cash Saldo
   const pettyCashDisbursed = (rawPettyCash || [])
     .filter(r => ["disbursed", "closed"].includes(r.status))
     .reduce((s, r) => s + r.approvedAmount, 0);
@@ -95,16 +119,16 @@ export function DashboardKpiCards() {
   const kpiItems = [
     {
       icon: DollarSign,
-      label: "Omzet Hari Ini",
-      value: isLoading ? "..." : formatRpFull(omzetToday),
-      badge: rawSalesToday?.length ? `${rawSalesToday.length} transaksi` : undefined,
+      label: "Omzet Terkini",
+      value: isLoading ? "Memuat..." : formatRpFull(omzetLatest),
+      badge: latestSalesDate ? formatLongDate(latestSalesDate) : undefined,
       badgeColor: "success" as const,
       path: "/finance",
     },
     {
       icon: TrendingUp,
-      label: "Net Cash to Owner",
-      value: isLoading ? "..." : formatRpFull(netCashToOwner),
+      label: "Kas Bersih ke Owner",
+      value: isLoading ? "Memuat..." : formatRpFull(netCashToOwner),
       badge: netCashToOwner > 0 ? "Positif" : undefined,
       badgeColor: "success" as const,
       path: "/report",
@@ -112,50 +136,50 @@ export function DashboardKpiCards() {
     {
       icon: Receipt,
       label: "Expense Bulan Ini",
-      value: isLoading ? "..." : formatRpFull(expensesThisMonth),
+      value: isLoading ? "Memuat..." : formatRpFull(expensesThisMonth),
       badge: undefined,
       badgeColor: "warning" as const,
-      path: "/expenses",
+      path: "/finance/expenses",
     },
     {
       icon: AlertTriangle,
-      label: "Outstanding Payable",
-      value: isLoading ? "..." : formatRpFull(outstanding),
-      badge: overdueCount > 0 ? `${overdueCount} overdue` : undefined,
+      label: "Piutang Vendor",
+      value: isLoading ? "Memuat..." : formatRpFull(outstanding),
+      badge: overdueCount > 0 ? `${overdueCount} terlambat` : undefined,
       badgeColor: "destructive" as const,
-      path: "/payables",
+      path: "/finance/payables",
     },
     {
       icon: Wallet,
       label: "Petty Cash Saldo",
-      value: isLoading ? "..." : formatRpFull(pettyCashBalance),
-      badge: pettyCashPending > 0 ? `${pettyCashPending} pending` : undefined,
+      value: isLoading ? "Memuat..." : formatRpFull(pettyCashBalance),
+      badge: pettyCashPending > 0 ? `${pettyCashPending} menunggu` : undefined,
       badgeColor: "warning" as const,
-      path: "/petty-cash",
+      path: "/finance/petty-cash",
     },
     {
       icon: Moon,
       label: "Setoran Malam",
-      value: isLoading ? "..." : formatRpFull(setoranToday),
-      badge: latestClosing?.status === "submitted" ? "Submitted" : latestClosing?.status === "verified" ? "Verified" : undefined,
+      value: isLoading ? "Memuat..." : formatRpFull(setoranToday),
+      badge: latestClosing?.status === "submitted" ? "Diajukan" : latestClosing?.status === "verified" ? "Terverifikasi" : undefined,
       badgeColor: "primary" as const,
-      path: "/closing",
+      path: "/finance/closing",
     },
     {
       icon: Package,
-      label: "Low Stock Items",
-      value: isLoading ? "..." : `${lowStockItems.length} items`,
+      label: "Stok Rendah",
+      value: isLoading ? "Memuat..." : `${lowStockItems.length} item`,
       badge: lowStockItems.length > 0 ? "Restock!" : undefined,
       badgeColor: "destructive" as const,
-      path: "/inventory",
+      path: "/operation",
     },
     {
       icon: DollarSign,
       label: "Selisih Kas",
-      value: isLoading ? "..." : (selisihKas === 0 ? "Rp 0" : formatRpFull(selisihKas)),
-      badge: selisihKas !== 0 ? "Alert" : "OK",
+      value: isLoading ? "Memuat..." : (selisihKas === 0 ? "Rp 0" : formatRpFull(selisihKas)),
+      badge: selisihKas !== 0 ? "Perlu cek" : "OK",
       badgeColor: selisihKas !== 0 ? "destructive" as const : "success" as const,
-      path: "/closing",
+      path: "/finance/closing",
     },
   ];
 

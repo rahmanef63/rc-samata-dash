@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateRange, formatShortDate } from "@/shared/lib";
 
 export function DashboardSalesChart() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -39,17 +40,22 @@ export function DashboardSalesChart() {
     );
   }
 
-  const dateRange = `${salesTrend[0].date} - ${salesTrend[salesTrend.length - 1].date}`;
+  const chartData = salesTrend.map((point) => ({
+    ...point,
+    label: formatShortDate(point.date),
+  }));
+  const dateRange = formatDateRange(salesTrend[0].date, salesTrend[salesTrend.length - 1].date);
 
   return (
     <motion.div variants={itemVariants}>
       <AreaChartCard
-        data={salesTrend}
-        title="Sales Last 7 Days"
+        data={chartData}
+        title="Penjualan 7 Hari Terakhir"
         subtitle={dateRange}
         height={220}
         gradientId="salesGradient"
-        tooltipLabel="Sales"
+        tooltipLabel="Penjualan"
+        fitRange
       />
     </motion.div>
   );

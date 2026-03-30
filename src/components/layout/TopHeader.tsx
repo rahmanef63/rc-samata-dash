@@ -117,7 +117,7 @@ export function TopHeader() {
         )}
         {!isMobile && (
           <div className="flex items-center gap-1.5 text-sm">
-            <span className="font-semibold">{user?.name ? "Welcome, " + user.name : "Owner Overview"}</span>
+            <span className="font-semibold">{user?.name ? `Selamat datang, ${user.name}` : "Ringkasan Owner"}</span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">{formatDate()}</span>
           </div>
@@ -131,27 +131,27 @@ export function TopHeader() {
         </Button>
 
         <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-          <CommandInput placeholder="Type a command or search..." />
+          <CommandInput placeholder="Ketik perintah atau cari halaman..." />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup heading="Pages">
+            <CommandEmpty>Tidak ada hasil.</CommandEmpty>
+            <CommandGroup heading="Halaman">
               <CommandItem onSelect={() => { router.push("/"); setSearchOpen(false); }}>
                 Dashboard
               </CommandItem>
               <CommandItem onSelect={() => { router.push("/profile"); setSearchOpen(false); }}>
-                Profile
+                Profil
               </CommandItem>
               <CommandItem onSelect={() => { router.push("/finance/expenses"); setSearchOpen(false); }}>
-                Expenses
+                Pengeluaran
               </CommandItem>
               <CommandItem onSelect={() => { router.push("/report"); setSearchOpen(false); }}>
-                Report
+                Laporan
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
-            <CommandGroup heading="Settings">
+            <CommandGroup heading="Pengaturan">
               <CommandItem onSelect={() => { router.push("/profile"); setSearchOpen(false); }}>
-                Account Settings
+                Pengaturan Akun
               </CommandItem>
             </CommandGroup>
           </CommandList>
@@ -175,11 +175,11 @@ export function TopHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
-              <span className="font-semibold text-sm">Welcome back!</span>
-              <span className="text-xs text-muted-foreground">This is your notifications hub. Current alerts will show here.</span>
+              <span className="font-semibold text-sm">Pantau aktivitas terbaru</span>
+              <span className="text-xs text-muted-foreground">Peringatan operasional dan update sistem akan muncul di sini.</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -209,16 +209,16 @@ export function TopHeader() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push("/profile")}>
                 <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+                <span>Profil</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/profile")}>
                 <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
+                <span>Pengaturan</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+                <span>Keluar</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

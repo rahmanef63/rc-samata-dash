@@ -17,10 +17,10 @@ export type RouteGroup = {
 
 export const ROUTE_GROUPS: RouteGroup[] = [
   {
-    label: "MAIN MENU",
+    label: "MENU UTAMA",
     items: [
       { title: "Dashboard", url: "/", icon: Home },
-      { title: "Report", url: "/report", icon: BarChart3 },
+      { title: "Laporan", url: "/report", icon: BarChart3 },
       {
         title: "Upload",
         url: "/laporan/upload",
@@ -36,26 +36,24 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     ],
   },
   {
-    label: "FINANCE",
-    isTabs: true,
+    label: "KEUANGAN",
     basePath: "/finance",
     items: [
       { title: "Penjualan", url: "/finance", icon: FileText },
-      { title: "Expenses", url: "/finance/expenses", icon: DollarSign },
+      { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
       { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
     ],
   },
   {
-    label: "OPERATIONS",
-    isTabs: true,
+    label: "OPERASIONAL",
     basePath: "/operation",
     items: [
-      { title: "Inventory", url: "/operation", icon: Package },
+      { title: "Inventaris", url: "/operation", icon: Package },
       { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
       { title: "Master Data", url: "/operation/master-data", icon: Database },
-      { title: "Settings", url: "/operation/settings", icon: Settings },
+      { title: "Pengaturan", url: "/operation/settings", icon: Settings },
     ],
   },
 ];

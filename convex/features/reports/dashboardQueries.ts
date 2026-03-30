@@ -77,20 +77,24 @@ export const getMonthlySalesTrend = query({
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
 
-    const summaries = await ctx.db
-      .query("dailyCashSummary")
+    const sales = await ctx.db
+      .query("productSales")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .collect();
 
-    // Sort by date, take last 30
-    const sorted = summaries
-      .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+    const byDate: Record<string, number> = {};
+    for (const sale of sales) {
+      byDate[sale.businessDate] = (byDate[sale.businessDate] ?? 0) + sale.amount;
+    }
+
+    const sorted = Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
       .slice(-30);
 
-    return sorted.map((s) => ({
-      label: s.businessDate.slice(8), // day of month
-      date: s.businessDate,
-      value: s.grossSales,
+    return sorted.map(([date, value]) => ({
+      label: date.slice(8),
+      date,
+      value,
     }));
   },
 });
@@ -100,19 +104,24 @@ export const getMonthlySalesTrendInternal = internalQuery({
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
 
-    const summaries = await ctx.db
-      .query("dailyCashSummary")
+    const sales = await ctx.db
+      .query("productSales")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .collect();
 
-    const sorted = summaries
-      .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+    const byDate: Record<string, number> = {};
+    for (const sale of sales) {
+      byDate[sale.businessDate] = (byDate[sale.businessDate] ?? 0) + sale.amount;
+    }
+
+    const sorted = Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
       .slice(-30);
 
-    return sorted.map((s) => ({
-      label: s.businessDate.slice(8),
-      date: s.businessDate,
-      value: s.grossSales,
+    return sorted.map(([date, value]) => ({
+      label: date.slice(8),
+      date,
+      value,
     }));
   },
 });
@@ -263,12 +272,12 @@ export const getCashflowWaterfall = query({
     const net = revenue - totalCOGS - Math.max(opex, 0) - totalOtherOut;
 
     return [
-      { name: "Revenue", value: revenue },
+      { name: "Pendapatan", value: revenue },
       { name: "COGS", value: -totalCOGS },
       { name: "Opex", value: -Math.max(opex, 0) },
-      { name: "Other Out", value: -totalOtherOut },
-      { name: "Net", value: net },
-    ].filter((item) => item.value !== 0 || item.name === "Net");
+      { name: "Arus Keluar Lain", value: -totalOtherOut },
+      { name: "Bersih", value: net },
+    ].filter((item) => item.value !== 0 || item.name === "Bersih");
   },
 });
 
@@ -307,12 +316,12 @@ export const getCashflowWaterfallInternal = internalQuery({
     const net = revenue - totalCOGS - Math.max(opex, 0) - totalOtherOut;
 
     return [
-      { name: "Revenue", value: revenue },
+      { name: "Pendapatan", value: revenue },
       { name: "COGS", value: -totalCOGS },
       { name: "Opex", value: -Math.max(opex, 0) },
-      { name: "Other Out", value: -totalOtherOut },
-      { name: "Net", value: net },
-    ].filter((item) => item.value !== 0 || item.name === "Net");
+      { name: "Arus Keluar Lain", value: -totalOtherOut },
+      { name: "Bersih", value: net },
+    ].filter((item) => item.value !== 0 || item.name === "Bersih");
   },
 });
 
@@ -347,7 +356,7 @@ export const getRecentTransactions = query({
       results.push({
         id: `SALES-${s.businessDate}`,
         name: `Penjualan ${s.businessDate}`,
-        type: "Sales Deposit",
+        type: "Setoran Penjualan",
         amount: `+Rp ${s.grossSales.toLocaleString("id-ID")}`,
         time: s.businessDate,
         status: "completed",
@@ -366,19 +375,21 @@ export const getRecentTransactions = query({
 
     for (const cf of latestCF) {
       if (cf.expenseOutflow > 0) {
-        results.push({
-          id: `EXP-${cf.businessDate}`,
-          name: `Belanja ${cf.businessDate}`,
-          type: "Expense",
-          amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
-          time: cf.businessDate,
-          status: "completed",
+          results.push({
+            id: `EXP-${cf.businessDate}`,
+            name: `Belanja ${cf.businessDate}`,
+            type: "Pengeluaran",
+            amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
+            time: cf.businessDate,
+            status: "completed",
           direction: "out",
         });
       }
     }
 
-    return results.slice(0, 6);
+    return results
+      .sort((a, b) => b.time.localeCompare(a.time))
+      .slice(0, 6);
   },
 });
 
@@ -409,7 +420,7 @@ export const getRecentTransactionsInternal = internalQuery({
       results.push({
         id: `SALES-${s.businessDate}`,
         name: `Penjualan ${s.businessDate}`,
-        type: "Sales Deposit",
+        type: "Setoran Penjualan",
         amount: `+Rp ${s.grossSales.toLocaleString("id-ID")}`,
         time: s.businessDate,
         status: "completed",
@@ -427,18 +438,20 @@ export const getRecentTransactionsInternal = internalQuery({
 
     for (const cf of latestCF) {
       if (cf.expenseOutflow > 0) {
-        results.push({
-          id: `EXP-${cf.businessDate}`,
-          name: `Belanja ${cf.businessDate}`,
-          type: "Expense",
-          amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
-          time: cf.businessDate,
-          status: "completed",
+          results.push({
+            id: `EXP-${cf.businessDate}`,
+            name: `Belanja ${cf.businessDate}`,
+            type: "Pengeluaran",
+            amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
+            time: cf.businessDate,
+            status: "completed",
           direction: "out",
         });
       }
     }
 
-    return results.slice(0, 6);
+    return results
+      .sort((a, b) => b.time.localeCompare(a.time))
+      .slice(0, 6);
   },
 });

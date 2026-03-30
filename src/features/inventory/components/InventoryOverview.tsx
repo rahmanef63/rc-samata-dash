@@ -1,8 +1,10 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, PackageSearch } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -55,11 +57,11 @@ const movementColumns: Column<StockMovement>[] = [
   { key: "notes", label: "Catatan", render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
 ];
 
-const subTabs = ["Stock Items", "Movements"] as const;
+const subTabs = ["Daftar Stok", "Pergerakan Stok"] as const;
 type SubTab = typeof subTabs[number];
 
 export function InventoryOverview() {
-  const [activeTab, setActiveTab] = useState<SubTab>("Stock Items");
+  const [activeTab, setActiveTab] = useState<SubTab>("Daftar Stok");
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const currentBranchId = branches?.[0]?._id;
@@ -117,7 +119,7 @@ export function InventoryOverview() {
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       <TabBar<SubTab> tabs={subTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {activeTab === "Stock Items" && (
+      {activeTab === "Daftar Stok" && (
         <>
           {lowStockItems.length > 0 && (
             <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 flex items-start gap-3">
@@ -132,7 +134,20 @@ export function InventoryOverview() {
             </div>
           )}
 
-          <SectionHeader title="Daftar Stok" />
+          {itemsData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center bg-card rounded-xl shadow-card border border-border">
+              <div className="w-14 h-14 mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <PackageSearch className="h-7 w-7 text-primary" />
+              </div>
+              <h3 className="text-base font-semibold mb-1">Belum Ada Data Stok</h3>
+              <p className="text-sm text-muted-foreground mb-4 max-w-xs">
+                Mulai pantau persediaan bahan baku Anda. Tambahkan item stok pertama Anda sekarang.
+              </p>
+              <Button onClick={itemCrud.openCreate} className="gap-2">
+                <span>+</span> Tambah Item Stok Pertama
+              </Button>
+            </div>
+          ) : (
           <DataTable<StockItem>
             data={itemTable.sortedItems}
             columns={itemColumns}
@@ -146,6 +161,7 @@ export function InventoryOverview() {
             onDelete={itemCrud.openDelete}
             entityName="Item Stok"
           />
+          )}
           <CrudDialog<StockItem>
             open={itemCrud.isOpen} mode={itemCrud.mode} item={itemCrud.selectedItem}
             fields={itemFields} entityName="Item Stok" onClose={itemCrud.close}
@@ -155,15 +171,15 @@ export function InventoryOverview() {
         </>
       )}
 
-      {activeTab === "Movements" && (
+      {activeTab === "Pergerakan Stok" && (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card rounded-xl shadow-card p-3">
-              <p className="label-uppercase mb-1">TOTAL WASTE</p>
+              <p className="label-uppercase mb-1">TOTAL PEMBOROSAN</p>
               <p className="text-lg font-bold font-mono-data text-destructive">{totalWaste} unit</p>
             </div>
             <div className="bg-card rounded-xl shadow-card p-3">
-              <p className="label-uppercase mb-1">MOVEMENTS HARI INI</p>
+              <p className="label-uppercase mb-1">PERGERAKAN HARI INI</p>
               <p className="text-lg font-bold font-mono-data">{todayMovements}</p>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateRange, formatShortDate } from "@/shared/lib";
 
 export function Dashboard30DayChart() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -39,15 +40,22 @@ export function Dashboard30DayChart() {
     );
   }
 
+  const chartData = monthlyTrend.map((point) => ({
+    ...point,
+    label: formatShortDate(point.date),
+  }));
+  const dateRange = formatDateRange(monthlyTrend[0].date, monthlyTrend[monthlyTrend.length - 1].date);
+
   return (
     <motion.div variants={itemVariants}>
       <AreaChartCard
-        data={monthlyTrend}
+        data={chartData}
         title="Omzet 30 Hari Terakhir"
-        subtitle="Trend penjualan harian"
+        subtitle={dateRange}
         height={200}
         gradientId="sales30Gradient"
         tooltipLabel="Omzet"
+        fitRange
       />
     </motion.div>
   );

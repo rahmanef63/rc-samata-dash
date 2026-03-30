@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +80,7 @@ export default function LoginPage() {
               <span className="text-3xl">🐔</span>
             </motion.div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Rocket Chicken
+              RC Samata
             </h1>
             <p className="text-sm text-white/50 mt-1">
               {isSignUp ? "Daftar Akun Baru" : "Owner Control & Audit System"}
@@ -92,7 +93,7 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <label
                   htmlFor="name"
-                  className="block text-xs font-medium text-white/60 uppercase tracking-wider"
+                  className="block text-xs font-medium text-white/70"
                 >
                   Nama
                 </label>
@@ -110,7 +111,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label
                 htmlFor="email"
-                className="block text-xs font-medium text-white/60 uppercase tracking-wider"
+                className="block text-xs font-medium text-white/70"
               >
                 Email
               </label>
@@ -129,7 +130,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label
                 htmlFor="password"
-                className="block text-xs font-medium text-white/60 uppercase tracking-wider"
+                className="block text-xs font-medium text-white/70"
               >
                 Password
               </label>
@@ -144,6 +145,24 @@ export default function LoginPage() {
                 className="w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#dc2648]/60 focus:border-transparent transition"
               />
             </div>
+
+            {/* Lupa password link — SARAN-01 */}
+            {!isSignUp && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword((value) => !value)}
+                  className="text-xs text-white/40 hover:text-white/70 transition-colors"
+                >
+                  Lupa password?
+                </button>
+              </div>
+            )}
+            {showForgotPassword && (
+              <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3 text-xs text-blue-300">
+                Hubungi administrator untuk reset password Anda.
+              </div>
+            )}
 
             {error && (
               <motion.div
@@ -182,24 +201,31 @@ export default function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Signing in…
+                  Memproses…
                 </span>
               ) : (
-                isSignUp ? "Daftar" : "Sign In"
+                isSignUp ? "Daftar" : "Masuk"
               )}
             </button>
           </form>
 
           {/* Toggle */}
           <p className="text-center text-xs text-white/40 mt-6">
-            {isSignUp ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
+            {isSignUp ? "Sudah punya akun?" : "Butuh akun owner baru?"}{" "}
             <button
               type="button"
-              onClick={() => { setIsSignUp(!isSignUp); setError(""); }}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError("");
+                setShowForgotPassword(false);
+              }}
               className="text-[#f97316] hover:underline font-medium"
             >
-              {isSignUp ? "Sign In" : "Daftar"}
+              {isSignUp ? "Masuk" : "Daftar"}
             </button>
+          </p>
+          <p className="text-center text-[11px] text-white/25 mt-3">
+            Gunakan email yang telah diotorisasi administrator.
           </p>
         </div>
 

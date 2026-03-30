@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { formatRp, formatRpFull } from "@/shared/lib";
 
 interface PieChartCardProps {
   data: { name: string; value: number; color: string }[];
@@ -39,7 +40,10 @@ export function PieChartCard({ data, title, subtitle, height = 220, headerRight 
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [`Rp ${(value / 1000000).toFixed(1)}M`, ""]}
+                formatter={(value: number, _name, item: { payload?: { name?: string } }) => [
+                  formatRpFull(value),
+                  item?.payload?.name || "Nilai",
+                ]}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }}
               />
             </PieChart>
@@ -51,7 +55,9 @@ export function PieChartCard({ data, title, subtitle, height = 220, headerRight 
               <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
               <div className="min-w-0">
                 <p className="text-[11px] text-muted-foreground truncate">{d.name}</p>
-                <p className="text-xs font-semibold font-mono-data">{((d.value / total) * 100).toFixed(0)}%</p>
+                <p className="text-xs font-semibold font-mono-data">
+                  {((d.value / total) * 100).toFixed(0)}% · {formatRp(d.value)}
+                </p>
               </div>
             </div>
           ))}

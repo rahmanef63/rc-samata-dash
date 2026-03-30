@@ -5,7 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader } from "@/shared/components";
-import { amountColorClass, formatRpFull } from "@/shared/lib";
+import { formatLongDate } from "@/shared/lib";
+import { amountColorClass } from "@/shared/lib";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -33,7 +34,7 @@ export function DashboardTransactionLog() {
   if (transactions.length === 0) {
     return (
       <motion.div variants={itemVariants} className="hidden md:block space-y-4">
-        <SectionHeader title="Detailed Transaction Log" />
+        <SectionHeader title="Log Transaksi Detail" />
         <div className="bg-card rounded-xl shadow-card p-8 text-center text-muted-foreground text-sm">
           Belum ada transaksi. Upload laporan mingguan untuk melihat data.
         </div>
@@ -43,7 +44,7 @@ export function DashboardTransactionLog() {
 
   return (
     <motion.div variants={itemVariants} className="hidden md:block space-y-4">
-      <SectionHeader title="Detailed Transaction Log" />
+      <SectionHeader title="Log Transaksi Detail" />
       <div className="bg-card rounded-xl shadow-card overflow-hidden">
         <ScrollArea className="w-full">
           <Table>
@@ -64,7 +65,7 @@ export function DashboardTransactionLog() {
                   <TableCell>{tx.name}</TableCell>
                   <TableCell className="text-muted-foreground">{tx.type}</TableCell>
                   <TableCell className={`text-right font-mono-data ${amountColorClass(tx.amount)}`}>{tx.amount}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{tx.time}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">{formatLongDate(tx.time)}</TableCell>
                   <TableCell className="text-right"><StatusBadge status={tx.status} /></TableCell>
                 </TableRow>
               ))}

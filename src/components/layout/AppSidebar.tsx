@@ -4,9 +4,7 @@ import { ChevronRight, ChevronDown, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { usePathname, useRouter } from "next/navigation";
 import { ROUTE_GROUPS } from "@/config/routes";
-import { useConvexAuth, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { api } from "../../../convex/_generated/api";
 import { useState } from "react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -19,7 +17,6 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = usePathname();
-  const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
   const router = useRouter();
   const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
@@ -33,12 +30,6 @@ export function AppSidebar() {
 
   const isChildActive = (children: { url: string }[]) =>
     children.some((c) => isItemActive(c.url));
-
-  // Fetch current user data when authenticated
-  const currentUser = useQuery(
-    api.features.masterData.queries.listBranches,
-    isAuthenticated ? {} : "skip"
-  );
 
   const handleLogout = async () => {
     await signOut();
@@ -55,11 +46,11 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <div>
-                <span className="font-bold text-navy">Rocket</span>
-                <span className="font-bold text-primary ml-0.5">Chicken</span>
+                <span className="font-bold text-navy">RC</span>
+                <span className="font-bold text-primary ml-0.5">Samata</span>
               </div>
               <span className="text-[10px] text-muted-foreground leading-tight">
-                Owner Control Panel
+                Owner Control &amp; Audit System
               </span>
             </div>
           )}
@@ -202,7 +193,7 @@ export function AppSidebar() {
             className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            <span>Logout</span>
+            <span>Keluar</span>
           </button>
         </div>
       )}

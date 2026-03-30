@@ -24,7 +24,7 @@ export default function DashboardPage() {
     >
       {/* Page Header */}
       <motion.div variants={itemVariants} className="mb-6">
-        <h1 className="text-lg font-semibold tracking-tight">Owner Dashboard</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Dashboard Owner</h1>
         <p className="text-sm text-muted-foreground">
           Kontrol penuh cabang Anda — omzet, kas, hutang, dan operasional.
         </p>

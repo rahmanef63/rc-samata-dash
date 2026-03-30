@@ -30,7 +30,7 @@ export function DashboardCashflowChart() {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
-          <h2 className="text-sm font-semibold mb-2">Cashflow Waterfall</h2>
+          <h2 className="text-sm font-semibold mb-2">Ringkasan Arus Kas</h2>
           <p className="text-sm text-muted-foreground py-8 text-center">
             Belum ada data cash flow.
           </p>
@@ -43,8 +43,8 @@ export function DashboardCashflowChart() {
     <motion.div variants={itemVariants}>
       <WaterfallChart
         data={waterfallData}
-        title="Cashflow Waterfall"
-        subtitle="Revenue → Net Profit (berdasarkan laporan)"
+        title="Ringkasan Arus Kas"
+        subtitle="Pendapatan → Laba Bersih"
         height={240}
       />
     </motion.div>

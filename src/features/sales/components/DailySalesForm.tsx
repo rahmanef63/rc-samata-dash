@@ -18,24 +18,24 @@ import { api } from "../../../../convex/_generated/api";
 const fields: FieldConfig[] = [
   { key: "businessDate", label: "Tanggal", type: "date", required: true },
   { key: "channelName", label: "Channel", type: "select", options: salesChannels.map(c => ({ value: c, label: c })) },
-  { key: "grossAmount", label: "Gross Sales", type: "number", required: true },
+  { key: "grossAmount", label: "Penjualan Kotor", type: "number", required: true },
   { key: "platformFee", label: "Fee Platform", type: "number" },
   { key: "promoCost", label: "Potongan Promo", type: "number" },
   { key: "referenceNo", label: "No. Referensi" },
   { key: "status", label: "Status", type: "select", options: [
-    { value: "recorded", label: "Recorded" },
-    { value: "pending_settlement", label: "Pending Settlement" },
-    { value: "settled", label: "Settled" },
+    { value: "recorded", label: "Tercatat" },
+    { value: "pending_settlement", label: "Menunggu Settlement" },
+    { value: "settled", label: "Selesai" },
   ]},
 ];
 
 const columns: Column<DailySale>[] = [
   { key: "businessDate", label: "Tanggal", className: "text-xs" },
   { key: "channelName", label: "Channel" },
-  { key: "grossAmount", label: "Gross Sales", className: "text-right font-mono-data", render: (v) => formatRpFull(v) },
-  { key: "platformFee", label: "Fee", className: "text-right font-mono-data text-destructive", render: (v) => v > 0 ? `-${formatRpFull(v)}` : "-" },
+  { key: "grossAmount", label: "Penjualan Kotor", className: "text-right font-mono-data", render: (v) => formatRpFull(v) },
+  { key: "platformFee", label: "Biaya", className: "text-right font-mono-data text-destructive", render: (v) => v > 0 ? `-${formatRpFull(v)}` : "-" },
   { key: "promoCost", label: "Promo", className: "text-right font-mono-data text-destructive", render: (v) => v > 0 ? `-${formatRpFull(v)}` : "-" },
-  { key: "netAmount", label: "Net Amount", className: "text-right font-mono-data font-semibold text-success", render: (v) => formatRpFull(v) },
+  { key: "netAmount", label: "Nilai Bersih", className: "text-right font-mono-data font-semibold text-success", render: (v) => formatRpFull(v) },
   { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
 ];
 
@@ -121,7 +121,7 @@ export function DailySalesForm() {
               <p className="text-lg font-bold font-mono-data text-foreground">{formatRpFull(totalGross)}</p>
             </div>
             <div className="bg-card rounded-xl shadow-card p-3">
-              <p className="label-uppercase mb-1">NET AMOUNT</p>
+              <p className="label-uppercase mb-1">NILAI BERSIH</p>
               <p className="text-lg font-bold font-mono-data text-success">{formatRpFull(totalNet)}</p>
             </div>
             <div className="bg-card rounded-xl shadow-card p-3">
@@ -129,7 +129,7 @@ export function DailySalesForm() {
               <p className="text-lg font-bold font-mono-data text-destructive">-{formatRpFull(totalFees)}</p>
             </div>
             <div className="bg-card rounded-xl shadow-card p-3">
-              <p className="label-uppercase mb-1">PENDING SETTLEMENT</p>
+              <p className="label-uppercase mb-1">SETTLEMENT TERTUNDA</p>
               <p className="text-lg font-bold font-mono-data text-warning">{pendingSettlement.length} transaksi</p>
             </div>
           </div>
@@ -137,7 +137,7 @@ export function DailySalesForm() {
           {/* Input Form */}
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Input Penjualan Harian</h2>
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">{new Date().toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">{new Date().toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -146,14 +146,14 @@ export function DailySalesForm() {
                 <p className="label-uppercase">{ch}</p>
                 <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2.5">
                   <span className="text-sm text-muted-foreground">Rp</span>
-                  <Input type="text" defaultValue="0" className="flex-1 border-0 p-0 h-auto text-sm font-mono-data shadow-none focus-visible:ring-0" />
+                  <Input type="number" inputMode="numeric" min="0" defaultValue="0" className="flex-1 border-0 p-0 h-auto text-sm font-mono-data shadow-none focus-visible:ring-0" />
                 </div>
               </div>
             ))}
           </div>
 
           <Button className="w-full h-12 text-sm font-semibold">
-            Calculate Expected Cash
+            Hitung Estimasi Kas
           </Button>
 
           {/* Sales Records Table */}

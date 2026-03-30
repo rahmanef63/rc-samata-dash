@@ -30,9 +30,9 @@ export function DashboardExpenseChart() {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
-          <h2 className="text-sm font-semibold mb-2">Expense by Category</h2>
+          <h2 className="text-sm font-semibold mb-2">Pengeluaran per Kategori</h2>
           <p className="text-sm text-muted-foreground py-8 text-center">
-            Belum ada data expense.
+            Belum ada data pengeluaran.
           </p>
         </div>
       </motion.div>
@@ -43,8 +43,8 @@ export function DashboardExpenseChart() {
     <motion.div variants={itemVariants} className="lg:col-span-2">
       <PieChartCard
         data={expenseData}
-        title="Expense by Category"
-        subtitle="Berdasarkan laporan yang di-upload"
+        title="Pengeluaran per Kategori"
+        subtitle="Berdasarkan laporan yang diunggah"
         height={200}
       />
     </motion.div>

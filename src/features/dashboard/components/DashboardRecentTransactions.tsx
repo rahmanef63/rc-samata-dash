@@ -49,8 +49,8 @@ export function DashboardRecentTransactions() {
     <>
       <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold">Recent Transactions</h2>
-          <button onClick={() => router.push("/finance")} className="text-xs text-primary font-medium hover:underline">View All</button>
+          <h2 className="text-sm font-semibold">Transaksi Terbaru</h2>
+          <button onClick={() => router.push("/finance")} className="text-xs text-primary font-medium hover:underline">Lihat Semua</button>
         </div>
         {transactions.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">Belum ada transaksi.</p>

@@ -50,13 +50,13 @@ export function DashboardPettyCashRequests() {
     return (
       <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold">Petty Cash Requests</h2>
+          <h2 className="text-sm font-semibold">Permintaan Petty Cash</h2>
           <button onClick={() => router.push("/finance/petty-cash")} className="text-xs text-primary font-medium hover:underline">
-            View All
+            Lihat Semua
           </button>
         </div>
         <p className="text-sm text-muted-foreground py-3 text-center">
-          Tidak ada permintaan petty cash menunggu approval.
+          Tidak ada permintaan petty cash yang menunggu persetujuan.
         </p>
       </motion.div>
     );
@@ -66,9 +66,9 @@ export function DashboardPettyCashRequests() {
     <>
       <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold">Petty Cash Requests</h2>
+          <h2 className="text-sm font-semibold">Permintaan Petty Cash</h2>
           <button onClick={() => router.push("/finance/petty-cash")} className="text-xs text-primary font-medium hover:underline">
-            <StatusBadge status="pending">{pendingRequests.length} Action Required</StatusBadge>
+            <StatusBadge status="pending">{pendingRequests.length} perlu tindakan</StatusBadge>
           </button>
         </div>
         <div className="space-y-3">
@@ -99,7 +99,7 @@ export function DashboardPettyCashRequests() {
       <Dialog open={!!selected} onOpenChange={(v) => !v && setSelectedId(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Petty Cash Request</DialogTitle>
+            <DialogTitle>Permintaan Petty Cash</DialogTitle>
             <DialogDescription>{selected?.purposeCategory}</DialogDescription>
           </DialogHeader>
           {selected && (
@@ -122,11 +122,11 @@ export function DashboardPettyCashRequests() {
             <Button variant="outline" onClick={() => {
               toast.error(`"${selected?.purposeCategory}" ditolak`);
               setSelectedId(null);
-            }}>Reject</Button>
+            }}>Tolak</Button>
             <Button onClick={() => {
               toast.success(`"${selected?.purposeCategory}" disetujui`);
               setSelectedId(null);
-            }}>Approve</Button>
+            }}>Setujui</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

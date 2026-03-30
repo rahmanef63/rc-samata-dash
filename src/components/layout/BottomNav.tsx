@@ -8,10 +8,10 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: Home },
-  { title: "Finance", url: "/finance", icon: DollarSign },
-  { title: "Report", url: "/report", icon: BarChart3 },
+  { title: "Keuangan", url: "/finance", icon: DollarSign },
+  { title: "Laporan", url: "/report", icon: BarChart3 },
   { title: "Chat AI", url: "/chat", icon: Bot },
-  { title: "Operation", url: "/operation", icon: Settings },
+  { title: "Operasional", url: "/operation", icon: Settings },
 ];
 
 export function BottomNav() {
@@ -63,7 +63,7 @@ export function BottomNav() {
           className="relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-200 min-w-[48px] active:scale-95"
         >
           <Menu className="h-5 w-5 text-muted-foreground" />
-          <span className="text-[10px] font-semibold text-muted-foreground">More</span>
+          <span className="text-[10px] font-semibold text-muted-foreground">Lainnya</span>
         </button>
       </div>
     </nav>
