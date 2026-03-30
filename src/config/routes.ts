@@ -5,6 +5,7 @@ export type RouteConfig = {
   title: string;
   url: string;
   icon?: LucideIcon;
+  children?: RouteConfig[];
 };
 
 export type RouteGroup = {
@@ -20,9 +21,16 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     items: [
       { title: "Dashboard", url: "/", icon: Home },
       { title: "Report", url: "/report", icon: BarChart3 },
-      { title: "Upload Laporan", url: "/laporan/upload", icon: UploadCloud },
-      { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
-      { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
+      {
+        title: "Upload",
+        url: "/laporan/upload",
+        icon: UploadCloud,
+        children: [
+          { title: "Upload Laporan", url: "/laporan/upload", icon: UploadCloud },
+          { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
+          { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
+        ],
+      },
       { title: "Analisis", url: "/laporan/analisis", icon: PieChart },
       { title: "Chat AI", url: "/chat", icon: Bot },
     ],

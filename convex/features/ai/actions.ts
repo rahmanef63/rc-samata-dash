@@ -910,14 +910,21 @@ export const chatCompletion = action({
       customInstruction,
       ragContextStr,
       `\n\n## Hasil Tool "${toolResult.title}":\n${toolResult.summary}`,
-      "\nBerikan jawaban final dalam Bahasa Indonesia yang ringkas dan natural berdasarkan data di atas. Jangan tampilkan JSON, format teknis, atau proses berpikir.",
+      [
+        "\nATURAN WAJIB untuk jawaban final:",
+        "- Gunakan HANYA data dari 'Hasil Tool' di atas. DILARANG mengarang angka atau nama bahan.",
+        "- Jika data kosong atau tidak ada, katakan langsung 'Tidak ada data' — jangan buat tabel fiktif.",
+        "- Jawab langsung ke inti, singkat dan padat. Hindari kalimat pembuka seperti 'Berdasarkan data...'",
+        "- JANGAN tambahkan rekomendasi, tips, atau penjelasan panjang kecuali user memintanya.",
+        "- Gunakan Bahasa Indonesia. Jangan tampilkan JSON atau format teknis.",
+      ].join("\n"),
     ].filter(Boolean).join("\n\n");
 
     const synthesisResponse = await requestModelCompletion(
       provider,
       model,
       [{ role: "system", content: synthesisSystemContent }, ...chatMessages],
-      { temperature: 0.7, maxTokens: 2048 }
+      { temperature: 0.3, maxTokens: 1024 }
     );
 
     return {

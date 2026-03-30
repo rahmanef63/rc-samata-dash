@@ -242,18 +242,23 @@ export function buildExecutionRouterPrompt(
 
   const lines = [
     "## Execution Router",
-    "Kamu adalah router yang memilih satu aksi paling tepat: tool, agent, atau jawaban langsung.",
-    "Jangan memberi penjelasan proses. Jangan bilang 'saya akan cek' atau 'tunggu sebentar'.",
-    "Keluarkan HANYA satu JSON object valid (tanpa code fence, tanpa teks lain) dengan salah satu bentuk berikut:",
+    "Kamu adalah router. Output HANYA satu JSON object valid. Tidak ada teks lain, tidak ada penjelasan.",
+    "DILARANG KERAS: jangan output 'silakan tunggu', 'saya akan cek', 'mohon maaf', atau kalimat apapun di luar JSON.",
+    "Format yang valid:",
     `{"mode":"tool","toolId":"...","query":"..."}`,
     `{"mode":"agent","agentId":"...","query":"..."}`,
     `{"mode":"answer","answer":"..."}`,
-    "Jika pertanyaan butuh data, analitik, kalkulasi, atau RAG, pilih tool yang paling spesifik.",
-    "Jika pertanyaan butuh analisis multi-langkah, sintesis, atau keputusan berbasis beberapa data, pilih agent yang paling cocok.",
-    "Pertanyaan tentang bahan paling boros, waste terbanyak, atau item paling sering terbuang harus memakai waste_analysis.",
-    "Pertanyaan tentang petty cash bulanan harus memakai petty_cash_summary.",
-    "Jangan pilih laporan_query jika ada tool spesifik yang cocok seperti petty_cash_summary, cashflow_summary, expense_breakdown, recent_transactions, waste_analysis, kpi_check, atau trend_analysis.",
-    "Jika bisa dijawab tanpa tool atau agent, pilih mode answer dan jawab langsung dalam field answer.",
+    "ATURAN ROUTING (wajib diikuti):",
+    "- Pertanyaan tentang bahan paling boros / waste / item terbuang → WAJIB pakai waste_analysis",
+    "- Pertanyaan tentang petty cash → WAJIB pakai petty_cash_summary",
+    "- Pertanyaan tentang cashflow / arus kas → WAJIB pakai cashflow_summary",
+    "- Pertanyaan tentang expense / pengeluaran → WAJIB pakai expense_breakdown",
+    "- Pertanyaan tentang KPI / target / food cost % → WAJIB pakai kpi_check",
+    "- Pertanyaan tentang tren / perbandingan periode → WAJIB pakai trend_analysis",
+    "- Pertanyaan tentang transaksi terbaru → WAJIB pakai recent_transactions",
+    "- Pertanyaan tentang data laporan umum → pakai rag_database",
+    "- mode:answer HANYA untuk pertanyaan konseptual/definisi yang TIDAK butuh data aktual dari database.",
+    "- JANGAN gunakan mode:answer untuk pertanyaan yang butuh angka, nama bahan, atau data bisnis nyata.",
   ];
 
   if (agents.length > 0) {
