@@ -521,9 +521,16 @@ export default function LaporanUploadPage() {
               <p className="text-sm text-yellow-800/80 dark:text-yellow-200/80">
                 Kedua file memiliki periode yang sama. Timpa data lama dengan file baru, atau batalkan?
               </p>
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button onClick={() => setDuplicateReport(null)} className="px-5 py-2.5 rounded-xl border border-yellow-300/50 bg-white/50 hover:bg-white dark:bg-black/20 dark:hover:bg-black/40 text-yellow-800 dark:text-yellow-200 text-sm font-semibold transition-colors">
                   Batal
+                </button>
+                <button
+                  onClick={() => setSelectedHistoryId(duplicateReport._id)}
+                  className="px-5 py-2.5 rounded-xl border border-yellow-300 bg-white/70 hover:bg-white dark:bg-black/20 dark:hover:bg-black/40 text-yellow-800 dark:text-yellow-200 text-sm font-semibold transition-colors flex items-center gap-2"
+                >
+                  <Info className="h-4 w-4" />
+                  Lihat Laporan Lama
                 </button>
                 <button
                   onClick={handleReplaceAndImport}
@@ -942,6 +949,153 @@ export default function LaporanUploadPage() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* ─── History Report Detail Sheet ─── */}
+      {(() => {
+        const report = recentReports?.find((r) => r._id === selectedHistoryId);
+        const counts = report ? [
+          { label: "Kas Kecil",    val: report.expenseCount ?? 0,        color: "text-orange-600" },
+          { label: "Penjualan",    val: report.salesCount ?? 0,          color: "text-primary" },
+          { label: "Vendor",       val: report.vendorCount ?? 0,         color: "text-teal-600" },
+          { label: "Food Cost",    val: report.inventoryCount ?? 0,      color: "text-green-600" },
+          { label: "Left Over",    val: report.leftoverCount ?? 0,       color: "text-red-500" },
+          { label: "Kas Periode",  val: report.kasPeriodeCount ?? 0,     color: "text-blue-600" },
+          { label: "Sales Ctrl",   val: report.salesControlCount ?? 0,   color: "text-purple-600" },
+          { label: "Beli Kredit",  val: report.creditPurchaseCount ?? 0, color: "text-yellow-600" },
+          { label: "Ikhtisar FC",  val: report.foodCostSummaryCount ?? 0,color: "text-emerald-600" },
+          { label: "Transfer",     val: report.transferCount ?? 0,       color: "text-cyan-600" },
+          { label: "HPP",          val: report.hppCount ?? 0,            color: "text-indigo-600" },
+          { label: "Cost Anls",    val: report.costAnalysisCount ?? 0,   color: "text-pink-600" },
+          { label: "Cash Flow",    val: report.cashFlowCount ?? 0,       color: "text-lime-600" },
+          { label: "Insentif",     val: report.incentiveCount ?? 0,      color: "text-amber-600" },
+        ] : [];
+        const totalRecords = counts.reduce((s, c) => s + c.val, 0);
+        const uploadedDate = report
+          ? new Date(report.uploadedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        return (
+          <Sheet open={!!selectedHistoryId} onOpenChange={(open) => { if (!open) setSelectedHistoryId(null); }}>
+            <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col gap-0">
+              <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+                <SheetTitle className="text-base flex items-center gap-2">
+                  <Upload className="h-4 w-4 text-primary shrink-0" />
+                  Detail Laporan Mingguan
+                </SheetTitle>
+              </SheetHeader>
+
+              {!report ? (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                  Laporan tidak ditemukan
+                </div>
+              ) : (
+                <ScrollArea className="flex-1">
+                  <div className="px-6 py-5 space-y-5">
+
+                    {/* Metadata */}
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2.5">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">File</p>
+                          <p className="text-sm font-medium break-all">{report.fileName}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Periode</p>
+                            <p className="text-sm font-mono font-medium">{report.periodStart} → {report.periodEnd}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Status</p>
+                            <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                              report.status === "processed"
+                                ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700"
+                                : report.status === "error"
+                                ? "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
+                                : "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+                            }`}>{report.status}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Diupload</p>
+                          <p className="text-xs text-muted-foreground">{uploadedDate}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Total Record</p>
+                          <p className="text-sm font-bold text-primary">{totalRecords.toLocaleString("id-ID")}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Record counts */}
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Rincian Data</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {counts.map((c) => (
+                          <div key={c.label} className="rounded-xl border border-border bg-card p-3 text-center shadow-sm">
+                            <p className={`text-lg font-bold ${c.color}`}>{c.val}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium mt-0.5 leading-tight">{c.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Validation notes */}
+                    {(report.validationNotes ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Catatan Validasi</p>
+                        <ul className="space-y-1.5">
+                          {(report.validationNotes ?? []).map((note, i) => (
+                            <li key={i} className={`text-xs rounded-lg px-3 py-2 border space-y-0.5 ${
+                              note.severity === "warning"
+                                ? "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
+                                : "bg-muted/50 border-border/50"
+                            }`}>
+                              <p className="font-semibold text-foreground">
+                                <span className="font-mono text-muted-foreground">[{note.category}]</span> {note.message}
+                              </p>
+                              <p className="text-muted-foreground leading-relaxed">{note.tip}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
+
+              {/* Actions */}
+              {report && (
+                <div className="px-6 py-4 border-t border-border shrink-0 space-y-2">
+                  <button
+                    onClick={() => {
+                      setUpdateTargetId(report._id);
+                      setSelectedHistoryId(null);
+                      updateFileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload File Baru (Update)
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const shortId = report._id.slice(-8).toUpperCase();
+                      if (!confirm(`Hapus laporan #${shortId} "${report.fileName}"?\n\nSemua data terkait akan ikut terhapus.`)) return;
+                      await deleteReport({ reportId: report._id });
+                      setSelectedHistoryId(null);
+                      toast.success(`Laporan #${shortId} dihapus`);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-destructive/30 text-destructive text-sm font-semibold hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Hapus Laporan Ini
+                  </button>
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
+        );
+      })()}
     </div>
   );
 }
