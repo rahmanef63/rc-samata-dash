@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { TagBadge, TagSelect, hashColor, type TagOption } from "@/components/ui/tag-select";
-import { formatRpFull } from "@/shared/lib";
+import { TagSelect, type TagOption } from "@/components/ui/tag-select";
+import { formatLongDate } from "@/shared/lib";
 import { Loader2, Search, Database } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -47,6 +47,20 @@ const directionOptions: TagOption[] = [
 function fmtN(n: number, decimals = 0): string {
   if (n === 0) return "0";
   return n.toLocaleString("id-ID", { maximumFractionDigits: decimals });
+}
+
+function safeText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function matchesSearch(value: unknown, search: string) {
+  if (!search) return true;
+  return safeText(value).toLowerCase().includes(search.toLowerCase());
+}
+
+function formatTableDate(dateLike: unknown) {
+  const value = safeText(dateLike);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatLongDate(value) : value || "-";
 }
 
 // ─── Main Component ────────────────────────────────────────
@@ -148,10 +162,24 @@ export function ReportDataBrowser({ reportId }: { reportId: Id<"weeklyReports"> 
 // ─── Shared Loading & Empty States ─────────────────────────
 
 function TableLoading() {
+  const [isSlow, setIsSlow] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setIsSlow(true), 8000);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   return (
-    <div className="flex items-center justify-center py-16 text-muted-foreground">
-      <Loader2 className="h-5 w-5 animate-spin mr-2" />
-      <span className="text-sm">Memuat data...</span>
+    <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+      <div className="flex items-center">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        <span className="text-sm">Memuat data...</span>
+      </div>
+      {isSlow && (
+        <p className="max-w-md text-center text-xs">
+          Data lebih lama dari biasanya. Coba ganti laporan atau refresh halaman jika loading tidak selesai.
+        </p>
+      )}
     </div>
   );
 }
@@ -194,7 +222,7 @@ function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyR
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((s) => {
-    if (search && !s.productName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (!matchesSearch(s.productName, search)) return false;
     if (channelFilter && (s.channel ?? "all") !== channelFilter) return false;
     return true;
   });
@@ -219,14 +247,13 @@ function SalesTable({ reportId, search, channelFilter }: { reportId: Id<"weeklyR
           </thead>
           <tbody>
             {filtered.map((s, i) => {
-              const channel = channelOptions.find((o) => o.value === (s.channel ?? "all"));
               return (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{s.productName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(s.productName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={s.channel ?? "all"} options={channelOptions} onChange={(v) => v && update({ id: s._id, channel: v })} placeholder="Channel" className="min-w-[100px]" />
                   </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">{s.businessDate}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{formatTableDate(s.businessDate)}</td>
                   <td className="px-3 py-1.5 text-right">{s.qty}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(s.unitPrice)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-primary font-medium">{fmtN(s.amount)}</td>
@@ -249,7 +276,7 @@ function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; sear
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((v) =>
-    !search || v.commodityName.toLowerCase().includes(search.toLowerCase()),
+    matchesSearch(v.commodityName, search),
   );
 
   if (filtered.length === 0) return <TableEmpty tableName="vendor" />;
@@ -274,10 +301,10 @@ function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; sear
           </thead>
           <tbody>
             {(() => {
-              const sectionOpts: TagOption[] = [...new Set(data.map((v) => v.section).filter(Boolean))].map((s) => ({ value: s!, label: s! }));
+              const sectionOpts: TagOption[] = [...new Set(data.map((v) => safeText(v.section)).filter(Boolean))].map((s) => ({ value: s, label: s }));
               return filtered.map((v, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{v.commodityName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(v.commodityName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={v.section ?? ""} options={sectionOpts} onChange={(val) => val && update({ id: v._id, section: val })} onCreate={(label) => update({ id: v._id, section: label })} placeholder="Section" className="min-w-[90px]" />
                   </td>
@@ -302,23 +329,6 @@ function VendorTable({ reportId, search }: { reportId: Id<"weeklyReports">; sear
 
 function CashSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const reportData = useQuery(api.features.reports.queries.getWeeklyReport, { reportId });
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = reportData?.branchId ?? branches?.[0]?._id;
-
-  // We need to query by branch since there's no getByReport for dailyCashSummary
-  const allSummaries = useQuery(
-    api.features.reports.queries.listWeeklyReports,
-    branchId ? { branchId } : "skip",
-  );
-
-  // Use direct report query instead — let me use a simpler approach
-  // Since getProductSales works by reportId, we'll query cash summaries similarly
-  // But dailyCashSummary doesn't have a by_report query... let me check.
-  // Actually it does — all tables have by_report index.
-
-  // For now, use the data from getWeeklyReport counts
-  // Actually we need the raw data. Let me just show what we can.
-
   if (!reportData) return <TableLoading />;
 
   return (
@@ -327,16 +337,14 @@ function CashSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">;
 }
 
 function CashSummaryInner({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
-  // We need a dedicated query for dailyCashSummary by report
-  // For now, let's show CashFlow which we already have
   const cashFlows = useQuery(api.features.reports.queries.getDailyCashFlow, { reportId });
   if (!cashFlows) return <TableLoading />;
-  if (cashFlows.length === 0) return <TableEmpty tableName="kas periode" />;
+  const filtered = cashFlows.filter((cf) => matchesSearch(cf.businessDate, search));
+  if (filtered.length === 0) return <TableEmpty tableName="kas periode" />;
 
-  // Show summary-like view from cash flow data
   return (
     <>
-      <TableCount count={cashFlows.length} label="hari" />
+      <TableCount count={filtered.length} label="hari" />
       <ScrollableTable>
         <table className="w-full text-xs">
           <thead className="bg-muted/60 sticky top-0 z-10">
@@ -350,11 +358,11 @@ function CashSummaryInner({ reportId, search }: { reportId: Id<"weeklyReports">;
             </tr>
           </thead>
           <tbody>
-            {cashFlows
-              .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+            {filtered
+              .sort((a, b) => safeText(a.businessDate).localeCompare(safeText(b.businessDate)))
               .map((cf, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 text-muted-foreground">{cf.businessDate}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{formatTableDate(cf.businessDate)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(cf.openingBalance)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-green-600">+{fmtN(cf.salesInflow)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-blue-600">+{fmtN(cf.otherInflow)}</td>
@@ -374,11 +382,12 @@ function CashSummaryInner({ reportId, search }: { reportId: Id<"weeklyReports">;
 function CashFlowTable({ reportId, search }: { reportId: Id<"weeklyReports">; search: string }) {
   const data = useQuery(api.features.reports.queries.getDailyCashFlow, { reportId });
   if (!data) return <TableLoading />;
-  if (data.length === 0) return <TableEmpty tableName="cash flow" />;
+  const filtered = data.filter((cf) => matchesSearch(cf.businessDate, search));
+  if (filtered.length === 0) return <TableEmpty tableName="cash flow" />;
 
   return (
     <>
-      <TableCount count={data.length} label="hari" />
+      <TableCount count={filtered.length} label="hari" />
       <ScrollableTable>
         <table className="w-full text-xs">
           <thead className="bg-muted/60 sticky top-0 z-10">
@@ -393,11 +402,11 @@ function CashFlowTable({ reportId, search }: { reportId: Id<"weeklyReports">; se
             </tr>
           </thead>
           <tbody>
-            {data
-              .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+            {filtered
+              .sort((a, b) => safeText(a.businessDate).localeCompare(safeText(b.businessDate)))
               .map((cf, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 text-muted-foreground">{cf.businessDate}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{formatTableDate(cf.businessDate)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{fmtN(cf.openingBalance)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-green-600">{fmtN(cf.salesInflow)}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-blue-600">{fmtN(cf.otherInflow)}</td>
@@ -420,7 +429,7 @@ function CostAnalysisTable({ reportId, search }: { reportId: Id<"weeklyReports">
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((c) =>
-    !search || c.itemName.toLowerCase().includes(search.toLowerCase()),
+    matchesSearch(c.itemName, search),
   );
   if (filtered.length === 0) return <TableEmpty tableName="cost analysis" />;
 
@@ -445,7 +454,7 @@ function CostAnalysisTable({ reportId, search }: { reportId: Id<"weeklyReports">
           <tbody>
             {filtered.map((c, i) => (
               <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                <td className="px-3 py-1.5 font-medium">{c.itemName}</td>
+                <td className="px-3 py-1.5 font-medium">{safeText(c.itemName) || "-"}</td>
                 <td className="px-3 py-1.5 text-right">{fmtN(c.openingQty, 1)}</td>
                 <td className="px-3 py-1.5 text-right font-mono">{fmtN(c.openingValue)}</td>
                 <td className="px-3 py-1.5 text-right">{fmtN(c.purchaseQty, 1)}</td>
@@ -473,7 +482,7 @@ function InventoryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((v) =>
-    !search || v.itemName.toLowerCase().includes(search.toLowerCase()),
+    matchesSearch(v.itemName, search),
   );
   if (filtered.length === 0) return <TableEmpty tableName="inventory" />;
 
@@ -494,10 +503,10 @@ function InventoryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
           </thead>
           <tbody>
             {(() => {
-              const catOpts: TagOption[] = [...new Set(data.map((v) => v.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              const catOpts: TagOption[] = [...new Set(data.map((v) => safeText(v.category)).filter(Boolean))].map((c) => ({ value: c, label: c }));
               return filtered.map((v, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{v.itemName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(v.itemName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={v.category} options={catOpts} onChange={(val) => val && update({ id: v._id, category: val })} onCreate={(label) => update({ id: v._id, category: label })} placeholder="Kategori" className="min-w-[90px]" />
                   </td>
@@ -523,7 +532,7 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((h) =>
-    !search || h.productName.toLowerCase().includes(search.toLowerCase()),
+    matchesSearch(h.productName, search),
   );
   if (filtered.length === 0) return <TableEmpty tableName="HPP" />;
 
@@ -544,13 +553,13 @@ function HPPTable({ reportId, search }: { reportId: Id<"weeklyReports">; search:
           </thead>
           <tbody>
             {(() => {
-              const classOpts: TagOption[] = [...new Set(data.map((h) => h.pricingClass).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              const classOpts: TagOption[] = [...new Set(data.map((h) => safeText(h.pricingClass)).filter(Boolean))].map((c) => ({ value: c, label: c }));
               return filtered.map((h, i) => {
               const margin = h.sellingPrice ? h.sellingPrice - h.totalHPP : 0;
               const marginPct = h.sellingPrice ? (margin / h.sellingPrice * 100) : 0;
               return (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{h.productName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(h.productName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={h.pricingClass} options={classOpts} onChange={(val) => val && update({ id: h._id, pricingClass: val })} onCreate={(label) => update({ id: h._id, pricingClass: label })} placeholder="Kelas" className="min-w-[80px]" />
                   </td>
@@ -579,7 +588,7 @@ function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"we
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((t) => {
-    if (search && !t.itemName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (!matchesSearch(t.itemName, search)) return false;
     if (directionFilter && t.direction !== directionFilter) return false;
     return true;
   }
@@ -603,10 +612,10 @@ function TransferTable({ reportId, search, directionFilter }: { reportId: Id<"we
           </thead>
           <tbody>
             {(() => {
-              const catOpts: TagOption[] = [...new Set(data.map((t) => t.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              const catOpts: TagOption[] = [...new Set(data.map((t) => safeText(t.category)).filter(Boolean))].map((c) => ({ value: c, label: c }));
               return filtered.map((t, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{t.itemName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(t.itemName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={t.direction} options={directionOptions} onChange={(val) => val && update({ id: t._id, direction: val })} placeholder="Arah" className="min-w-[100px]" />
                   </td>
@@ -634,7 +643,7 @@ function IncentiveTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
   if (!data) return <TableLoading />;
 
   const filtered = data.filter((e) =>
-    !search || e.employeeName.toLowerCase().includes(search.toLowerCase()),
+    matchesSearch(e.employeeName, search),
   );
   if (filtered.length === 0) return <TableEmpty tableName="insentif" />;
 
@@ -653,10 +662,10 @@ function IncentiveTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
           </thead>
           <tbody>
             {(() => {
-              const typeOpts: TagOption[] = [...new Set(data.map((e) => e.incentiveType).filter(Boolean))].map((t) => ({ value: t, label: t }));
+              const typeOpts: TagOption[] = [...new Set(data.map((e) => safeText(e.incentiveType)).filter(Boolean))].map((t) => ({ value: t, label: t }));
               return filtered.map((e, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
-                  <td className="px-3 py-1.5 font-medium">{e.employeeName}</td>
+                  <td className="px-3 py-1.5 font-medium">{safeText(e.employeeName) || "-"}</td>
                   <td className="px-1 py-0.5">
                     <TagSelect value={e.incentiveType} options={typeOpts} onChange={(val) => val && update({ id: e._id, incentiveType: val })} onCreate={(label) => update({ id: e._id, incentiveType: label })} placeholder="Tipe" className="min-w-[90px]" />
                   </td>
@@ -678,11 +687,12 @@ function FCSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
   const data = useQuery(api.features.reports.queries.getFoodCostSummary, { reportId });
   const update = useMutation(api.features.reports.mutations.updateFoodCostSummary);
   if (!data) return <TableLoading />;
-  if (data.length === 0) return <TableEmpty tableName="ikhtisar FC" />;
+  const filtered = data.filter((f) => matchesSearch(f.category, search));
+  if (filtered.length === 0) return <TableEmpty tableName="ikhtisar FC" />;
 
   return (
     <>
-      <TableCount count={data.length} label="kategori" />
+      <TableCount count={filtered.length} label="kategori" />
       <ScrollableTable>
         <table className="w-full text-xs">
           <thead className="bg-muted/60 sticky top-0 z-10">
@@ -699,8 +709,8 @@ function FCSummaryTable({ reportId, search }: { reportId: Id<"weeklyReports">; s
           </thead>
           <tbody>
             {(() => {
-              const catOpts: TagOption[] = [...new Set(data.map((f) => f.category).filter(Boolean))].map((c) => ({ value: c, label: c }));
-              return data.map((f, i) => (
+              const catOpts: TagOption[] = [...new Set(data.map((f) => safeText(f.category)).filter(Boolean))].map((c) => ({ value: c, label: c }));
+              return filtered.map((f, i) => (
                 <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-1 py-0.5">
                     <TagSelect value={f.category} options={catOpts} onChange={(val) => val && update({ id: f._id, category: val })} onCreate={(label) => update({ id: f._id, category: label })} placeholder="Kategori" className="min-w-[90px]" />

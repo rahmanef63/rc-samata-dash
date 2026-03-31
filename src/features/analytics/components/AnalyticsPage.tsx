@@ -7,7 +7,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { KpiCard } from "@/components/ui/kpi-card";
-import { formatRpFull } from "@/shared/lib";
+import { formatDateRange, formatRpFull } from "@/shared/lib";
 import { AreaChartCard } from "@/shared/components/AreaChartCard";
 import {
   DollarSign, TrendingDown, Percent, AlertTriangle,
@@ -18,7 +18,7 @@ import { ReportDataBrowser } from "./ReportDataBrowser";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 
-const TABS = ["Ikhtisar", "KPI", "Data Browser", "Profitabilitas", "Efisiensi Beli", "Pemborosan", "Arus Kas"] as const;
+const TABS = ["Ikhtisar", "KPI", "Penjelajah Data", "Profitabilitas", "Efisiensi Beli", "Pemborosan", "Arus Kas"] as const;
 type Tab = typeof TABS[number];
 
 // Helper: filter out rows where itemName looks like a raw number (BUG-02)
@@ -90,7 +90,7 @@ export default function AnalyticsPage() {
             <option value="all">Semua Laporan</option>
             {reports?.map((r) => (
               <option key={r._id} value={r._id}>
-                {r.fileName} ({r.periodStart} → {r.periodEnd})
+                {r.fileName} ({formatDateRange(r.periodStart, r.periodEnd)})
               </option>
             ))}
           </select>
@@ -123,7 +123,7 @@ export default function AnalyticsPage() {
         <>
           {activeTab === "Ikhtisar" && <OverviewTab args={queryArgs} />}
           {activeTab === "KPI" && <KPITab args={queryArgs} />}
-          {activeTab === "Data Browser" && (isAll ? <div className="p-8 text-center text-muted-foreground bg-card rounded-2xl border">Data Browser tidak tersedia untuk mode &quot;Semua Laporan&quot;. Pilih satu laporan spesifik.</div> : <ReportDataBrowser reportId={reportId as any} />)}
+          {activeTab === "Penjelajah Data" && (isAll ? <div className="p-8 text-center text-muted-foreground bg-card rounded-2xl border">Penjelajah Data tidak tersedia untuk mode &quot;Semua Laporan&quot;. Pilih satu laporan spesifik.</div> : <ReportDataBrowser reportId={reportId as any} />)}
           {activeTab === "Profitabilitas" && <ProfitabilityTab args={queryArgs} />}
           {activeTab === "Efisiensi Beli" && <PurchaseTab args={queryArgs} />}
           {activeTab === "Pemborosan" && <WasteTab args={queryArgs} />}
@@ -404,11 +404,11 @@ function WasteTab({ args }: { args: any }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="bg-card rounded-xl shadow-card p-4 text-center">
           <p className="text-2xl font-bold text-destructive">{data.totalWasteQty}</p>
-          <p className="text-[10px] text-muted-foreground">Total Unit Waste</p>
+          <p className="text-[10px] text-muted-foreground">Total Unit Pemborosan</p>
         </div>
         <div className="bg-card rounded-xl shadow-card p-4 text-center">
           <p className="text-2xl font-bold text-destructive">{formatRpFull(data.totalWasteCost)}</p>
-          <p className="text-[10px] text-muted-foreground">Est. Waste Cost</p>
+          <p className="text-[10px] text-muted-foreground">Estimasi Biaya Pemborosan</p>
         </div>
         <div className="bg-card rounded-xl shadow-card p-4 text-center">
           <p className="text-2xl font-bold text-primary">{data.topWastedItems.length}</p>
@@ -419,9 +419,9 @@ function WasteTab({ args }: { args: any }) {
       {chartData.length > 0 && (
         <AreaChartCard
           data={chartData}
-          title="Tren Waste Harian"
-          subtitle="Estimasi biaya waste per hari"
-          tooltipLabel="Waste Cost"
+          title="Tren Pemborosan Harian"
+          subtitle="Estimasi biaya pemborosan per hari"
+          tooltipLabel="Biaya Pemborosan"
           gradientId="wasteGrad"
           height={180}
         />
@@ -429,7 +429,7 @@ function WasteTab({ args }: { args: any }) {
 
       {/* Top Wasted Items */}
       <div className="bg-card rounded-xl shadow-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Item Pemborosan Terbesar (by cost)</h3>
+        <h3 className="text-sm font-semibold mb-3">Item Pemborosan Terbesar (berdasarkan biaya)</h3>
         <div className="space-y-2">
           {data.topWastedItems.slice(0, 10).map((item, i) => {
             const maxCost = data.topWastedItems[0]?.estimatedCost ?? 1;
@@ -543,7 +543,7 @@ function KPITab({ args }: { args: any }) {
             onClick={handleSeedTargets}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            <Settings2 className="h-3 w-3" /> Atur Target Default
+            <Settings2 className="h-3 w-3" /> Atur Target Awal
           </button>
         )}
       </div>
@@ -559,7 +559,7 @@ function KPITab({ args }: { args: any }) {
             <p className={`text-4xl font-bold ${
               good >= 7 ? "text-green-600" : good >= 5 ? "text-yellow-600" : "text-red-600"
             }`}>{good}/{kpis.length}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">KPI On Target</p>
+            <p className="text-[10px] text-muted-foreground mt-1">KPI Sesuai Target</p>
           </div>
           <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden flex">
             {good > 0 && <div className="h-full bg-green-500" style={{ width: `${(good / kpis.length) * 100}%` }} />}
@@ -608,7 +608,7 @@ function KPITab({ args }: { args: any }) {
               {/* Target bar */}
               <div className="mt-3">
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-                  <span>{kpi.direction === "lower_is_better" ? "Target ↓" : "Target ↑"}</span>
+                  <span>{kpi.direction === "lower_is_better" ? "Semakin rendah semakin baik" : "Semakin tinggi semakin baik"}</span>
                   <span>
                     {formatKPIValue(kpi.dangerThreshold, kpi.unit)} — {formatKPIValue(kpi.warningThreshold, kpi.unit)} — {formatKPIValue(kpi.target, kpi.unit)}
                   </span>
@@ -670,7 +670,7 @@ function CashFlowTab({ args }: { args: any }) {
           <p className={`text-xl font-bold ${data.netCashFlow >= 0 ? "text-green-600" : "text-destructive"}`}>
             {formatRpFull(data.netCashFlow)}
           </p>
-          <p className="text-[10px] text-muted-foreground">Net Cash Flow</p>
+          <p className="text-[10px] text-muted-foreground">Arus Kas Bersih</p>
         </div>
         <div className="bg-card rounded-xl shadow-card p-4 text-center">
           <p className="text-xl font-bold text-orange-600">{formatRpFull(data.totalCommissions)}</p>
@@ -691,7 +691,7 @@ function CashFlowTab({ args }: { args: any }) {
         <AreaChartCard
           data={chartData}
           title="Saldo Harian"
-          subtitle="Closing balance per hari"
+          subtitle="Saldo penutupan per hari"
           tooltipLabel="Saldo"
           gradientId="cashFlowGrad"
           height={220}
@@ -706,7 +706,7 @@ function CashFlowTab({ args }: { args: any }) {
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Tanggal</th>
                 <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Saldo Awal</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Sales</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Penjualan</th>
                 <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Pengeluaran</th>
                 <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Komisi</th>
                 <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Saldo Akhir</th>

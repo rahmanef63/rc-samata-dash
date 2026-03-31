@@ -24,6 +24,10 @@ function toSafeDate(dateLike: string) {
     : new Date(dateLike);
 }
 
+function isValidDateLike(dateLike?: string | null): dateLike is string {
+  return typeof dateLike === "string" && dateLike.trim().length > 0 && !Number.isNaN(toSafeDate(dateLike).getTime());
+}
+
 // ─── Currency formatting ────────────────────────────────
 export const formatRp = (val: number) => {
   const abs = Math.abs(val);
@@ -43,7 +47,17 @@ export const formatRp = (val: number) => {
   return `Rp ${val.toLocaleString("id-ID")}`;
 };
 
-export const formatRpFull = (val: number) => `Rp ${val.toLocaleString("id-ID")}`;
+export const formatRpFull = (val: number) => {
+  if (!Number.isFinite(val)) return "Rp 0";
+
+  const rounded = Math.round(val * 100) / 100;
+  const hasFraction = Math.abs(rounded % 1) > 0.000001;
+
+  return `Rp ${rounded.toLocaleString("id-ID", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: hasFraction ? 2 : 0,
+  })}`;
+};
 
 export const formatShortDate = (dateLike: string) =>
   shortDateFormatter.format(toSafeDate(dateLike));
@@ -51,8 +65,16 @@ export const formatShortDate = (dateLike: string) =>
 export const formatLongDate = (dateLike: string) =>
   longDateFormatter.format(toSafeDate(dateLike));
 
-export const formatDateRange = (start: string, end: string) =>
-  `${formatShortDate(start)} - ${formatLongDate(end)}`;
+export const formatDateRange = (start?: string, end?: string) => {
+  if (isValidDateLike(start) && isValidDateLike(end)) {
+    return `${formatShortDate(start)} - ${formatLongDate(end)}`;
+  }
+
+  if (isValidDateLike(start)) return formatLongDate(start);
+  if (isValidDateLike(end)) return formatLongDate(end);
+
+  return "Periode belum tersedia";
+};
 
 export const getJakartaDateString = (date = new Date()) => {
   const parts = jakartaDateFormatter.formatToParts(date);

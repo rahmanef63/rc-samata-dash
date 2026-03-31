@@ -357,6 +357,9 @@ export default function ChatPage() {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Tanya apapun tentang bisnis — omzet, expense, stok, dan insight lainnya.
                     </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Didukung AI - dapat membuat kesalahan. Verifikasi keputusan penting dengan data laporan Anda.
+                    </p>
                   </div>
                 )}
               </motion.div>
@@ -458,7 +461,13 @@ export default function ChatPage() {
           <div className="flex items-end gap-2 max-w-4xl mx-auto w-full relative">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon" className="h-[46px] w-[46px] rounded-2xl shrink-0 shadow-sm border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all hidden sm:flex">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  title="Lampiran dan unggahan"
+                  aria-label="Lampiran dan unggahan"
+                  className="h-[46px] w-[46px] rounded-2xl shrink-0 shadow-sm border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all hidden sm:flex"
+                >
                   <Plus className="h-5 w-5 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
@@ -477,7 +486,11 @@ export default function ChatPage() {
             <div className="flex-1 relative bg-secondary/80 border border-border/50 rounded-[20px] focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/30 focus-within:bg-card transition-all shadow-sm">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="absolute left-2.5 top-1/2 -translate-y-1/2 sm:hidden p-2 text-muted-foreground hover:text-foreground z-10">
+                  <button
+                    title="Lampiran dan unggahan"
+                    aria-label="Lampiran dan unggahan"
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 sm:hidden p-2 text-muted-foreground hover:text-foreground z-10"
+                  >
                     <Plus className="h-5 w-5" />
                   </button>
                 </DropdownMenuTrigger>
@@ -541,10 +554,15 @@ export default function ChatPage() {
             </div>
           )}
           {activeProvider && (
-            <p className="text-[10px] text-muted-foreground text-center mt-2.5 font-medium opacity-60">
-              ⚡ {activeProvider.displayName} {activeProvider.defaultModel ? `· ${activeProvider.defaultModel}` : ""}
-              {activeInstruction ? ` · ${activeInstruction.name}` : ""}
-            </p>
+            <div className="space-y-1.5 mt-2.5">
+              <p className="text-[10px] text-muted-foreground text-center font-medium opacity-60">
+                ⚡ {activeProvider.displayName} {activeProvider.defaultModel ? `· ${activeProvider.defaultModel}` : ""}
+                {activeInstruction ? ` · ${activeInstruction.name}` : ""}
+              </p>
+              <p className="text-[10px] text-muted-foreground text-center opacity-70">
+                AI dapat membuat kesalahan. Gunakan sebagai asisten analisis, bukan satu-satunya sumber keputusan.
+              </p>
+            </div>
           )}
         </div>
       </div>

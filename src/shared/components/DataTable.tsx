@@ -13,6 +13,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SortState } from "../hooks/useTableState";
 import { exportToCsv, exportToJson, importFromCsv, importFromJson } from "../lib/export";
+import { formatLongDate } from "@/shared/lib";
 
 type ColumnConfig<T extends object, K extends keyof T & string> = {
   key: K;
@@ -46,6 +47,20 @@ interface DataTableProps<T extends object> {
   onImport?: (items: Partial<T>[]) => void;
   entityName?: string;
   draggable?: boolean;
+}
+
+function formatCellValue(key: string, value: unknown) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const lowerKey = key.toLowerCase();
+    const looksLikeDate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+
+    if (looksLikeDate && lowerKey.includes("date")) {
+      return formatLongDate(trimmed);
+    }
+  }
+
+  return String(value ?? "");
 }
 
 export function DataTable<T extends object>({
@@ -162,10 +177,10 @@ export function DataTable<T extends object>({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">
-                      {titleCol.render ? titleCol.render(item[titleCol.key], item) : String(item[titleCol.key] ?? "")}
+                      {titleCol.render ? titleCol.render(item[titleCol.key], item) : formatCellValue(titleCol.key, item[titleCol.key])}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {subtitleCol.render ? subtitleCol.render(item[subtitleCol.key], item) : String(item[subtitleCol.key] ?? "")}
+                      {subtitleCol.render ? subtitleCol.render(item[subtitleCol.key], item) : formatCellValue(subtitleCol.key, item[subtitleCol.key])}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -178,7 +193,7 @@ export function DataTable<T extends object>({
                       <div key={col.key} className="flex items-center gap-1.5">
                         <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{col.label}</span>
                         <span className={`text-xs font-medium ${col.className || ''}`}>
-                          {col.render ? col.render(item[col.key], item) : String(item[col.key] ?? "")}
+                          {col.render ? col.render(item[col.key], item) : formatCellValue(col.key, item[col.key])}
                         </span>
                       </div>
                     ))}
@@ -235,7 +250,7 @@ export function DataTable<T extends object>({
                     )}
                     {columns.map((col) => (
                       <TableCell key={col.key} className={col.className}>
-                        {col.render ? col.render(item[col.key], item) : String(item[col.key] ?? "")}
+                        {col.render ? col.render(item[col.key], item) : formatCellValue(col.key, item[col.key])}
                       </TableCell>
                     ))}
                     {hasActions && (

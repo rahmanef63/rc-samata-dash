@@ -2,6 +2,30 @@ import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
+function isIsoDateString(value: string | undefined): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function normalizeReportPeriod(periodStart: string, periodEnd: string) {
+  const safeStart = isIsoDateString(periodStart) ? periodStart : undefined;
+  const safeEnd = isIsoDateString(periodEnd) ? periodEnd : undefined;
+
+  const normalizedStart = safeStart ?? safeEnd ?? "";
+  const normalizedEnd = safeEnd ?? safeStart ?? "";
+
+  if (normalizedStart && normalizedEnd && normalizedStart > normalizedEnd) {
+    return {
+      periodStart: normalizedEnd,
+      periodEnd: normalizedStart,
+    };
+  }
+
+  return {
+    periodStart: normalizedStart,
+    periodEnd: normalizedEnd,
+  };
+}
+
 /** Internal: get report by ID (for actions, no auth required) */
 export const getReportById = internalQuery({
   args: { reportId: v.id("weeklyReports") },
@@ -14,11 +38,35 @@ export const listWeeklyReports = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    return await ctx.db
+    const reports = await ctx.db
       .query("weeklyReports")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
       .collect();
+    const expenses = await ctx.db
+      .query("expenses")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+
+    return reports.map((report) => {
+      const normalizedPeriod = normalizeReportPeriod(report.periodStart, report.periodEnd);
+      const storedExpenseCount = report.expenseCount ?? 0;
+      const fallbackExpenseCount =
+        normalizedPeriod.periodStart && normalizedPeriod.periodEnd
+          ? expenses.filter(
+              (expense) =>
+                expense.expenseDate >= normalizedPeriod.periodStart &&
+                expense.expenseDate <= normalizedPeriod.periodEnd,
+            ).length
+          : storedExpenseCount;
+
+      return {
+        ...report,
+        periodStart: normalizedPeriod.periodStart,
+        periodEnd: normalizedPeriod.periodEnd,
+        expenseCount: storedExpenseCount > 0 ? storedExpenseCount : fallbackExpenseCount,
+      };
+    });
   },
 });
 
@@ -241,4 +289,3 @@ export const getCashFlowByBranch = query({
     return all.sort((a, b) => b.businessDate.localeCompare(a.businessDate));
   },
 });
-

@@ -35,8 +35,10 @@ export function todayDateString(): string {
  * Normalize item name for cross-table matching.
  * Strips common prefixes, uppercases, and trims.
  */
-export function normalizeItemName(name: string): string {
-  return name
+export function normalizeItemName(name: string | null | undefined): string {
+  const safeName = typeof name === "string" ? name : "";
+
+  return safeName
     .toUpperCase()
     .trim()
     .replace(/^(DAGING\s+|BAHAN\s+|BUMBU\s+)/i, "")
@@ -46,7 +48,7 @@ export function normalizeItemName(name: string): string {
 /**
  * Check if two item names match (fuzzy bidirectional includes).
  */
-export function matchItemNames(a: string, b: string): boolean {
+export function matchItemNames(a: string | null | undefined, b: string | null | undefined): boolean {
   const na = normalizeItemName(a);
   const nb = normalizeItemName(b);
   if (na === nb) return true;

@@ -39,7 +39,7 @@ const channelFields: FieldConfig[] = [
 const channelColumns: Column<IncomeChannel>[] = [
   { key: "name", label: "Nama Channel" },
   { key: "type", label: "Tipe", render: (v) => <span className="text-muted-foreground">{channelTypeLabels[v] || v}</span> },
-  { key: "isSettlementDelayed", label: "Settlement Delayed", render: (v) => <StatusBadge status={v ? "pending" : "completed"}>{v ? "Ya" : "Tidak"}</StatusBadge> },
+  { key: "isSettlementDelayed", label: "Settlement Tertunda", render: (v) => <StatusBadge status={v ? "pending" : "completed"}>{v ? "Ya" : "Tidak"}</StatusBadge> },
 ];
 
 // ── Category Tab ────────────────────────────────────────
@@ -53,11 +53,11 @@ const categoryColumns: Column<ExpenseCategory>[] = [
   { key: "type", label: "Tipe", render: (v) => <span className="text-muted-foreground">{expenseCategoryTypeLabels[v] || v}</span> },
 ];
 
-const tabs = ["Vendors", "Income Channels", "Kategori Expense"] as const;
+const tabs = ["Vendor", "Channel Pendapatan", "Kategori Pengeluaran"] as const;
 type Tab = typeof tabs[number];
 
 export function MasterDataPanel() {
-  const [activeTab, setActiveTab] = useState<Tab>("Vendors");
+  const [activeTab, setActiveTab] = useState<Tab>("Vendor");
 
   const vendorsData = (useVendors() || []).map(v => ({ ...v, id: v._id })) as unknown as Vendor[];
   const channelsData = (useIncomeChannels() || []).map(v => ({ ...v, id: v._id, isSettlementDelayed: Boolean(v.isSettlementDelayed) })) as unknown as IncomeChannel[];
@@ -68,7 +68,7 @@ export function MasterDataPanel() {
     updateMutation: useUpdateVendor(),
     deleteMutation: useDeleteVendor()
   };
-  const vendorCrud = useConvexCrudState<Vendor>(vendorMutations as any);
+  const vendorCrud = useConvexCrudState<Vendor>(vendorMutations);
   const vendorTable = useTableState(vendorsData, ["name", "type", "phone"]);
 
   const channelMutations = {
@@ -76,7 +76,7 @@ export function MasterDataPanel() {
     updateMutation: useUpdateIncomeChannel(),
     deleteMutation: useDeleteIncomeChannel()
   };
-  const channelCrud = useConvexCrudState<IncomeChannel>(channelMutations as any);
+  const channelCrud = useConvexCrudState<IncomeChannel>(channelMutations);
   const channelTable = useTableState(channelsData, ["name", "type"]);
 
   const catMutations = {
@@ -84,16 +84,16 @@ export function MasterDataPanel() {
     updateMutation: useUpdateExpenseCategory(),
     deleteMutation: useDeleteExpenseCategory()
   };
-  const catCrud = useConvexCrudState<ExpenseCategory>(catMutations as any);
+  const catCrud = useConvexCrudState<ExpenseCategory>(catMutations);
   const catTable = useTableState(categoriesData, ["name", "type"]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       <TabBar<Tab> tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {activeTab === "Vendors" && (
+      {activeTab === "Vendor" && (
         <>
-          <SectionHeader title="Daftar Vendor / Supplier" />
+          <SectionHeader title="Daftar Vendor / Pemasok" />
           <DataTable<Vendor>
             data={vendorTable.sortedItems}
             columns={vendorColumns}
@@ -107,7 +107,7 @@ export function MasterDataPanel() {
             onDelete={vendorCrud.openDelete}
             onImport={async (items) => {
               for (const i of items) {
-                if (i.name) await vendorMutations.createMutation(i as any);
+                if (i.name) await vendorCrud.onCreate(i);
               }
             }}
             entityName="Vendor"
@@ -121,9 +121,9 @@ export function MasterDataPanel() {
         </>
       )}
 
-      {activeTab === "Income Channels" && (
+      {activeTab === "Channel Pendapatan" && (
         <>
-          <SectionHeader title="Income Channels" />
+          <SectionHeader title="Daftar Channel Pendapatan" />
           <DataTable<IncomeChannel>
             data={channelTable.sortedItems}
             columns={channelColumns}
@@ -137,21 +137,21 @@ export function MasterDataPanel() {
             onDelete={channelCrud.openDelete}
             onImport={async (items) => {
               for (const i of items) {
-                if (i.name) await channelMutations.createMutation(i as any);
+                if (i.name) await channelCrud.onCreate(i);
               }
             }}
-            entityName="Channel"
+            entityName="Channel Pendapatan"
           />
           <CrudDialog<IncomeChannel>
             open={channelCrud.isOpen} mode={channelCrud.mode} item={channelCrud.selectedItem}
-            fields={channelFields} entityName="Channel" onClose={channelCrud.close}
+            fields={channelFields} entityName="Channel Pendapatan" onClose={channelCrud.close}
             onSubmit={channelCrud.mode === "edit" ? channelCrud.onUpdate : channelCrud.onCreate}
             onDelete={channelCrud.onDelete}
           />
         </>
       )}
 
-      {activeTab === "Kategori Expense" && (
+      {activeTab === "Kategori Pengeluaran" && (
         <>
           <SectionHeader title="Kategori Pengeluaran" />
           <DataTable<ExpenseCategory>
@@ -167,7 +167,7 @@ export function MasterDataPanel() {
             onDelete={catCrud.openDelete}
             onImport={async (items) => {
               for (const i of items) {
-                if (i.name) await catMutations.createMutation(i as any);
+                if (i.name) await catCrud.onCreate(i);
               }
             }}
             entityName="Kategori"

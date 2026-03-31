@@ -15,7 +15,10 @@ export const useDeleteBranch = () => useMutation(api.features.masterData.mutatio
 
 // ─── Vendors ────────────────────────────────────────────────
 export const useVendors = (activeOnly?: boolean) =>
-  useQuery(api.features.masterData.queries.listVendors, { activeOnly });
+  useQuery(
+    api.features.masterData.queries.listVendors,
+    activeOnly === undefined ? {} : { activeOnly },
+  );
 export const useVendor = (id: string) => useQuery(api.features.masterData.queries.getVendor, id ? { id: id as Id<"vendors"> } : "skip");
 export const useCreateVendor = () => useMutation(api.features.masterData.mutations.createVendor);
 export const useUpdateVendor = () => useMutation(api.features.masterData.mutations.updateVendor);
