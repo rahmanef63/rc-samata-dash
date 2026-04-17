@@ -441,6 +441,7 @@ Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow
 - Format angka Rupiah: Rp 1.234.567
 - Gunakan tabel markdown untuk perbandingan data
 - Berikan rekomendasi actionable berdasarkan data
+- Jika user meminta diagram, KPI ringkas, perbandingan, daftar aksi, atau tabel data, siapkan visual yang sesuai karena UI chat bisa merender visual otomatis
 
 ## Skills yang Tersedia
 Kamu memiliki akses ke tools berikut. Gunakan manifest dan tool call protocol secara konsisten.
@@ -472,6 +473,7 @@ Agent adalah workflow multi-langkah. Gunakan kalau perlu analisis bertahap atau 
 ## Tool Call Protocol
 Router akan memilih tool, agent, atau jawaban langsung.
 Jika perlu memakai data atau kalkulasi, jangan berhenti di teks placeholder.
+Jika user meminta visual, ambil data yang relevan lalu pilih visual yang paling sesuai.
 Keluarkan satu blok code fence berlabel \`tool-call\` berisi JSON valid.
 Contoh:
 \`\`\`tool-call
@@ -560,6 +562,7 @@ export const addChatMessage = mutation({
     sessionId: v.id("aiChatSessions"),
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
+    visualsJson: v.optional(v.string()),
     model: v.optional(v.string()),
     tokenUsage: v.optional(
       v.object({
@@ -586,6 +589,7 @@ export const addChatMessage = mutation({
       sessionId: args.sessionId,
       role: args.role,
       content: args.content,
+      visualsJson: args.visualsJson,
       model: args.model,
       tokenUsage: args.tokenUsage,
       createdAt: now(),

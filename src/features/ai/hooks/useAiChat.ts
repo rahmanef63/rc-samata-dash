@@ -4,7 +4,18 @@ import { useState, useCallback } from "react";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { AiVisualBlock } from "@/features/ai-visual";
 import type { AiChatMessage } from "../types";
+
+function parseVisuals(visualsJson?: string): AiVisualBlock[] | undefined {
+  if (!visualsJson) return undefined;
+  try {
+    const parsed = JSON.parse(visualsJson) as AiVisualBlock[];
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +28,16 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
 
   const addMessage = useMutation(api.features.ai.mutations.addChatMessage);
   const chatCompletion = useAction(api.features.ai.actions.chatCompletion);
+
+  const parsedMessages: AiChatMessage[] = (messages || []).map((message) => ({
+    role: message.role,
+    content: message.content,
+    visualsJson: message.visualsJson,
+    visuals: parseVisuals(message.visualsJson),
+    model: message.model,
+    tokenUsage: message.tokenUsage,
+    createdAt: message.createdAt,
+  }));
 
   const sendMessage = useCallback(
     async (content: string, systemPrompt?: string, branchId?: Id<"branches">) => {
@@ -34,8 +55,8 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
         if (systemPrompt) {
           history.push({ role: "system", content: systemPrompt });
         }
-        if (messages) {
-          for (const m of messages) {
+        if (parsedMessages) {
+          for (const m of parsedMessages) {
             history.push({ role: m.role, content: m.content });
           }
         }
@@ -53,6 +74,7 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
           sessionId,
           role: "assistant",
           content: result.content,
+          visualsJson: result.visuals ? JSON.stringify(result.visuals) : undefined,
           model: result.model,
           tokenUsage: result.tokenUsage,
         });
@@ -63,11 +85,11 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
         setIsLoading(false);
       }
     },
-    [sessionId, messages, addMessage, chatCompletion]
+    [sessionId, parsedMessages, addMessage, chatCompletion]
   );
 
   return {
-    messages: messages || [],
+    messages: parsedMessages,
     isLoading,
     error,
     clearError: () => setError(null),

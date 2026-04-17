@@ -149,6 +149,14 @@ pnpm build
 pnpm lint
 ```
 
+## AI Visual Chat Pattern
+
+Untuk feature AI chat yang butuh teks + visual terstruktur + tools/agents reusable, gunakan panduan ini:
+
+- [docs/AI_VISUAL_CHAT_PATTERN.md](./AI_VISUAL_CHAT_PATTERN.md)
+
+Dokumen itu menjelaskan pemisahan `custom instruction`, `data tools`, `visual tools`, `agents`, dan `visual contract` supaya pola yang sama bisa diterapkan di feature lain tanpa copy-paste logic.
+
 ## Convex API Types (Manual Update)
 
 Karena `npx convex dev` tidak bisa jalan di CI, update `convex/_generated/api.d.ts` manual saat menambah file Convex baru:

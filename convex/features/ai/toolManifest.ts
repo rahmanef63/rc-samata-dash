@@ -64,6 +64,63 @@ export type AiAgentManifestItem = {
 
 export const BUILTIN_AI_TOOL_MANIFEST: AiToolManifestItem[] = [
   {
+    toolId: "generateChart",
+    name: "Generate Chart",
+    description: "Membentuk payload chart visual untuk ditampilkan langsung di chat.",
+    category: "utility",
+    syntaxGuide: `Gunakan tool ini setelah data tren, expense breakdown, atau cashflow tersedia.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"generateChart","query":"tampilkan diagram tren omzet"}
+\`\`\`
+
+Tool ini dipakai untuk chart area, pie, atau waterfall.`,
+  },
+  {
+    toolId: "generateKPICards",
+    name: "Generate KPI Cards",
+    description: "Membentuk payload KPI cards untuk ringkasan performa yang cepat dibaca.",
+    category: "utility",
+    syntaxGuide: `Gunakan tool ini saat user meminta ringkasan KPI atau status performa.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"generateKPICards","query":"ringkas KPI bulan ini"}
+\`\`\``,
+  },
+  {
+    toolId: "generateComparisonTable",
+    name: "Generate Comparison Table",
+    description: "Membentuk tabel perbandingan terstruktur dari data KPI atau metrik lain.",
+    category: "utility",
+    syntaxGuide: `Gunakan tool ini saat user meminta perbandingan metrik.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"generateComparisonTable","query":"bandingkan actual vs target KPI"}
+\`\`\``,
+  },
+  {
+    toolId: "generateActionList",
+    name: "Generate Action List",
+    description: "Membentuk daftar aksi prioritas dari hasil analisis data.",
+    category: "utility",
+    syntaxGuide: `Gunakan tool ini saat user meminta rekomendasi, prioritas aksi, atau langkah tindak lanjut.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"generateActionList","query":"apa rekomendasi aksi minggu ini"}
+\`\`\``,
+  },
+  {
+    toolId: "generateTable",
+    name: "Generate Table",
+    description: "Membentuk tabel data umum untuk transaksi, waste, petty cash, atau rincian lain.",
+    category: "utility",
+    syntaxGuide: `Gunakan tool ini saat user meminta data rinci dalam format tabel.
+Output tool call:
+\`\`\`tool-call
+{"mode":"tool","toolId":"generateTable","query":"tampilkan transaksi terbaru dalam tabel"}
+\`\`\``,
+  },
+  {
     toolId: "laporan_query",
     name: "Query Laporan",
     description: "Fallback untuk pertanyaan data umum yang belum cocok ke tool spesifik.",
@@ -220,6 +277,11 @@ Jawabanmu harus langsung ke inti, tanpa klarifikasi proses.
 Jika butuh data, gunakan tool yang paling spesifik.
 Jika data sudah cukup, jawab langsung dalam Bahasa Indonesia yang ringkas, akurat, dan actionable.`,
     allowedToolIds: [
+      "generateChart",
+      "generateKPICards",
+      "generateComparisonTable",
+      "generateActionList",
+      "generateTable",
       "petty_cash_summary",
       "cashflow_summary",
       "expense_breakdown",
@@ -249,6 +311,11 @@ export function buildExecutionRouterPrompt(
     `{"mode":"agent","agentId":"...","query":"..."}`,
     `{"mode":"answer","answer":"..."}`,
     "ATURAN ROUTING (wajib diikuti):",
+    "- Jika user meminta diagram, chart, grafik, pie, atau waterfall, ambil data relevan lalu siapkan visual chart.",
+    "- Jika user meminta ringkasan KPI/status performa, ambil data KPI lalu siapkan KPI cards.",
+    "- Jika user meminta perbandingan, siapkan comparison table jika data memungkinkan.",
+    "- Jika user meminta rekomendasi/aksi, siapkan action list setelah data didapat.",
+    "- Jika user meminta rincian data/transaksi/listing, siapkan tabel.",
     "- Pertanyaan tentang bahan paling boros / waste / item terbuang → WAJIB pakai waste_analysis",
     "- Pertanyaan tentang petty cash → WAJIB pakai petty_cash_summary",
     "- Pertanyaan tentang cashflow / arus kas → WAJIB pakai cashflow_summary",

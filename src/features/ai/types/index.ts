@@ -1,5 +1,7 @@
 /** AI Provider types — reusable across projects */
 
+import type { AiVisualBlock } from "@/features/ai-visual";
+
 export type AiProviderType = "openrouter" | "openai" | "anthropic" | "openclaw" | "custom";
 
 export interface AiProviderDefinition {
@@ -25,6 +27,8 @@ export interface AiModelDefinition {
 export interface AiChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  visuals?: AiVisualBlock[];
+  visualsJson?: string;
   model?: string;
   tokenUsage?: { promptTokens: number; completionTokens: number };
   createdAt?: string;

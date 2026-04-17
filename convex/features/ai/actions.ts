@@ -198,12 +198,282 @@ type ToolExecutionResult = {
   raw?: unknown;
 };
 
+type VisualTone = "default" | "success" | "warning" | "destructive";
+
+type VisualBlock =
+  | {
+      type: "chart";
+      title: string;
+      subtitle?: string;
+      variant: "area" | "pie" | "waterfall";
+      data: Array<Record<string, string | number>>;
+    }
+  | {
+      type: "kpi_cards";
+      title: string;
+      subtitle?: string;
+      items: Array<{
+        label: string;
+        value: string;
+        badge?: string;
+        tone?: VisualTone;
+      }>;
+    }
+  | {
+      type: "comparison_table";
+      title: string;
+      subtitle?: string;
+      columns: string[];
+      rows: string[][];
+      summary?: string;
+    }
+  | {
+      type: "action_list";
+      title: string;
+      subtitle?: string;
+      items: Array<{
+        title: string;
+        description?: string;
+        priority?: "high" | "medium" | "low";
+        impact?: string;
+      }>;
+    }
+  | {
+      type: "table";
+      title: string;
+      subtitle?: string;
+      columns: string[];
+      rows: string[][];
+    };
+
 function formatNumber(value: number): string {
   return `Rp ${Math.round(value).toLocaleString("id-ID")}`;
 }
 
 function normalizeQueryText(text: string): string {
   return text.toLowerCase().trim();
+}
+
+function wantsActionList(query: string): boolean {
+  return /rekomendasi|aksi|langkah|prioritas|saran/i.test(query);
+}
+
+function wantsComparison(query: string): boolean {
+  return /banding|versus|vs|compare|perbandingan/i.test(query);
+}
+
+function wantsTable(query: string): boolean {
+  return /tabel|table|rincian|detail|daftar|list/i.test(query);
+}
+
+function inferToneFromStatus(status: string): VisualTone {
+  const normalized = status.toLowerCase();
+  if (/(good|baik|healthy|on track|aman|ok)/i.test(normalized)) return "success";
+  if (/(warning|perhatian|medium|moderate)/i.test(normalized)) return "warning";
+  if (/(critical|bahaya|poor|buruk|overdue|danger)/i.test(normalized)) return "destructive";
+  return "default";
+}
+
+function buildVisualsFromToolResult(toolResult: ToolExecutionResult, queryText: string): VisualBlock[] {
+  const normalized = normalizeQueryText(queryText);
+
+  switch (toolResult.toolId) {
+    case "trend_analysis": {
+      const raw = Array.isArray(toolResult.raw)
+        ? toolResult.raw as Array<{ label?: string; date?: string; value?: number }>
+        : [];
+      if (!raw.length) return [];
+      return [{
+        type: "chart",
+        title: "Tren Performa",
+        subtitle: wantsComparison(queryText) ? "Perbandingan antar periode" : "Ringkasan tren terbaru",
+        variant: "area",
+        data: raw.map((item) => ({
+          label: item.label || item.date || "-",
+          value: Number(item.value || 0),
+        })),
+      }];
+    }
+
+    case "cashflow_summary": {
+      const raw = Array.isArray(toolResult.raw)
+        ? toolResult.raw as Array<{ name?: string; value?: number }>
+        : [];
+      if (!raw.length) return [];
+      return [{
+        type: "chart",
+        title: "Waterfall Cashflow",
+        subtitle: "Arus masuk dan keluar kas",
+        variant: "waterfall",
+        data: raw.map((item) => ({
+          name: item.name || "-",
+          value: Number(item.value || 0),
+        })),
+      }];
+    }
+
+    case "expense_breakdown": {
+      const raw = Array.isArray(toolResult.raw)
+        ? toolResult.raw as Array<{ name?: string; value?: number }>
+        : [];
+      if (!raw.length) return [];
+      const palette = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
+      return [{
+        type: "chart",
+        title: "Breakdown Expense",
+        subtitle: "Proporsi biaya utama",
+        variant: "pie",
+        data: raw.map((item, index) => ({
+          name: item.name || "-",
+          value: Number(item.value || 0),
+          color: palette[index % palette.length],
+        })),
+      }];
+    }
+
+    case "kpi_check": {
+      const raw = toolResult.raw as {
+        kpis?: Array<{ kpiLabel: string; actual: number; target: number; unit: string; status: string }>;
+      } | undefined;
+      const kpis = raw?.kpis || [];
+      if (!kpis.length) return [];
+
+      const visuals: VisualBlock[] = [{
+        type: "kpi_cards",
+        title: "KPI Utama",
+        subtitle: "Actual vs target",
+        items: kpis.slice(0, 6).map((kpi) => ({
+          label: kpi.kpiLabel,
+          value: `${kpi.actual}${kpi.unit}`,
+          badge: `Target ${kpi.target}${kpi.unit}`,
+          tone: inferToneFromStatus(kpi.status),
+        })),
+      }];
+
+      if (wantsComparison(queryText) || /target/i.test(normalized)) {
+        visuals.push({
+          type: "comparison_table",
+          title: "Perbandingan KPI",
+          subtitle: "Actual vs target",
+          columns: ["KPI", "Actual", "Target", "Status"],
+          rows: kpis.map((kpi) => [
+            kpi.kpiLabel,
+            `${kpi.actual}${kpi.unit}`,
+            `${kpi.target}${kpi.unit}`,
+            kpi.status,
+          ]),
+          summary: "Perbandingan KPI aktual terhadap target operasional.",
+        });
+      }
+
+      if (wantsActionList(queryText)) {
+        visuals.push({
+          type: "action_list",
+          title: "Rekomendasi Aksi",
+          subtitle: "Prioritas dari KPI yang belum sehat",
+          items: kpis
+            .filter((kpi) => inferToneFromStatus(kpi.status) !== "success")
+            .slice(0, 4)
+            .map((kpi) => ({
+              title: `Perbaiki ${kpi.kpiLabel}`,
+              description: `Status saat ini ${kpi.status}. Kejar gap menuju target ${kpi.target}${kpi.unit}.`,
+              priority: inferToneFromStatus(kpi.status) === "destructive" ? "high" : "medium",
+              impact: "Meningkatkan disiplin KPI operasional.",
+            })),
+        });
+      }
+
+      return visuals;
+    }
+
+    case "petty_cash_summary": {
+      const raw = toolResult.raw as PettyCashMonthlySummary | undefined;
+      if (!raw || !raw.count) return [];
+      const visuals: VisualBlock[] = [{
+        type: "kpi_cards",
+        title: "Ringkasan Petty Cash",
+        subtitle: raw.yearMonth,
+        items: [
+          { label: "Total Request", value: formatNumber(raw.totalRequested) },
+          { label: "Total Approved", value: formatNumber(raw.totalApproved) },
+          { label: "Total Actual", value: formatNumber(raw.totalActual) },
+          { label: "Jumlah Pengajuan", value: String(raw.count) },
+        ],
+      }];
+
+      if (wantsTable(queryText)) {
+        visuals.push({
+          type: "table",
+          title: "Rincian Status Petty Cash",
+          subtitle: raw.yearMonth,
+          columns: ["Status", "Nominal"],
+          rows: Object.entries(raw.byStatus).map(([status, total]) => [status, formatNumber(Number(total))]),
+        });
+      }
+      return visuals;
+    }
+
+    case "recent_transactions": {
+      const raw = Array.isArray(toolResult.raw)
+        ? toolResult.raw as Array<{ time?: string; name?: string; amount?: string; status?: string; type?: string }>
+        : [];
+      if (!raw.length) return [];
+      return [{
+        type: "table",
+        title: "Transaksi Terbaru",
+        subtitle: "Aktivitas operasional terakhir",
+        columns: ["Waktu", "Nama", "Tipe", "Nominal", "Status"],
+        rows: raw.map((item) => [
+          item.time || "-",
+          item.name || "-",
+          item.type || "-",
+          item.amount || "-",
+          item.status || "-",
+        ]),
+      }];
+    }
+
+    case "waste_analysis": {
+      const raw = toolResult.raw as {
+        topWastedItems?: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        topWastedByQty?: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
+        totalWasteCost?: number;
+        totalWasteQty?: number;
+      } | undefined;
+      const rows = raw?.topWastedItems || raw?.topWastedByQty || [];
+      if (!rows.length) return [];
+      const visuals: VisualBlock[] = [{
+        type: "table",
+        title: "Analisis Waste",
+        subtitle: `Total waste ${raw?.totalWasteQty || 0} unit`,
+        columns: ["Item", "Qty Waste", "Estimasi Biaya"],
+        rows: rows.map((item) => [
+          item.itemName,
+          String(item.totalQty),
+          formatNumber(item.estimatedCost),
+        ]),
+      }];
+
+      if (wantsActionList(queryText)) {
+        visuals.push({
+          type: "action_list",
+          title: "Aksi Pengurangan Waste",
+          subtitle: "Langkah cepat berdasarkan item teratas",
+          items: rows.slice(0, 3).map((item, index) => ({
+            title: `Tindak ${item.itemName}`,
+            description: `Waste ${item.totalQty} unit dengan estimasi biaya ${formatNumber(item.estimatedCost)}.`,
+            priority: index === 0 ? "high" : "medium",
+            impact: "Menurunkan waste dan menjaga margin.",
+          })),
+        });
+      }
+
+      return visuals;
+    }
+
+    default:
+      return [];
+  }
 }
 
 function parseYearMonthFromQuery(query: string): string | null {
@@ -280,6 +550,38 @@ async function executeToolCall(
   const normalized = normalizeQueryText(queryText);
 
   switch (toolCall.toolId) {
+    case "generateChart": {
+      if (/cashflow|arus kas/i.test(queryText)) {
+        return executeToolCall(ctx, { ...toolCall, toolId: "cashflow_summary" }, branchId);
+      }
+      if (/expense|pengeluaran|biaya/i.test(queryText)) {
+        return executeToolCall(ctx, { ...toolCall, toolId: "expense_breakdown" }, branchId);
+      }
+      return executeToolCall(ctx, { ...toolCall, toolId: "trend_analysis" }, branchId);
+    }
+
+    case "generateKPICards":
+      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" }, branchId);
+
+    case "generateComparisonTable":
+      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" }, branchId);
+
+    case "generateActionList":
+      return executeToolCall(
+        ctx,
+        { ...toolCall, toolId: /waste|boros/i.test(queryText) ? "waste_analysis" : "kpi_check" },
+        branchId
+      );
+
+    case "generateTable":
+      if (/petty cash/i.test(queryText)) {
+        return executeToolCall(ctx, { ...toolCall, toolId: "petty_cash_summary" }, branchId);
+      }
+      if (/waste|boros/i.test(queryText)) {
+        return executeToolCall(ctx, { ...toolCall, toolId: "waste_analysis" }, branchId);
+      }
+      return executeToolCall(ctx, { ...toolCall, toolId: "recent_transactions" }, branchId);
+
     case "rag_database": {
       if (!queryText) return null;
       const searchResults = await ctx.runAction(
@@ -750,6 +1052,7 @@ export const chatCompletion = action({
   },
   handler: async (ctx, args): Promise<{
     content: string;
+    visuals?: VisualBlock[];
     model: string;
     tokenUsage?: { promptTokens: number; completionTokens: number };
     ragContext?: string[];
@@ -846,6 +1149,7 @@ export const chatCompletion = action({
     if (!routeDecision) {
       return {
         content: routerResponse.content,
+        visuals: undefined,
         model,
         tokenUsage: routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
@@ -855,6 +1159,7 @@ export const chatCompletion = action({
     if (routeDecision.mode === "answer") {
       return {
         content: routeDecision.answer,
+        visuals: undefined,
         model,
         tokenUsage: routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
@@ -873,6 +1178,7 @@ export const chatCompletion = action({
 
       return {
         content: agentResponse.content,
+        visuals: undefined,
         model,
         tokenUsage: agentResponse.tokenUsage ?? routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
@@ -899,11 +1205,17 @@ export const chatCompletion = action({
     if (!toolResult) {
       return {
         content: `Tool ${routeDecision.toolId} belum bisa dieksekusi.`,
+        visuals: undefined,
         model,
         tokenUsage: routerResponse.tokenUsage,
         ragContext: ragTexts.length > 0 ? ragTexts : undefined,
       };
     }
+
+    const visuals = buildVisualsFromToolResult(
+      toolResult,
+      routeDecision.query || routeDecision.action || chatMessages.at(-1)?.content || ""
+    );
 
     // Second LLM pass: synthesize tool result into natural language response
     const synthesisSystemContent = [
@@ -929,6 +1241,7 @@ export const chatCompletion = action({
 
     return {
       content: synthesisResponse.content,
+      visuals: visuals.length > 0 ? visuals : undefined,
       model,
       tokenUsage: synthesisResponse.tokenUsage ?? routerResponse.tokenUsage,
       ragContext: ragTexts.length > 0 ? ragTexts : undefined,

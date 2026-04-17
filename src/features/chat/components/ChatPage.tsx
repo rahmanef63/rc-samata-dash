@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAiChat } from "@/features/ai/hooks";
+import { ChatVisualRenderer, type AiVisualBlock } from "@/features/ai-visual";
+import type { AiChatMessage } from "@/features/ai/types";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import {
@@ -389,33 +391,39 @@ export default function ChatPage() {
           ) : (
             /* Message List */
             <div className="max-w-3xl mx-auto p-4 space-y-6 lg:px-8 pb-8">
-              {messages.map((msg: { _id?: string; role: string; content: string; model?: string }, i: number) => (
+              {messages.map((msg: AiChatMessage & { _id?: string }, i: number) => (
                 <motion.div
                   key={msg._id || i}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
+                  className="space-y-3"
                 >
-                  {msg.role === "assistant" && (
-                    <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                  )}
-                  <div
-                    className={`rounded-[20px] px-5 py-3.5 max-w-[85%] md:max-w-[75%] font-medium ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground shadow-md rounded-tr-sm"
-                        : "bg-card shadow-sm border border-border/50 rounded-tl-sm text-card-foreground leading-relaxed"
-                    }`}
-                  >
-                    <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
-                    {msg.model && msg.role === "assistant" && (
-                      <div className="flex items-center gap-1.5 mt-3 opacity-40 font-normal">
-                        <Bot className="h-3 w-3" />
-                        <p className="text-[10px] uppercase tracking-wider">{msg.model}</p>
+                  <div className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}>
+                    {msg.role === "assistant" && (
+                      <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                        <Bot className="h-4 w-4 text-primary" />
                       </div>
                     )}
+                    <div
+                      className={`rounded-[20px] px-5 py-3.5 max-w-[85%] md:max-w-[75%] font-medium ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground shadow-md rounded-tr-sm"
+                          : "bg-card shadow-sm border border-border/50 rounded-tl-sm text-card-foreground leading-relaxed"
+                      }`}
+                    >
+                      <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+                      {msg.model && msg.role === "assistant" && (
+                        <div className="flex items-center gap-1.5 mt-3 opacity-40 font-normal">
+                          <Bot className="h-3 w-3" />
+                          <p className="text-[10px] uppercase tracking-wider">{msg.model}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  {msg.role === "assistant" && Array.isArray(msg.visuals) && msg.visuals.length > 0 ? (
+                    <ChatVisualRenderer visuals={msg.visuals as AiVisualBlock[]} />
+                  ) : null}
                 </motion.div>
               ))}
 

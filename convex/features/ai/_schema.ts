@@ -122,6 +122,7 @@ export const aiTables = {
     sessionId: v.id("aiChatSessions"),
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
+    visualsJson: v.optional(v.string()),
     model: v.optional(v.string()),
     tokenUsage: v.optional(
       v.object({
