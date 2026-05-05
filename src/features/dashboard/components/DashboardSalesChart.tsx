@@ -7,8 +7,10 @@ import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
+import { useUserRole } from "@/features/auth/useUserRole";
 
 export function DashboardSalesChart() {
+  const isOwner = useUserRole() === "owner";
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
   const salesTrend = useQuery(
@@ -33,7 +35,9 @@ export function DashboardSalesChart() {
         <div className="bg-card rounded-xl shadow-card p-5">
           <h2 className="text-sm font-semibold mb-2">Sales Last 7 Days</h2>
           <p className="text-sm text-muted-foreground py-8 text-center">
-            Belum ada data penjualan. Upload laporan mingguan terlebih dahulu.
+            {isOwner
+              ? "Belum ada data penjualan."
+              : "Belum ada data penjualan. Upload laporan mingguan terlebih dahulu."}
           </p>
         </div>
       </motion.div>

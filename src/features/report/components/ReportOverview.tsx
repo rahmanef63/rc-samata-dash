@@ -10,9 +10,12 @@ import { AreaChartCard, PieChartCard, WaterfallChart, SectionHeader } from "@/sh
 import { formatRp } from "../lib";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
+import { useUserRole } from "@/features/auth/useUserRole";
 
 export function ReportOverview() {
   const router = useRouter();
+  const role = useUserRole();
+  const isOwner = role === "owner";
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
 
@@ -85,7 +88,23 @@ export function ReportOverview() {
           </>
         ) : (
           <p className="text-sm text-muted-foreground py-2">
-            Belum ada data. <button onClick={(e) => { e.stopPropagation(); router.push("/laporan/upload"); }} className="text-primary underline">Upload laporan</button> untuk melihat ringkasan.
+            {isOwner ? (
+              "Belum ada data laporan."
+            ) : (
+              <>
+                Belum ada data.{" "}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push("/laporan/upload");
+                  }}
+                  className="text-primary underline"
+                >
+                  Upload laporan
+                </button>{" "}
+                untuk melihat ringkasan.
+              </>
+            )}
           </p>
         )}
       </div>
@@ -120,14 +139,18 @@ export function ReportOverview() {
       )}
 
       {/* Uploaded Reports */}
-      <SectionHeader title="Laporan Terunggah" />
+      <SectionHeader title="Laporan Tersedia" />
       {reports.length === 0 ? (
         <div className="bg-card rounded-xl shadow-card p-8 text-center space-y-3">
-          <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">Belum ada laporan yang diunggah.</p>
-          <Button onClick={() => router.push("/laporan/upload")} size="sm">
-            <Upload className="h-4 w-4 mr-2" /> Upload Laporan
-          </Button>
+          <FileText className="h-8 w-8 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">
+            {isOwner ? "Belum ada laporan tersedia." : "Belum ada laporan yang diunggah."}
+          </p>
+          {!isOwner && (
+            <Button onClick={() => router.push("/laporan/upload")} size="sm">
+              <Upload className="h-4 w-4 mr-2" /> Upload Laporan
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -159,7 +182,7 @@ export function ReportOverview() {
           ))}
           {reports.length > 5 && (
             <button
-              onClick={() => router.push("/laporan/upload")}
+              onClick={() => router.push("/laporan")}
               className="w-full text-center text-xs text-primary font-medium py-2 hover:underline"
             >
               Lihat semua {reports.length} laporan →

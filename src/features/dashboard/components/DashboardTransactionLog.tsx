@@ -13,8 +13,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { useUserRole } from "@/features/auth/useUserRole";
 
 export function DashboardTransactionLog() {
+  const isOwner = useUserRole() === "owner";
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
   const transactions = useQuery(
@@ -36,7 +38,9 @@ export function DashboardTransactionLog() {
       <motion.div variants={itemVariants} className="hidden md:block space-y-4">
         <SectionHeader title="Log Transaksi Detail" />
         <div className="bg-card rounded-xl shadow-card p-8 text-center text-muted-foreground text-sm">
-          Belum ada transaksi. Upload laporan mingguan untuk melihat data.
+          {isOwner
+            ? "Belum ada transaksi."
+            : "Belum ada transaksi. Upload laporan mingguan untuk melihat data."}
         </div>
       </motion.div>
     );

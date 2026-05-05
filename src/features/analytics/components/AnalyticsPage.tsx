@@ -17,6 +17,7 @@ import { useMutation } from "convex/react";
 import { ReportDataBrowser } from "./ReportDataBrowser";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
+import { useUserRole } from "@/features/auth/useUserRole";
 
 const TABS = ["Ikhtisar", "KPI", "Penjelajah Data", "Profitabilitas", "Efisiensi Beli", "Pemborosan", "Arus Kas"] as const;
 type Tab = typeof TABS[number];
@@ -29,6 +30,7 @@ function isValidItemName(name: string): boolean {
 }
 
 export default function AnalyticsPage() {
+  const isOwner = useUserRole() === "owner";
   const [activeTab, setActiveTab] = useState<Tab>("Ikhtisar");
   const [manualSelectedReportId, setManualSelectedReportId] = useState<Id<"weeklyReports"> | "all" | null>(null);
   const [timeFilter, setTimeFilter] = useState<string>("all");
@@ -117,7 +119,11 @@ export default function AnalyticsPage() {
       {/* Content */}
       {queryArgs === "skip" ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p>Upload laporan terlebih dahulu di halaman Upload Laporan</p>
+          <p>
+            {isOwner
+              ? "Belum ada laporan tersedia."
+              : "Upload laporan terlebih dahulu di halaman Upload Laporan"}
+          </p>
         </div>
       ) : (
         <>

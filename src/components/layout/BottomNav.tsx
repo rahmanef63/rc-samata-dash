@@ -7,7 +7,7 @@ import {
   Bot,
   Settings,
   Menu,
-  PieChart,
+  Folder,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -33,8 +33,8 @@ const ADMIN_ITEMS: NavItem[] = [
 // Owner: chart/report-only. No data-entry shortcuts.
 const OWNER_ITEMS: NavItem[] = [
   { title: "Dashboard", url: "/", icon: Home },
-  { title: "Laporan", url: "/report", icon: BarChart3 },
-  { title: "Analisis", url: "/laporan/analisis", icon: PieChart },
+  { title: "Ringkasan", url: "/report", icon: BarChart3 },
+  { title: "Laporan", url: "/laporan", icon: Folder },
   { title: "Chat AI", url: "/chat", icon: Bot },
 ];
 
