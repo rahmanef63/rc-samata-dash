@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as _internal_count from "../_internal/count.js";
+import type * as _internal_seedUsers from "../_internal/seedUsers.js";
+import type * as _internal_sum from "../_internal/sum.js";
 import type * as auth from "../auth.js";
 import type * as features_ai__schema from "../features/ai/_schema.js";
 import type * as features_ai_actions from "../features/ai/actions.js";
@@ -16,9 +19,13 @@ import type * as features_ai_indexing from "../features/ai/indexing.js";
 import type * as features_ai_mutations from "../features/ai/mutations.js";
 import type * as features_ai_queries from "../features/ai/queries.js";
 import type * as features_ai_search from "../features/ai/search.js";
+import type * as features_ai_toolManifest from "../features/ai/toolManifest.js";
 import type * as features_audit__schema from "../features/audit/_schema.js";
 import type * as features_audit_mutations from "../features/audit/mutations.js";
 import type * as features_audit_queries from "../features/audit/queries.js";
+import type * as features_auth__schema from "../features/auth/_schema.js";
+import type * as features_auth_mutations from "../features/auth/mutations.js";
+import type * as features_auth_queries from "../features/auth/queries.js";
 import type * as features_closing__schema from "../features/closing/_schema.js";
 import type * as features_closing_mutations from "../features/closing/mutations.js";
 import type * as features_closing_queries from "../features/closing/queries.js";
@@ -60,6 +67,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "_internal/count": typeof _internal_count;
+  "_internal/seedUsers": typeof _internal_seedUsers;
+  "_internal/sum": typeof _internal_sum;
   auth: typeof auth;
   "features/ai/_schema": typeof features_ai__schema;
   "features/ai/actions": typeof features_ai_actions;
@@ -68,9 +78,13 @@ declare const fullApi: ApiFromModules<{
   "features/ai/mutations": typeof features_ai_mutations;
   "features/ai/queries": typeof features_ai_queries;
   "features/ai/search": typeof features_ai_search;
+  "features/ai/toolManifest": typeof features_ai_toolManifest;
   "features/audit/_schema": typeof features_audit__schema;
   "features/audit/mutations": typeof features_audit_mutations;
   "features/audit/queries": typeof features_audit_queries;
+  "features/auth/_schema": typeof features_auth__schema;
+  "features/auth/mutations": typeof features_auth_mutations;
+  "features/auth/queries": typeof features_auth_queries;
   "features/closing/_schema": typeof features_closing__schema;
   "features/closing/mutations": typeof features_closing_mutations;
   "features/closing/queries": typeof features_closing_queries;

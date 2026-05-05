@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:users": "npx tsx scripts/seed-users.ts"
   },
   "dependencies": {
     "@auth/core": "^0.37.2",
