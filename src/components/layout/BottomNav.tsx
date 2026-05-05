@@ -39,10 +39,11 @@ const OWNER_ITEMS: NavItem[] = [
 ];
 
 function pickItems(role: Role | null | undefined): NavItem[] {
-  // While loading (undefined) we keep the admin set so layout doesn't shift
-  // for staff/super_admin. Owner is the only role that gets the trimmed nav.
-  if (role === "owner") return OWNER_ITEMS;
-  return ADMIN_ITEMS;
+  // While role is still loading (undefined) we show the trimmed owner set
+  // — same posture as the sidebar — so an owner never sees admin shortcuts
+  // mid-load. Admins get the full set once their role resolves.
+  if (role === "super_admin" || role === "staff") return ADMIN_ITEMS;
+  return OWNER_ITEMS;
 }
 
 export function BottomNav() {

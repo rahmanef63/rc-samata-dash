@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   FileText,
   Calendar,
   TrendingUp,
   TrendingDown,
-  Wallet,
   Search,
   PieChart,
   Gauge,
@@ -52,23 +50,24 @@ export default function ReportHub() {
   const router = useRouter();
   const isOwner = useUserRole() === "owner";
 
+  // Single-cabang app — auto-pick the only branch, no selector.
   const branches = useQuery(api.features.masterData.queries.listBranches);
-  const [branchId, setBranchId] = useState<Id<"branches"> | null>(null);
-  const activeBranchId = branchId ?? branches?.[0]?._id ?? null;
+  const branch = branches?.[0] ?? null;
+  const branchId = branch?._id ?? null;
 
   const reports = useQuery(
     api.features.reports.queries.listWeeklyReports,
-    activeBranchId ? { branchId: activeBranchId } : "skip",
+    branchId ? { branchId } : "skip",
   );
   const monthlySales = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
-    activeBranchId ? { branchId: activeBranchId } : "skip",
+    branchId ? { branchId } : "skip",
   );
 
   const [search, setSearch] = useState("");
 
   const isLoading =
-    !branches || (activeBranchId && (!reports || !monthlySales));
+    !branches || (branchId && (!reports || !monthlySales));
 
   const filteredReports = useMemo(() => {
     if (!reports) return [];
@@ -102,28 +101,12 @@ export default function ReportHub() {
       className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto"
     >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Semua Laporan</h1>
-          <p className="text-sm text-muted-foreground">
-            Pilih cabang dan laporan untuk melihat detail analisis.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="px-3 py-2 rounded-xl border border-border bg-card text-sm min-w-[180px]"
-            value={activeBranchId ?? ""}
-            onChange={(e) => setBranchId(e.target.value as Id<"branches">)}
-            aria-label="Pilih cabang"
-          >
-            {!branches && <option>Memuat cabang…</option>}
-            {branches?.map((b) => (
-              <option key={b._id} value={b._id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Semua Laporan</h1>
+        <p className="text-sm text-muted-foreground">
+          {branch?.name ?? "Cabang"}
+          {branch?.location ? ` · ${branch.location}` : ""}
+        </p>
       </div>
 
       {/* KPI strip */}
@@ -157,10 +140,14 @@ export default function ReportHub() {
           icon={<Gauge className="h-4 w-4 text-primary" />}
         />
         <KpiTile
-          label="Cabang Aktif"
-          value={isLoading ? null : `${branches?.length ?? 0}`}
-          hint={branches?.find((b) => b._id === activeBranchId)?.name ?? "—"}
-          icon={<Wallet className="h-4 w-4 text-primary" />}
+          label="Total Penjualan (data)"
+          value={
+            isLoading
+              ? null
+              : `${reports?.reduce((s, r) => s + (r.salesCount ?? 0), 0) ?? 0}`
+          }
+          hint="Akumulasi dari semua laporan"
+          icon={<TrendingUp className="h-4 w-4 text-primary" />}
         />
       </div>
 

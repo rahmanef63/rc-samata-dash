@@ -91,24 +91,26 @@ const isVisibleToRole = (
  * - children with role tags are filtered the same way;
  * - groups that end up with zero visible items are dropped.
  *
- * Pass `null` for unauthenticated state — returns nothing.
- * Pass `undefined` (still loading) — returns the unfiltered groups so the
- * sidebar shape stays stable until the role resolves.
+ * Pass `null` for unauthenticated — returns nothing.
+ * Pass `undefined` (role query still loading) — treated as the
+ * least-privileged role ("owner") to avoid leaking admin items to a
+ * non-admin during the brief load window. Admins get the full set once
+ * their role resolves.
  */
 export function filterRouteGroups(
   role: Role | null | undefined,
 ): RouteGroup[] {
-  if (role === undefined) return ROUTE_GROUPS;
   if (role === null) return [];
+  const effectiveRole: Role = role ?? "owner";
 
   const out: RouteGroup[] = [];
   for (const group of ROUTE_GROUPS) {
-    if (!isVisibleToRole(group.roles, role)) continue;
+    if (!isVisibleToRole(group.roles, effectiveRole)) continue;
     const items: RouteConfig[] = [];
     for (const item of group.items) {
-      if (!isVisibleToRole(item.roles, role)) continue;
+      if (!isVisibleToRole(item.roles, effectiveRole)) continue;
       const children = item.children?.filter((c) =>
-        isVisibleToRole(c.roles, role),
+        isVisibleToRole(c.roles, effectiveRole),
       );
       items.push(children ? { ...item, children } : item);
     }
