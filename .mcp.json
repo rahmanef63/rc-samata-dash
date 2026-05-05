@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rc-samata": {
+      "command": "node",
+      "args": ["packages/mcp-server/dist/index.js"],
+      "env": {
+        "RC_SAMATA_MCP_ALLOW_WRITE": "0",
+        "RC_SAMATA_MCP_ACT_AS": "md7ey1zaw1b3q4bgm1v5ab56dh83cwgt"
+      }
+    }
+  }
+}

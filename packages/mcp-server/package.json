@@ -1,0 +1,28 @@
+{
+  "name": "@rc-samata/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for RC Samata Dash — exposes Convex backend (branches, sales, expenses, payables, inventory, reports, AI) to Claude.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "rc-samata-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "convex": "^1.34.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
