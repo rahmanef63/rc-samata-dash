@@ -1,12 +1,28 @@
 "use client";
 
-import { Home, DollarSign, BarChart3, Bot, Settings, Menu } from "lucide-react";
+import {
+  Home,
+  DollarSign,
+  BarChart3,
+  Bot,
+  Settings,
+  Menu,
+  PieChart,
+  type LucideIcon,
+} from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useUserRole, type Role } from "@/features/auth/useUserRole";
 
-const navItems = [
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+}
+
+const ADMIN_ITEMS: NavItem[] = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Keuangan", url: "/finance", icon: DollarSign },
   { title: "Laporan", url: "/report", icon: BarChart3 },
@@ -14,9 +30,26 @@ const navItems = [
   { title: "Operasional", url: "/operation", icon: Settings },
 ];
 
+// Owner: chart/report-only. No data-entry shortcuts.
+const OWNER_ITEMS: NavItem[] = [
+  { title: "Dashboard", url: "/", icon: Home },
+  { title: "Laporan", url: "/report", icon: BarChart3 },
+  { title: "Analisis", url: "/laporan/analisis", icon: PieChart },
+  { title: "Chat AI", url: "/chat", icon: Bot },
+];
+
+function pickItems(role: Role | null | undefined): NavItem[] {
+  // While loading (undefined) we keep the admin set so layout doesn't shift
+  // for staff/super_admin. Owner is the only role that gets the trimmed nav.
+  if (role === "owner") return OWNER_ITEMS;
+  return ADMIN_ITEMS;
+}
+
 export function BottomNav() {
   const pathname = usePathname();
   const { toggleSidebar } = useSidebar();
+  const role = useUserRole();
+  const navItems = pickItems(role);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 glass border-t border-border safe-area-bottom">

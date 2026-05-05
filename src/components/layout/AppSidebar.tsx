@@ -3,7 +3,8 @@
 import { ChevronRight, ChevronDown, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { usePathname, useRouter } from "next/navigation";
-import { ROUTE_GROUPS } from "@/config/routes";
+import { filterRouteGroups } from "@/config/routes";
+import { useUserRole } from "@/features/auth/useUserRole";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import {
@@ -19,6 +20,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { signOut } = useAuthActions();
   const router = useRouter();
+  const role = useUserRole();
+  const groups = filterRouteGroups(role);
   const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
 
   const toggleSubMenu = (key: string) => {
@@ -57,7 +60,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent className="pt-3">
-        {ROUTE_GROUPS.map((group) => (
+        {groups.map((group) => (
           <SidebarGroup key={group.label}>
             {!collapsed && (
               <SidebarGroupLabel className="label-uppercase px-4 mb-1">
