@@ -41,10 +41,10 @@ In superspace `docs/merge-playbook/sources/rc-samata-dash/`:
 In superspace `scripts/merge-etl/rc-samata-dash/`:
 - `count-rows.ts`, `sum-financial.ts`, `export-embeddings.ts` — runnable ETL baseline scripts (require `SOURCE_CONVEX_URL` + `SOURCE_CONVEX_ADMIN_KEY` env)
 
-Pending artifacts (require source Convex admin key, run by merge lead):
-- `row-counts-baseline.json`
-- `financial-baseline.json`
-- `embeddings-export.jsonl.gz`
+Live baselines captured 2026-05-06:
+- `row-counts-baseline.json` ✅ — 48 tables, 1 branch, 10 weekly reports, 5079 productSales
+- `financial-baseline.json` ✅ — 12 aggregates; 2026-01 sales = Rp 104.7M, 2026-02 = Rp 109.4M
+- `embeddings-export.meta.json` ✅ — table empty in prod (0 rows), no export needed
 
 ## Related docs
 
