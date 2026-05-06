@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { aiProviderValidator, aiToolCategoryValidator } from "./_schema";
 import { BUILTIN_AI_AGENT_MANIFEST, BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
 import { requireAuth } from "../../shared/auth";
+import { BRAND } from "../../config/branding";
 
 const now = () => new Date().toISOString();
 
@@ -432,7 +433,7 @@ export const seedDefaultInstruction = mutation({
       .withIndex("by_default", (q) => q.eq("isDefault", true))
       .first();
 
-    const defaultContent = `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
+    const defaultContent = `Kamu adalah AI Assistant untuk ${BRAND.name} (franchise ${BRAND.franchise}).
 Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow, HPP, dan laporan keuangan.
 
 ## Panduan Respons
@@ -484,7 +485,7 @@ Setelah tool result diberikan kembali oleh sistem, jawab final secara ringkas da
 
 ## Konteks Bisnis
 - Rocket Chicken: franchise ayam goreng
-- Cabang: RC Samata Gowa (Sulawesi Selatan)
+- Cabang: ${BRAND.name} (${BRAND.region})
 - Metrik utama: omzet harian, food cost %, gross margin, waste rate
 - Periode laporan: mingguan (Senin-Minggu)`;
 
@@ -492,7 +493,7 @@ Setelah tool result diberikan kembali oleh sistem, jawab final secara ringkas da
       const needsUpdate = existing.content !== defaultContent || !existing.isDefault;
       if (needsUpdate) {
         await ctx.db.patch(existing._id, {
-          name: "RC Samata Default",
+          name: `${BRAND.shortName} Default`,
           content: defaultContent,
           isDefault: true,
           isActive: true,
@@ -503,7 +504,7 @@ Setelah tool result diberikan kembali oleh sistem, jawab final secara ringkas da
     }
 
     const id = await ctx.db.insert("aiCustomInstructions", {
-      name: "RC Samata Default",
+      name: `${BRAND.shortName} Default`,
       content: defaultContent,
       isDefault: true,
       isActive: true,

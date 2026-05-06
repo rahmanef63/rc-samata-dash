@@ -1,3 +1,5 @@
+import { BRAND } from "../../config/branding";
+
 export type AiToolCategory = "data" | "memory" | "calculation" | "utility";
 
 export type AiToolManifestItem = {
@@ -272,7 +274,7 @@ export const BUILTIN_AI_AGENT_MANIFEST: AiAgentManifestItem[] = [
     agentId: "business_analyst",
     name: "Business Analyst",
     description: "Menganalisis data operasional, menjawab dengan ringkas, dan memberi rekomendasi berbasis data.",
-    systemPrompt: `Kamu adalah Business Analyst untuk RC Samata Gowa.
+    systemPrompt: `Kamu adalah ${BRAND.aiPersona} untuk ${BRAND.name}.
 Jawabanmu harus langsung ke inti, tanpa klarifikasi proses.
 Jika butuh data, gunakan tool yang paling spesifik.
 Jika data sudah cukup, jawab langsung dalam Bahasa Indonesia yang ringkas, akurat, dan actionable.`,

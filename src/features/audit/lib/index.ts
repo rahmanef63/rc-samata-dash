@@ -1,4 +1,4 @@
-// Audit checklist sections for RC Samata Gowa
+// Audit checklist sections (QSR template)
 type AuditItem = {
   id: number;
   question: string;

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { auditSections } from "../lib";
+import { BRAND } from "@/config/branding";
 import { toast } from "sonner";
 
 export function AuditChecklist() {
@@ -65,7 +66,7 @@ export function AuditChecklist() {
         {branch ? (
           <>
             <h3 className="text-base font-semibold">{branch.name}</h3>
-            <p className="text-xs text-muted-foreground">{branch.code} · RC Samata Gowa</p>
+            <p className="text-xs text-muted-foreground">{branch.code} · {BRAND.name}</p>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">Belum ada cabang. Tambahkan di Master Data.</p>

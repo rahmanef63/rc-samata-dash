@@ -1,18 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
+import { BRAND } from "@/config/branding";
 
 export const metadata: Metadata = {
   title: {
-    default: "RC Samata - Owner Control",
-    template: "%s | RC Samata",
+    default: `${BRAND.shortName} - Owner Control`,
+    template: `%s | ${BRAND.shortName}`,
   },
   description:
-    "Owner Audit & Cash Control App for Rocket Chicken Branch. Kontrol omzet, kas, hutang, dan operasional cabang.",
-  authors: [{ name: "RC Samata Gowa" }],
+    `Owner Audit & Cash Control App for ${BRAND.franchise} Branch. Kontrol omzet, kas, hutang, dan operasional cabang.`,
+  authors: [{ name: BRAND.name }],
   manifest: "/manifest.json",
   openGraph: {
-    title: "RC Samata - Owner Control",
+    title: `${BRAND.shortName} - Owner Control`,
     description: "Kontrol penuh cabang Anda — omzet, kas, hutang, dan operasional.",
     type: "website",
   },
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "RC Samata",
+    title: BRAND.shortName,
   },
   icons: {
     icon: "/favicon.ico",

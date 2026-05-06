@@ -13,6 +13,7 @@ import {
   SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
   SidebarHeader, useSidebar,
 } from "@/components/ui/sidebar";
+import { BRAND } from "@/config/branding";
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -187,7 +188,7 @@ export function AppSidebar() {
               <span className="text-sm text-navy-foreground font-medium">RC</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">RC Samata</p>
+              <p className="text-sm font-semibold truncate">{BRAND.shortName}</p>
               <p className="text-[11px] text-muted-foreground">Super Admin</p>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { BRAND } from "@/config/branding";
 
 export default function LoginPage() {
   const { signIn } = useAuthActions();
@@ -80,7 +81,7 @@ export default function LoginPage() {
               <span className="text-3xl">🐔</span>
             </motion.div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              RC Samata
+              {BRAND.shortName}
             </h1>
             <p className="text-sm text-white/50 mt-1">
               {isSignUp ? "Daftar Akun Baru" : "Owner Control & Audit System"}
@@ -231,7 +232,7 @@ export default function LoginPage() {
 
         {/* Subtle branding */}
         <p className="text-center text-[10px] text-white/20 mt-4">
-          © {new Date().getFullYear()} RC Samata · Powered by Convex
+          © {new Date().getFullYear()} {BRAND.shortName} · Powered by Convex
         </p>
       </motion.div>
     </div>

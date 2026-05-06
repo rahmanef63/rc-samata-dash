@@ -20,6 +20,7 @@ import { parseHPPProduk, type ProductHPPItem } from "@/features/report-upload/pa
 import { parseCostAnalysis, type CostAnalysisItem } from "@/features/report-upload/parsers/parseCostAnalysis";
 import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/parsers/parseLapCF";
 import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
+import { BRAND } from "@/config/branding";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
@@ -138,8 +139,8 @@ export default function LaporanUploadPage() {
   useEffect(() => {
     if (branches && branches.length === 0 && !seededRef.current) {
       seededRef.current = true;
-      createBranch({ code: "RC-SAMATA", name: "RC Samata Gowa", location: "Gowa, Sulawesi Selatan", isActive: true })
-        .then(() => toast.success("Cabang default RC Samata Gowa dibuat otomatis"))
+      createBranch({ code: BRAND.code, name: BRAND.name, location: BRAND.location, isActive: true })
+        .then(() => toast.success(`Cabang default ${BRAND.name} dibuat otomatis`))
         .catch(() => { seededRef.current = false; });
     }
   }, [branches, createBranch]);

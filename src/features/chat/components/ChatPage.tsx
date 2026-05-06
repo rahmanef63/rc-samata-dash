@@ -21,8 +21,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BRAND } from "@/config/branding";
 
-const FALLBACK_SYSTEM_PROMPT = `Kamu adalah AI Assistant untuk RC Samata Gowa (franchise Rocket Chicken).
+const FALLBACK_SYSTEM_PROMPT = `Kamu adalah AI Assistant untuk ${BRAND.name} (franchise ${BRAND.franchise}).
 Kamu membantu pemilik/owner memahami data bisnis: omzet, expense, stok, cashflow, HPP, dan laporan keuangan.
 Jawab dalam Bahasa Indonesia yang profesional dan ringkas. Gunakan angka dan data jika relevan.`;
 

@@ -14,6 +14,7 @@ import {
   ArrowRight,
   ChevronRight,
 } from "lucide-react";
+import { BRAND } from "@/config/branding";
 
 const features = [
   {
@@ -82,7 +83,7 @@ export default function LandingPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#dc2648] to-[#f97316] flex items-center justify-center shadow-lg shadow-[#dc2648]/30">
             <span className="text-xl">🐔</span>
           </div>
-          <span className="font-bold text-lg tracking-tight">RC Samata</span>
+          <span className="font-bold text-lg tracking-tight">{BRAND.shortName}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-1 text-sm text-white/70">
@@ -271,7 +272,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-white/30">
             <span>🐔</span>
-            <span>&copy; {new Date().getFullYear()} RC Samata Gowa</span>
+            <span>&copy; {new Date().getFullYear()} {BRAND.name}</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-white/30">
             <span>Powered by Next.js + Convex</span>
