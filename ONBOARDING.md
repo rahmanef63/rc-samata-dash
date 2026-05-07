@@ -1,36 +1,32 @@
 # Onboarding — `rc-samata-dash`
 
-For agents/humans picking up where the last session left off (2026-05-06).
+For agents/humans picking up where the last session left off (2026-05-07).
 
 ## TL;DR
 
-This repo is **FROZEN since 2026-04-17** (`v-pre-merge-freeze`) and **stabilization-passed** (`v-stabilization-pass`) for merge into `/home/rahman/projects/superspace`. **Do not add features here.** All remaining work is the cutover itself, which lives in superspace.
+This repo is **FROZEN** (`v-pre-merge-freeze`, `v-stabilization-pass`) and **DATA MIGRATED** (`cutover-data-landed-2026-05-07`). All 9,159 production rows now live in superspace workspace `sd80m9bw54ja4nj0jt237xmq8d86877n`. Only UI smoke + DNS swap remain. **Do not add features here.**
 
-If user asks to "continue the project" → they mean execute the cutover runbook in superspace, NOT add features in this repo.
+If user asks to "continue the project" → they mean Steps 7-8 of the cutover (UI smoke test + DNS swap), NOT add features in this repo.
 
 ## What's done
 
-- ✅ De-branded: `BRAND` config in `convex/config/branding.ts` + `src/config/branding.ts` (env-driven, defaults preserve "RC Samata Gowa"); 14 callsites refactored
-- ✅ ETL helpers deployed to source Convex: `convex/_internal/{count,sum,exportEmbeddings,listAll}.ts`
-- ✅ Live baselines captured: 48 tables counted, 12 financial aggregates; 9,159 weekly child rows ready to port
-- ✅ All HIGH source-side risks closed (#1, #2, #7); MED #5/#6/#8/#9 closed
-- ✅ Superspace `qsr/` feature module shipped: 15 tables + 15 internal mutations + 16 queries + KPI dashboard + getMigrationStats
-- ✅ Full ETL writer wired in `superspace/scripts/merge-etl/rc-samata-dash/etl-rc-samata.ts` (Phase 4 + 5 = all 14 weekly children)
-- ✅ Clerk import script: `superspace/scripts/merge-etl/rc-samata-dash/clerk-import.ts`
-- ✅ Cutover runbook: `superspace/docs/merge-playbook/sources/rc-samata-dash/CUTOVER.md`
+- ✅ De-branded: `BRAND` config + 14 callsite refactors
+- ✅ ETL helpers deployed to source: `convex/_internal/{count,sum,exportEmbeddings,listAll}.ts`
+- ✅ Live baselines captured + reconciled exactly post-migration
+- ✅ All HIGH risks closed (source #1/#2/#7, ETL #3/#4, build #11/#12/#13)
+- ✅ Superspace `qsr/` deployed: schema + mutations + queries + bootstrap + rollback + admin reconcile
+- ✅ Clerk import: 8/8 source users in Clerk (1 existed, 7 created)
+- ✅ Live ETL ran 2026-05-07: 9159 rows, 0 errors, financial sum exact (Rp 312M across 4 months)
+- ✅ Workspace bootstrapped via admin-key path (no UI needed)
 
 ## What's NOT done (needs human)
 
-The remaining 6 steps need creds + production access — see `superspace/docs/merge-playbook/sources/rc-samata-dash/CUTOVER.md`:
+The remaining 2 steps need browser + DNS admin — see `superspace/docs/merge-playbook/sources/rc-samata-dash/CUTOVER.md` Steps 7-8:
 
-1. `pnpm deploy:convex:selfhosted` — push qsr/ to api-ss prod
-2. Run `clerk-import.ts` — creates 8 Clerk users via Backend API
-3. Create RC Samata Gowa workspace in superspace UI
-4. Run `etl-rc-samata.ts --phase=4` then `--phase=5` (~10 min, 9159 rows)
-5. Reconcile counts via `getMigrationStats` query
-6. UI smoke test → DNS swap
+1. **Step 7 — UI smoke** (~10 min, browser): open superspace, log in as `rahmanef63@gmail.com`, switch to RC Samata Gowa workspace, verify dashboard / weekly reports list / drill-down / financial KPIs
+2. **Step 8 — DNS swap** (~5 min, DNS admin): redirect `rc-samata.app` → `app.superspace.com/workspaces/rc-samata-gowa` OR add Clerk magic-link handoff; mark source decommission timer
 
-Estimated: **45 min hands-on**. Idempotent, rollback-safe.
+Estimated: **15 min hands-on**. Idempotent, rollback-safe (`qsr/rollback.ts:deleteAllQsrByPrefix` admin-key helper available).
 
 ## Key artifacts
 
