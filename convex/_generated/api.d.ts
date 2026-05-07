@@ -9,9 +9,12 @@
  */
 
 import type * as _internal_count from "../_internal/count.js";
+import type * as _internal_exportEmbeddings from "../_internal/exportEmbeddings.js";
+import type * as _internal_listAll from "../_internal/listAll.js";
 import type * as _internal_seedUsers from "../_internal/seedUsers.js";
 import type * as _internal_sum from "../_internal/sum.js";
 import type * as auth from "../auth.js";
+import type * as config_branding from "../config/branding.js";
 import type * as features_ai__schema from "../features/ai/_schema.js";
 import type * as features_ai_actions from "../features/ai/actions.js";
 import type * as features_ai_embedding from "../features/ai/embedding.js";
@@ -68,9 +71,12 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "_internal/count": typeof _internal_count;
+  "_internal/exportEmbeddings": typeof _internal_exportEmbeddings;
+  "_internal/listAll": typeof _internal_listAll;
   "_internal/seedUsers": typeof _internal_seedUsers;
   "_internal/sum": typeof _internal_sum;
   auth: typeof auth;
+  "config/branding": typeof config_branding;
   "features/ai/_schema": typeof features_ai__schema;
   "features/ai/actions": typeof features_ai_actions;
   "features/ai/embedding": typeof features_ai_embedding;

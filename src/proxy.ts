@@ -8,8 +8,31 @@ import type { NextRequest } from "next/server";
  *
  * Auth check lives client-side in AuthGuard (Convex tokens are in browser memory).
  */
+// Cutover redirect — env-gated so the swap can be flipped per environment.
+// Set CUTOVER_REDIRECT_URL to a full URL (e.g. https://ss.rahmanef.com/workspaces/rc-samata-gowa)
+// to redirect every non-asset request there. CUTOVER_REDIRECT_PRESERVE_PATH=true
+// appends the original pathname + search string to the target.
+const CUTOVER_REDIRECT_URL = process.env.CUTOVER_REDIRECT_URL;
+const CUTOVER_REDIRECT_PRESERVE_PATH = process.env.CUTOVER_REDIRECT_PRESERVE_PATH === "true";
+
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
+
+  // ─── Cutover redirect (Step 8 — pre-DNS swap soft cutover) ───
+  // Skip API + Convex handshakes so background jobs keep working until DNS swap.
+  if (
+    CUTOVER_REDIRECT_URL &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next/")
+  ) {
+    const target = new URL(CUTOVER_REDIRECT_URL);
+    if (CUTOVER_REDIRECT_PRESERVE_PATH) {
+      target.pathname = (target.pathname.replace(/\/$/, "") + pathname) || "/";
+      if (search) target.search = search;
+    }
+    return NextResponse.redirect(target.toString(), 308);
+  }
+
   const response = NextResponse.next();
 
   // ─── Security Headers ─────────────────────────────────────

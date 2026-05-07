@@ -2,11 +2,14 @@
 
 This repo is FROZEN for merge into superspace.
 
-- **Tags:** `v-pre-merge-freeze`, `merge-freeze-2026-04-17`
-- **Commit SHA:** 344102e
+- **Tags:** `v-pre-merge-freeze`, `merge-freeze-2026-04-17`, `v-stabilization-pass`, `cutover-data-landed-2026-05-07`
+- **Commit SHA:** 344102e (freeze) → 536c5dc (latest stabilization)
 - **Freeze date:** 2026-04-17
 - **Freeze re-verified:** 2026-04-20 (baseline pass)
+- **Cutover data landed:** 2026-05-07 (9159 rows live in superspace, smoke 6/6 pass)
+- **Soft cutover ready:** 2026-05-07 (`src/proxy.ts` honors `CUTOVER_REDIRECT_URL` env var)
 - **Canonical target:** `/home/rahman/projects/superspace`
+- **Target workspace:** `sd80m9bw54ja4nj0jt237xmq8d86877n` (RC Samata Gowa)
 - **Merge lead:** @rahman
 
 ## Rules while frozen
@@ -23,8 +26,8 @@ See `../superspace/docs/merge-playbook/sources/rc-samata-dash/risk-register.md`.
 |---|---|---|
 | 1 | 8 uncommitted WIP files | ✅ **closed** — committed f5a789f, tagged v-pre-merge-freeze |
 | 2 | AI system prompt hardcodes "RC Samata Gowa" | ✅ **closed 2026-05-06** — extracted to `convex/config/branding.ts` + `src/config/branding.ts`; 14 callsites refactored to `BRAND.*` |
-| 3 | Flat `branchId` tenancy vs superspace `workspaceId` | 🟡 **mapped 2026-05-06** — full table-by-table mapping documented; rewrite happens in ETL |
-| 4 | `@convex-dev/auth` password auth vs Clerk | 🟡 **planned 2026-05-06** — full Clerk migration plan documented; execution in ETL Phase 2 |
+| 3 | Flat `branchId` tenancy vs superspace `workspaceId` | ✅ **closed 2026-05-07** — live ETL ran, 9159 rows landed in workspace `sd80m9bw54ja4nj0jt237xmq8d86877n` w/ 1:1 reconcile |
+| 4 | `@convex-dev/auth` password auth vs Clerk | ✅ **closed 2026-05-07** — 8/8 source users imported to Clerk (1 existed + 7 created) |
 
 ## Stabilization artifacts (2026-05-06)
 
