@@ -19,6 +19,7 @@ import { parseTransferTOTI, type TransferItem } from "@/features/report-upload/p
 import { parseHPPProduk, type ProductHPPItem } from "@/features/report-upload/parsers/parseHPPProduk";
 import { parseCostAnalysis, type CostAnalysisItem } from "@/features/report-upload/parsers/parseCostAnalysis";
 import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/parsers/parseLapCF";
+import { parseOwnerTransfers, type OwnerTransferItem } from "@/features/report-upload/parsers/parseOwnerTransfers";
 import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
 import { BRAND } from "@/config/branding";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
@@ -47,6 +48,7 @@ type ParsedData = {
   hppProduk: ProductHPPItem[];
   costAnalysis: CostAnalysisItem[];
   cashFlow: DailyCashFlowItem[];
+  ownerTransfers: OwnerTransferItem[];
   insentif: IncentiveItem[];
   periodStart: string;
   periodEnd: string;
@@ -159,6 +161,7 @@ export default function LaporanUploadPage() {
   const importHPP         = useMutation(api.features.reports.mutations.importProductHPPBatch);
   const importCostAn      = useMutation(api.features.reports.mutations.importCostAnalysisBatch);
   const importCashFlow    = useMutation(api.features.reports.mutations.importDailyCashFlowBatch);
+  const importOwnerTransfers = useMutation(api.features.reports.mutations.importOwnerTransfersBatch);
   const importIncentive   = useMutation(api.features.reports.mutations.importEmployeeIncentivesBatch);
   const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
   const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
@@ -188,6 +191,7 @@ export default function LaporanUploadPage() {
         hppProduk:       parseHPPProduk(wb),
         costAnalysis:    parseCostAnalysis(wb),
         cashFlow:        parseLapCF(wb),
+        ownerTransfers:  parseOwnerTransfers(wb, start),
         insentif:        parseInsentif(wb),
         periodStart:     start,
         periodEnd:       end,
@@ -259,12 +263,14 @@ export default function LaporanUploadPage() {
       (parsed.hppProduk.length > 0 ? 1 : 0) +
       (parsed.costAnalysis.length > 0 ? 1 : 0) +
       (parsed.cashFlow.length > 0 ? 1 : 0) +
+      (parsed.ownerTransfers.length > 0 ? 1 : 0) +
       (parsed.insentif.length > 0 ? 1 : 0) + 1;
     let current = 0;
     const counts = {
       expense: 0, sales: 0, vendor: 0, inventory: 0, leftover: 0,
       kasPeriode: 0, salesControl: 0, creditPurchase: 0,
-      fcSummary: 0, transfer: 0, hpp: 0, costAnalysis: 0, cashFlow: 0, incentive: 0,
+      fcSummary: 0, transfer: 0, hpp: 0, costAnalysis: 0, cashFlow: 0,
+      ownerTransfer: 0, incentive: 0,
     };
 
     try {
@@ -334,6 +340,11 @@ export default function LaporanUploadPage() {
       if (parsed.cashFlow.length > 0) {
         setProgress({ current: ++current, total, label: "Cash flow..." });
         counts.cashFlow = await importCashFlow({ reportId, branchId, items: parsed.cashFlow });
+      }
+
+      if (parsed.ownerTransfers.length > 0) {
+        setProgress({ current: ++current, total, label: "Transfer owner..." });
+        counts.ownerTransfer = await importOwnerTransfers({ reportId, branchId, items: parsed.ownerTransfers });
       }
 
       if (parsed.insentif.length > 0) {

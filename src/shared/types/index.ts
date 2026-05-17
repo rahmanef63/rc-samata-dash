@@ -104,6 +104,13 @@ export interface Payable {
   status: PayableStatus;
   description: string;
   agingDays: number;
+  paidDate?: string;
+  creditDays?: number;
+  invoiceNo?: string;
+  // ETL provenance — present for rows coming from weekly report imports.
+  reportId?: string;
+  sourceFile?: string;
+  reportPeriod?: string;
 }
 
 export interface PayablePayment {
@@ -154,6 +161,9 @@ export interface OwnerTransfer {
   amount: number;
   referenceNo: string;
   status: "pending" | "completed";
+  // ETL provenance — set when row came from a weekly report import.
+  reportId?: string;
+  description?: string;
 }
 
 // ─── Inventory / Stock ───────────────────────────────────

@@ -81,6 +81,8 @@ const creditPurchaseItemValidator = v.object({
   unitPrice: v.number(),
   totalAmount: v.number(),
   dueDate: v.optional(v.string()),
+  creditDays: v.optional(v.number()),
+  paidDate: v.optional(v.string()),
 });
 
 // ─── 1. Buat header report ───────────────────────────────────
@@ -275,6 +277,55 @@ export const importCreditPurchasesBatch = mutation({
     for (const item of items) {
       if (item.totalAmount <= 0) continue;
       await ctx.db.insert("creditPurchases", { ...item, reportId, branchId });
+      count++;
+    }
+    return count;
+  },
+});
+
+// ─── 9b. Import LAP. CF other-income/expense → ownerTransfers ─
+
+const ownerTransferItemValidator = v.object({
+  transferDate: v.string(),
+  direction: v.union(
+    v.literal("branch_to_owner"),
+    v.literal("owner_to_branch"),
+  ),
+  purpose: v.union(
+    v.literal("night_transfer"),
+    v.literal("petty_cash_topup"),
+    v.literal("payable_payment_fund"),
+    v.literal("adjustment"),
+  ),
+  amount: v.number(),
+  referenceNo: v.string(),
+  description: v.string(),
+});
+
+export const importOwnerTransfersBatch = mutation({
+  args: {
+    reportId: v.id("weeklyReports"),
+    branchId: v.id("branches"),
+    items: v.array(ownerTransferItemValidator),
+  },
+  handler: async (ctx, { reportId, branchId, items }) => {
+    await requireAuth(ctx);
+    // Idempotent re-import: wipe any prior owner transfers tied to this report.
+    const existing = await ctx.db
+      .query("ownerTransfers")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    let count = 0;
+    for (const item of items) {
+      if (item.amount <= 0) continue;
+      await ctx.db.insert("ownerTransfers", {
+        ...item,
+        reportId,
+        branchId,
+        status: "completed",
+      });
       count++;
     }
     return count;
@@ -647,6 +698,7 @@ export const deleteWeeklyReport = mutation({
       "leftoverItems", "dailyCashSummary", "salesControl", "creditPurchases",
       "foodCostSummary", "transferItems", "productHPP",
       "costAnalysis", "dailyCashFlow", "employeeIncentives",
+      "ownerTransfers",
     ] as const;
     for (const table of tables) {
       const rows = await ctx.db

@@ -33,6 +33,7 @@ export type ParsedData = {
   hppProduk: ProductHPPItem[];
   costAnalysis: CostAnalysisItem[];
   cashFlow: DailyCashFlowItem[];
+  ownerTransfers?: { transferDate: string; direction: string; purpose: string; amount: number; referenceNo: string; description: string }[];
   insentif: IncentiveItem[];
 };
 

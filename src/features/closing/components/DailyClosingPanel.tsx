@@ -69,6 +69,11 @@ const transferColumns: Column<OwnerTransfer>[] = [
     const color = item.direction === "branch_to_owner" ? "text-success" : "text-info";
     return <span className={color}>{formatRpFull(v)}</span>;
   }},
+  { key: "description", label: "Catatan", render: (v) => (
+    <span className="text-xs text-muted-foreground truncate max-w-[180px] inline-block" title={v as string}>
+      {(v as string) || "—"}
+    </span>
+  ) },
   { key: "referenceNo", label: "Ref", className: "font-mono-data text-xs text-muted-foreground" },
   { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
 ];

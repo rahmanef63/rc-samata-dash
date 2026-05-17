@@ -1,6 +1,7 @@
 import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import type { Doc } from "../../_generated/dataModel";
 
 function isIsoDateString(value: string | undefined): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -287,13 +288,25 @@ export const getPayablesByBranch = query({
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
       .take(52);
-    const all = [];
+    const all: Array<
+      Doc<"creditPurchases"> & {
+        sourceFile?: string;
+        reportPeriod?: string;
+      }
+    > = [];
     for (const r of reports) {
       const items = await ctx.db
         .query("creditPurchases")
         .withIndex("by_report", (q) => q.eq("reportId", r._id))
         .collect();
-      all.push(...items);
+      for (const item of items) {
+        all.push({
+          ...item,
+          sourceFile: r.fileName,
+          reportPeriod: `${r.periodStart} — ${r.periodEnd}`,
+        });
+        if (all.length >= ROW_CAP) break;
+      }
       if (all.length >= ROW_CAP) break;
     }
     return all.slice(0, ROW_CAP);

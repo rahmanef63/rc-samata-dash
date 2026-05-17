@@ -44,6 +44,7 @@ interface DataTableProps<T extends object> {
   onAdd?: () => void;
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
+  onRowClick?: (item: T) => void;
   onImport?: (items: Partial<T>[]) => void;
   entityName?: string;
   draggable?: boolean;
@@ -65,7 +66,7 @@ function formatCellValue(key: string, value: unknown) {
 
 export function DataTable<T extends object>({
   data, columns, search, onSearchChange, sort, onToggleSort,
-  onReorder, onAdd, onEdit, onDelete, onImport,
+  onReorder, onAdd, onEdit, onDelete, onRowClick, onImport,
   entityName = "Data", draggable = true,
 }: DataTableProps<T>) {
   const isMobile = useIsMobile();
@@ -236,12 +237,13 @@ export function DataTable<T extends object>({
                 data.map((item, idx) => (
                   <TableRow
                     key={getRowKey(item, idx)}
-                    className={`transition-colors hover:bg-accent/30 ${overIdx === idx ? "bg-accent" : ""}`}
+                    className={`transition-colors hover:bg-accent/30 ${overIdx === idx ? "bg-accent" : ""} ${onRowClick ? "cursor-pointer" : ""}`}
                     draggable={draggable && !!onReorder}
                     onDragStart={() => handleDragStart(idx)}
                     onDragOver={(e) => handleDragOver(e, idx)}
                     onDrop={() => handleDrop(idx)}
                     onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                    onClick={onRowClick ? () => onRowClick(item) : undefined}
                   >
                     {draggable && onReorder && (
                       <TableCell className="w-8 cursor-grab active:cursor-grabbing">
@@ -257,12 +259,12 @@ export function DataTable<T extends object>({
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {onEdit && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-accent" onClick={() => onEdit(item)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-accent" onClick={(e) => { e.stopPropagation(); onEdit(item); }}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           {onDelete && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); onDelete(item); }}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}

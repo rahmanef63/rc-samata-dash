@@ -26,6 +26,8 @@ export type CreditPurchaseItem = {
   unitPrice: number;
   totalAmount: number;
   dueDate?: string;
+  creditDays?: number;
+  paidDate?: string;
 };
 
 const DATA_START = 11; // row 12 (setelah 2 baris header)
@@ -65,6 +67,9 @@ export function parsePembelianKredit(wb: XLSX.WorkBook): CreditPurchaseItem[] {
 
     const invoiceNo = row[3] ? String(row[3]).trim() : undefined;
     const dueDate   = toDateString(row[9]) ?? undefined;
+    const paidDate  = toDateString(row[10]) ?? undefined;
+    const creditDaysRaw = toNumber(row[7]);
+    const creditDays = creditDaysRaw > 0 ? Math.round(creditDaysRaw) : undefined;
 
     result.push({
       purchaseDate: lastDate,
@@ -75,6 +80,8 @@ export function parsePembelianKredit(wb: XLSX.WorkBook): CreditPurchaseItem[] {
       unitPrice,
       totalAmount: totalAmount || qty * unitPrice,
       dueDate,
+      creditDays,
+      paidDate,
     });
   }
 

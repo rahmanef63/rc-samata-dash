@@ -159,6 +159,9 @@ export const reportsTables = {
     unitPrice: v.number(),
     totalAmount: v.number(),
     dueDate: v.optional(v.string()),
+    // Sheet "PEMBELIAN KREDIT" col 7 (LAMA KREDIT in days) + col 10 (TANGGAL DIBAYAR)
+    creditDays: v.optional(v.number()),
+    paidDate: v.optional(v.string()),
   })
     .index("by_report", ["reportId"])
     .index("by_branch_date", ["branchId", "purchaseDate"]),

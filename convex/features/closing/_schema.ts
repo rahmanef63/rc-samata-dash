@@ -38,5 +38,11 @@ export const closingTables = {
     referenceNo: v.string(),
     status: v.union(v.literal("pending"), v.literal("completed")),
     branchId: v.id("branches"),
-  }).index("by_branch", ["branchId"]),
+    // ETL provenance — when row imported from a weekly report's
+    // LAP. CF "Penerimaan lain-lain" section.
+    reportId: v.optional(v.id("weeklyReports")),
+    description: v.optional(v.string()),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_report", ["reportId"]),
 };
