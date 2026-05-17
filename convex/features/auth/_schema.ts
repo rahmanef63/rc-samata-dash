@@ -13,4 +13,19 @@ export const authExtensionTables = {
       v.literal("staff"),
     ),
   }).index("by_user", ["userId"]),
+
+  /**
+   * Per-user persistent preferences. Created lazily on first write.
+   * Optional fields so new toggles can ship without migrations.
+   */
+  userPreferences: defineTable({
+    userId: v.id("users"),
+    theme: v.optional(
+      v.union(v.literal("light"), v.literal("dark"), v.literal("system")),
+    ),
+    defaultBranchId: v.optional(v.id("branches")),
+    notifAnomaly: v.optional(v.boolean()),
+    notifEmail: v.optional(v.boolean()),
+    updatedAt: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
 };

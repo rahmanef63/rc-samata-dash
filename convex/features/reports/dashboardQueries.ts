@@ -455,3 +455,123 @@ export const getRecentTransactionsInternal = internalQuery({
       .slice(0, 6);
   },
 });
+
+// ─── Multi-branch comparison (added 2026-05-17) ──────────────
+//
+// Returns per-branch aggregate of last 4 weekly reports:
+// omzet (revenue), COGS, food cost %, profit margin %.
+// Used by DashboardBranchCompare for owner cross-branch view.
+
+export const getBranchComparison = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    const branches = await ctx.db.query("branches").take(50);
+    const out: Array<{
+      branchId: string;
+      branchName: string;
+      revenue: number;
+      cogs: number;
+      foodCostPct: number;
+      profit: number;
+      profitMarginPct: number;
+    }> = [];
+
+    for (const b of branches) {
+      const reports = await ctx.db
+        .query("weeklyReports")
+        .withIndex("by_branch", (q) => q.eq("branchId", b._id))
+        .order("desc")
+        .take(4);
+      if (reports.length === 0) {
+        out.push({
+          branchId: String(b._id),
+          branchName: b.name,
+          revenue: 0,
+          cogs: 0,
+          foodCostPct: 0,
+          profit: 0,
+          profitMarginPct: 0,
+        });
+        continue;
+      }
+      const reportIds = new Set(reports.map((r) => r._id));
+
+      // Sum revenue from productSales (all-channel only)
+      let revenue = 0;
+      for (const r of reports) {
+        const sales = await ctx.db
+          .query("productSales")
+          .withIndex("by_report", (q) => q.eq("reportId", r._id))
+          .collect();
+        for (const s of sales) {
+          if (!s.channel || s.channel === "all") revenue += s.amount;
+        }
+      }
+
+      // Sum COGS from foodCostSummary
+      const fcAll = await ctx.db
+        .query("foodCostSummary")
+        .withIndex("by_branch_period", (q) => q.eq("branchId", b._id))
+        .collect();
+      const cogs = fcAll
+        .filter((f) => reportIds.has(f.reportId))
+        .reduce((s, f) => s + f.usageValue, 0);
+
+      const profit = revenue - cogs;
+      out.push({
+        branchId: String(b._id),
+        branchName: b.name,
+        revenue,
+        cogs,
+        foodCostPct: revenue > 0 ? (cogs / revenue) * 100 : 0,
+        profit,
+        profitMarginPct: revenue > 0 ? (profit / revenue) * 100 : 0,
+      });
+    }
+
+    return out.sort((a, b) => b.revenue - a.revenue);
+  },
+});
+
+// ─── Cash Runway (added 2026-05-17) ──────────────────────────
+//
+// Estimates how many days of cash on hand a branch has based on the
+// latest closingBalance vs avg daily expense outflow over last 30 days.
+
+export const getCashRunway = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+
+    const cashFlows = await ctx.db
+      .query("dailyCashFlow")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .take(60); /* ~2 months for stable avg */
+
+    if (cashFlows.length === 0) {
+      return { currentCash: 0, avgDailyOutflow: 0, runwayDays: null, lastDate: null };
+    }
+
+    const sorted = [...cashFlows].sort((a, b) =>
+      b.businessDate.localeCompare(a.businessDate),
+    );
+    const last = sorted[0];
+    const last30 = sorted.slice(0, 30);
+    const totalOutflow = last30.reduce(
+      (s, cf) => s + cf.expenseOutflow + cf.otherOutflow,
+      0,
+    );
+    const avgDailyOutflow = last30.length > 0 ? totalOutflow / last30.length : 0;
+    const runwayDays =
+      avgDailyOutflow > 0 ? Math.floor(last.closingBalance / avgDailyOutflow) : null;
+
+    return {
+      currentCash: last.closingBalance,
+      avgDailyOutflow,
+      runwayDays,
+      lastDate: last.businessDate,
+    };
+  },
+});

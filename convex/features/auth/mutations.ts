@@ -40,6 +40,43 @@ export const setRole = internalMutation({
 });
 
 /**
+ * Public — upsert the caller's own preferences.
+ * Any field is optional; unspecified fields keep existing value.
+ */
+export const updatePreferences = mutation({
+  args: {
+    theme: v.optional(
+      v.union(v.literal("light"), v.literal("dark"), v.literal("system")),
+    ),
+    defaultBranchId: v.optional(v.id("branches")),
+    notifAnomaly: v.optional(v.boolean()),
+    notifEmail: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const existing = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    const now = new Date().toISOString();
+    if (existing) {
+      const patch: Record<string, unknown> = { updatedAt: now };
+      for (const [k, v] of Object.entries(args)) {
+        if (v !== undefined) patch[k] = v;
+      }
+      await ctx.db.patch(existing._id, patch);
+      return existing._id;
+    }
+    return await ctx.db.insert("userPreferences", {
+      userId,
+      ...args,
+      updatedAt: now,
+    });
+  },
+});
+
+/**
  * Public — promote/demote a user's role.
  * Super-admin only. Cannot demote yourself (foot-gun guard).
  */

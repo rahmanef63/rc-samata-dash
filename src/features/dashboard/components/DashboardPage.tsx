@@ -12,6 +12,8 @@ import {
   DashboardCashflowChart,
   Dashboard30DayChart,
   DashboardTopProducts,
+  DashboardBranchCompare,
+  DashboardCashRunway,
   containerVariants,
   itemVariants,
 } from "@/features/dashboard";
@@ -42,6 +44,14 @@ export default function DashboardPage() {
         {/* KPI Target vs Aktual — full width */}
         <div className="lg:col-span-12">
           <DashboardKpiTargets />
+        </div>
+
+        {/* Multi-branch compare + Cash Runway */}
+        <div className="lg:col-span-7">
+          <DashboardBranchCompare />
+        </div>
+        <div className="lg:col-span-5">
+          <DashboardCashRunway />
         </div>
 
         {/* Row 2: Sales chart + Petty Cash */}

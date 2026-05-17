@@ -44,6 +44,28 @@ export const findUserByEmailInternal = internalQuery({
 });
 
 /**
+ * Returns the current user's saved preferences. Null if not signed in.
+ * Returns an empty object when row doesn't exist (lazy creation).
+ */
+export const myPreferences = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const row = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    return {
+      theme: row?.theme ?? "system",
+      defaultBranchId: row?.defaultBranchId ?? null,
+      notifAnomaly: row?.notifAnomaly ?? false,
+      notifEmail: row?.notifEmail ?? false,
+    };
+  },
+});
+
+/**
  * List all users with their roles — super_admin only.
  * Bounded by .take(500) since user count stays tiny for QSR ops.
  */

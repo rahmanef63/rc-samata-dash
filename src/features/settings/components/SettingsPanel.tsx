@@ -4,15 +4,12 @@ import { motion } from "framer-motion";
 import { ChevronRight, Globe, Moon, Shield, LogOut, Settings as SettingsIcon, Bell } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { AiProviderConfig, AiToolsConfig, AiInstructionsConfig, AiAgentsConfig } from "@/features/ai";
 import { BRAND } from "@/config/branding";
-
-const permissions = [
-  { label: "Supervisor Access", description: "Akses penuh ke semua fitur dan data", enabled: true, iconName: "Shield" },
-  { label: "Real-time Alerts", description: "Notifikasi otomatis untuk anomali data", enabled: false, iconName: "Bell" },
-];
+import { api } from "../../../../convex/_generated/api";
+import { toast } from "sonner";
 
 const appSettings = [
   { label: "Bahasa", value: "Indonesia", iconName: "Globe" },
@@ -32,10 +29,48 @@ export function SettingsPanel() {
   const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
 
+  const prefs = useQuery(api.features.auth.queries.myPreferences);
+  const updatePrefs = useMutation(api.features.auth.mutations.updatePreferences);
+
   const handleSignOut = async () => {
     await signOut();
     router.push("/landing");
   };
+
+  const togglePref = async (key: "notifAnomaly" | "notifEmail", val: boolean) => {
+    try {
+      await updatePrefs({ [key]: val });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menyimpan preferensi");
+    }
+  };
+
+  const persistedPermissions = [
+    {
+      key: "supervisor" as const,
+      label: "Supervisor Access",
+      description: "Akses penuh ke semua fitur dan data — diatur oleh super admin",
+      enabled: true,
+      readonly: true,
+      iconName: "Shield",
+    },
+    {
+      key: "notifAnomaly" as const,
+      label: "Real-time Alerts",
+      description: "Notifikasi otomatis untuk anomali data harian",
+      enabled: prefs?.notifAnomaly ?? false,
+      readonly: false,
+      iconName: "Bell",
+    },
+    {
+      key: "notifEmail" as const,
+      label: "Email Digest",
+      description: "Kirim ringkasan operasional mingguan ke email",
+      enabled: prefs?.notifEmail ?? false,
+      readonly: false,
+      iconName: "Bell",
+    },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -72,10 +107,10 @@ export function SettingsPanel() {
       <div>
         <h2 className="text-base font-semibold mb-3">Izin & Akses</h2>
         <div className="space-y-3">
-          {permissions.map((perm) => {
+          {persistedPermissions.map((perm) => {
             const IconComp = iconMap[perm.iconName] || SettingsIcon;
             return (
-              <div key={perm.label} className="bg-card rounded-xl shadow-card p-4 flex items-center gap-4">
+              <div key={perm.key} className="bg-card rounded-xl shadow-card p-4 flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                   perm.enabled ? "bg-primary/10" : "bg-warning/10"
                 }`}>
@@ -85,7 +120,19 @@ export function SettingsPanel() {
                   <p className="text-sm font-medium">{perm.label}</p>
                   <p className="text-xs text-muted-foreground">{perm.description}</p>
                 </div>
-                <Switch defaultChecked={perm.enabled} />
+                <Switch
+                  checked={perm.enabled}
+                  disabled={perm.readonly}
+                  onCheckedChange={
+                    perm.readonly
+                      ? undefined
+                      : (val) =>
+                          togglePref(
+                            perm.key as "notifAnomaly" | "notifEmail",
+                            val,
+                          )
+                  }
+                />
               </div>
             );
           })}

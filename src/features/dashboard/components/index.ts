@@ -8,3 +8,5 @@ export { DashboardCashflowChart } from "./DashboardCashflowChart";
 export { Dashboard30DayChart } from "./Dashboard30DayChart";
 export { DashboardKpiTargets } from "./DashboardKpiTargets";
 export { DashboardTopProducts } from "./DashboardTopProducts";
+export { DashboardBranchCompare } from "./DashboardBranchCompare";
+export { DashboardCashRunway } from "./DashboardCashRunway";
