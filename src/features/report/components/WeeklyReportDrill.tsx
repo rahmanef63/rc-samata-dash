@@ -68,6 +68,9 @@ function DataTablePanel<T extends Record<string, unknown>>({
   data: T[] | undefined;
   columns: { key: keyof T & string; label: string; align?: "left" | "right"; format?: (v: unknown) => string }[];
 }) {
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   if (data === undefined) {
     return (
       <div className="space-y-2">
@@ -84,24 +87,57 @@ function DataTablePanel<T extends Record<string, unknown>>({
       </Card>
     );
   }
+
+  const sorted = sortKey
+    ? [...data].sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        const cmp =
+          typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { numeric: true });
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : data;
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey(null);
+    }
+  };
+
   return (
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              {columns.map((c) => (
-                <th
-                  key={c.key}
-                  className={`px-3 py-2 ${c.align === "right" ? "text-right" : "text-left"}`}
-                >
-                  {c.label}
-                </th>
-              ))}
+              {columns.map((c) => {
+                const isActive = sortKey === c.key;
+                return (
+                  <th
+                    key={c.key}
+                    onClick={() => handleSort(c.key)}
+                    className={`px-3 py-2 cursor-pointer select-none hover:bg-muted/60 transition-colors ${c.align === "right" ? "text-right" : "text-left"}`}
+                  >
+                    <span className={`inline-flex items-center gap-1 ${c.align === "right" ? "flex-row-reverse" : ""}`}>
+                      {c.label}
+                      <span className="text-[10px] opacity-60">
+                        {isActive ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                      </span>
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {data.map((row, i) => (
+            {sorted.map((row, i) => (
               <tr key={i} className="border-t hover:bg-muted/30">
                 {columns.map((c) => {
                   const raw = row[c.key];
