@@ -29,19 +29,25 @@ function isValidDateLike(dateLike?: string | null): dateLike is string {
 }
 
 // ─── Currency formatting ────────────────────────────────
+// Indonesian convention: rb = ribu (thousand), jt = juta (million),
+// mlr = miliar (billion), T = triliun (trillion). Earlier suffixes
+// (K / M / B) caused user confusion — "M" in Indonesia reads as
+// "miliar" so a 1 jt value labeled "1M" looked like 1 miliar.
 export const formatRp = (val: number) => {
+  if (!Number.isFinite(val)) return "Rp 0";
   const abs = Math.abs(val);
 
+  if (abs >= 1_000_000_000_000) {
+    return `Rp ${(val / 1_000_000_000_000).toFixed(abs >= 10_000_000_000_000 ? 0 : 1)} T`;
+  }
   if (abs >= 1_000_000_000) {
-    return `Rp ${(val / 1_000_000_000).toFixed(abs >= 10_000_000_000 ? 0 : 1)}B`;
+    return `Rp ${(val / 1_000_000_000).toFixed(abs >= 10_000_000_000 ? 0 : 1)} mlr`;
   }
-
   if (abs >= 1_000_000) {
-    return `Rp ${(val / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+    return `Rp ${(val / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)} jt`;
   }
-
   if (abs >= 1_000) {
-    return `Rp ${(val / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}K`;
+    return `Rp ${(val / 1_000).toFixed(abs >= 10_000 ? 0 : 1)} rb`;
   }
 
   return `Rp ${val.toLocaleString("id-ID")}`;

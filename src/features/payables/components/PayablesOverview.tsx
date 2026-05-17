@@ -6,7 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Payable } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
@@ -73,7 +73,10 @@ export function PayablesOverview() {
     branchId: p.branchId,
     _creationTime: p._creationTime,
   })) as unknown as Payable[];
-  const payablesData = [...manualPayables, ...reportData];
+  const payablesAll = [...manualPayables, ...reportData];
+  // DRY date filter — uses dueDate (when payable falls due) so the
+  // header DateRangePicker controls which payables are visible.
+  const payablesData = useFilteredByDate(payablesAll, "dueDate");
 
   const createPayable = useCreatePayable();
   const updatePayable = useUpdatePayable();

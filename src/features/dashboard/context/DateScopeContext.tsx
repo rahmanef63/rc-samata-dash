@@ -33,12 +33,16 @@ export const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   custom: "Custom",
 };
 
+export type DateGranularity = "day" | "week" | "month";
+
 type DateScopeValue = {
   preset: DatePreset;
   startDate: number; // unix ms inclusive
   endDate: number;   // unix ms exclusive (next-day boundary)
+  granularity: DateGranularity;
   setPreset: (p: Exclude<DatePreset, "custom">) => void;
   setCustomRange: (start: number, end: number) => void;
+  setGranularity: (g: DateGranularity) => void;
 };
 
 function computeRange(preset: Exclude<DatePreset, "custom">): { start: number; end: number } {
@@ -94,8 +98,10 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
   const urlToRaw = searchParams.get("to");
   const urlFrom = urlFromRaw ? Number(urlFromRaw) : 0;
   const urlTo = urlToRaw ? Number(urlToRaw) : 0;
+  const urlGran = (searchParams.get("g") as DateGranularity | null) ?? "day";
 
   const [preset, setPresetState] = useState<DatePreset>(urlPreset);
+  const [granularity, setGranularityState] = useState<DateGranularity>(urlGran);
   const [customRange, setCustomRangeState] = useState<{ start: number; end: number } | null>(
     urlPreset === "custom" && urlFrom && urlTo ? { start: urlFrom, end: urlTo } : null,
   );
@@ -113,6 +119,10 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
       setCustomRangeState((prev) => (prev === null ? prev : null));
     }
   }, [urlPreset, urlFrom, urlTo]);
+
+  useEffect(() => {
+    setGranularityState((prev) => (prev === urlGran ? prev : urlGran));
+  }, [urlGran]);
 
   // Stable refs so the memoised setters don't restart subscribers each render.
   const searchParamsRef = useRef(searchParams);
@@ -163,6 +173,22 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
     [writeUrl],
   );
 
+  const setGranularity = useCallback(
+    (g: DateGranularity) => {
+      setGranularityState(g);
+      const sp = searchParamsRef.current;
+      const params = new URLSearchParams(sp.toString());
+      if (g === "day") params.delete("g");
+      else params.set("g", g);
+      const qs = params.toString();
+      router.replace(
+        qs ? `${pathnameRef.current}?${qs}` : pathnameRef.current,
+        { scroll: false },
+      );
+    },
+    [router],
+  );
+
   const { startDate, endDate } = useMemo(() => {
     if (preset === "custom" && customRange) {
       return { startDate: customRange.start, endDate: customRange.end };
@@ -173,8 +199,16 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
   }, [preset, customRange]);
 
   const value = useMemo<DateScopeValue>(
-    () => ({ preset, startDate, endDate, setPreset, setCustomRange }),
-    [preset, startDate, endDate, setPreset, setCustomRange],
+    () => ({
+      preset,
+      startDate,
+      endDate,
+      granularity,
+      setPreset,
+      setCustomRange,
+      setGranularity,
+    }),
+    [preset, startDate, endDate, granularity, setPreset, setCustomRange, setGranularity],
   );
 
   return (

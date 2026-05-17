@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, ProgressBar } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Expense } from "@/shared/types";
 import { paymentSourceLabels } from "../lib";
@@ -51,7 +51,9 @@ export function ExpensesOverview() {
     branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as Expense[];
-  const expensesData = [...manualExpenses, ...reportData];
+  const expensesAll = [...manualExpenses, ...reportData];
+  // DRY date filter — header DateRangePicker controls visibility.
+  const expensesData = useFilteredByDate(expensesAll, "expenseDate");
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();

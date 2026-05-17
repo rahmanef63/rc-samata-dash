@@ -20,8 +20,16 @@ import {
   useDateScope,
   DATE_PRESET_LABELS,
   type DatePreset,
+  type DateGranularity,
 } from "@/features/dashboard/context/DateScopeContext";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type DateRange } from "react-day-picker";
+
+const GRANULARITY_OPTIONS: { value: DateGranularity; label: string }[] = [
+  { value: "day", label: "Hari" },
+  { value: "week", label: "Minggu" },
+  { value: "month", label: "Bulan" },
+];
 
 const PRESET_OPTIONS: Exclude<DatePreset, "custom">[] = [
   "today",
@@ -34,7 +42,15 @@ const PRESET_OPTIONS: Exclude<DatePreset, "custom">[] = [
 ];
 
 export function DateRangePicker({ className }: { className?: string }) {
-  const { preset, startDate, endDate, setPreset, setCustomRange } = useDateScope();
+  const {
+    preset,
+    startDate,
+    endDate,
+    granularity,
+    setPreset,
+    setCustomRange,
+    setGranularity,
+  } = useDateScope();
   const [open, setOpen] = useState(false);
 
   const handleSelect = (range: DateRange | undefined) => {
@@ -60,7 +76,7 @@ export function DateRangePicker({ className }: { className?: string }) {
   };
 
   return (
-    <div className={`flex items-center gap-1 ${className ?? ""}`}>
+    <div className={`flex flex-wrap items-center gap-1 ${className ?? ""}`}>
       <Select
         value={preset === "custom" ? undefined : preset}
         onValueChange={(v) => setPreset(v as Exclude<DatePreset, "custom">)}
@@ -92,6 +108,27 @@ export function DateRangePicker({ className }: { className?: string }) {
           />
         </PopoverContent>
       </Popover>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        value={granularity}
+        onValueChange={(v) => {
+          if (!v) return; /* ignore empty value when toggling off */
+          setGranularity(v as DateGranularity);
+        }}
+        className="h-8 ml-1"
+      >
+        {GRANULARITY_OPTIONS.map((g) => (
+          <ToggleGroupItem
+            key={g.value}
+            value={g.value}
+            className="h-7 px-2 text-[11px]"
+            title={`Tampilkan data per ${g.label.toLowerCase()}`}
+          >
+            {g.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }

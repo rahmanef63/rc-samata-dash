@@ -5,7 +5,7 @@ import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { PettyCashRequest } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
@@ -79,7 +79,8 @@ export function PettyCashOverview() {
     branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as PettyCashRequest[];
-  const requestsData = [...manualData, ...reportData];
+  const requestsAll = [...manualData, ...reportData];
+  const requestsData = useFilteredByDate(requestsAll, "requestDate");
 
   const createPettyCashRequest = useCreatePettyCashRequest();
   const updatePettyCashRequest = useUpdatePettyCashRequest();

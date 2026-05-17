@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
 import { salesChannels, subTabs, formatRpFull } from "../lib";
 import { toast } from "sonner";
@@ -68,7 +68,8 @@ export function DailySalesForm() {
     branchId: s.branchId,
     _creationTime: s._creationTime,
   })) as unknown as DailySale[];
-  const salesData = [...manualData, ...reportData];
+  const salesAll = [...manualData, ...reportData];
+  const salesData = useFilteredByDate(salesAll, "businessDate");
 
   const createSale = useCreateSale();
   const updateSale = useUpdateSale();

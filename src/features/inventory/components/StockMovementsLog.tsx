@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { Package, ArrowDownLeft, ArrowUpRight, Wrench, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,7 +57,8 @@ export function StockMovementsLog() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const filtered = (movements ?? []).filter((m) => {
+  const dateFiltered = useFilteredByDate(movements ?? [], "date");
+  const filtered = dateFiltered.filter((m) => {
     if (typeFilter !== "all" && m.type !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();

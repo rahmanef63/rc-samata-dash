@@ -200,11 +200,21 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
           <h1 className="text-lg font-semibold tracking-tight truncate">
             Laporan Periode {report.periodStart}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {report.periodStart} — {report.periodEnd} ·{" "}
+          <p className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span>{report.periodStart} — {report.periodEnd}</span>
+            <span>·</span>
             <Badge variant="outline" className="text-[10px]">
               {report.status}
             </Badge>
+            {report.fileName && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1 truncate max-w-[260px]" title={report.fileName}>
+                  <FileText className="h-3 w-3" />
+                  <span className="font-mono text-[10px] truncate">{report.fileName}</span>
+                </span>
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -259,6 +269,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={productSales}
           columns={[
+            { key: "businessDate", label: "Tanggal" },
             { key: "productName", label: "Produk" },
             { key: "channel", label: "Channel" },
             { key: "qty", label: "Qty", align: "right", format: num },
@@ -314,6 +325,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={vendorPurchases}
           columns={[
+            { key: "weekStart", label: "Minggu" },
             { key: "commodityName", label: "Komoditi" },
             { key: "section", label: "Section" },
             { key: "purchaseQty", label: "Beli Qty", align: "right", format: num },
@@ -341,6 +353,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={inventoryValuation}
           columns={[
+            { key: "valuationDate", label: "Tanggal" },
             { key: "itemName", label: "Item" },
             { key: "category", label: "Kategori" },
             { key: "qty", label: "Qty", align: "right", format: num },
@@ -354,6 +367,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={foodCostSummary}
           columns={[
+            { key: "periodStart", label: "Periode" },
             { key: "category", label: "Kategori" },
             { key: "openingValue", label: "Opening", align: "right", format: rp },
             { key: "purchaseValue", label: "Purchase", align: "right", format: rp },
@@ -367,6 +381,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={costAnalysis}
           columns={[
+            { key: "periodStart", label: "Periode" },
             { key: "itemName", label: "Item" },
             { key: "openingQty", label: "Open Qty", align: "right", format: num },
             { key: "purchaseQty", label: "Purchase Qty", align: "right", format: num },
@@ -381,6 +396,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={productHPP}
           columns={[
+            { key: "periodStart", label: "Periode" },
             { key: "productName", label: "Produk" },
             { key: "pricingClass", label: "Kelas" },
             { key: "totalHPP", label: "Total HPP", align: "right", format: rp },
@@ -431,6 +447,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={employeeIncentives}
           columns={[
+            { key: "periodStart", label: "Periode" },
             { key: "employeeName", label: "Karyawan" },
             { key: "incentiveType", label: "Jenis" },
             { key: "amount", label: "Amount", align: "right", format: rp },

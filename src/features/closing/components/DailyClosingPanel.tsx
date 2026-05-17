@@ -5,7 +5,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DailyClosing, OwnerTransfer } from "@/shared/types";
 import { purposeLabels } from "../lib";
@@ -101,10 +101,12 @@ export function DailyClosingPanel() {
     branchId: cf.branchId,
     _creationTime: cf._creationTime,
   })) as unknown as DailyClosing[];
-  const closingsData = manualClosings.length > 0 ? manualClosings : reportClosings;
+  const closingsAll = manualClosings.length > 0 ? manualClosings : reportClosings;
+  const closingsData = useFilteredByDate(closingsAll, "businessDate");
 
   const rawTransfers = useListTransfers(currentBranchId || "");
-  const transfersData = (rawTransfers || []).map(t => ({ ...t, id: t._id })) as unknown as OwnerTransfer[];
+  const transfersAll = (rawTransfers || []).map(t => ({ ...t, id: t._id })) as unknown as OwnerTransfer[];
+  const transfersData = useFilteredByDate(transfersAll, "transferDate");
 
   const closingMutations = {
     createMutation: useCreateClosing(),

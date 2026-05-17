@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { ClipboardList, Filter } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,7 @@ export function AuditLogViewer() {
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const filtered = ((logs ?? []) as Array<{
+  const typed = (logs ?? []) as Array<{
     _id: unknown;
     _creationTime: number;
     entityType: string;
@@ -58,7 +59,10 @@ export function AuditLogViewer() {
     description: string;
     actedBy: string;
     actedAt?: string;
-  }>).filter((log) => {
+  }>;
+  // DRY date filter — drives off header DateRangePicker.
+  const dateFiltered = useFilteredByDate(typed, "actedAt");
+  const filtered = dateFiltered.filter((log) => {
     if (actionFilter !== "all" && log.action !== actionFilter) return false;
     if (search) {
       const q = search.toLowerCase();
