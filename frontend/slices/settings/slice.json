@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "settings",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Settings",
+  "description": "Settings slice (rc-samata).",
+  "namespace": "@/slices/settings",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/settings/_schema.ts",
+    "rootPaths": [
+      "convex/features/settings"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/settings"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "dashboard",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Dashboard",
+  "description": "Dashboard slice (rc-samata).",
+  "namespace": "@/slices/dashboard",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/dashboard/_schema.ts",
+    "rootPaths": [
+      "convex/features/dashboard"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/dashboard"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

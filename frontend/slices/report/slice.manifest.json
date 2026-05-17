@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "report",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add report",
+    "consumerPath": "slices/report"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/report/_schema.ts",
+    "rootPaths": [
+      "convex/features/report"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

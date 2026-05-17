@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "ai-visual",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add ai-visual",
+    "consumerPath": "slices/ai-visual"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/ai-visual/_schema.ts",
+    "rootPaths": [
+      "convex/features/ai-visual"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

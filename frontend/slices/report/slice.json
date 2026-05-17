@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "report",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Report",
+  "description": "Report slice (rc-samata).",
+  "namespace": "@/slices/report",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/report/_schema.ts",
+    "rootPaths": [
+      "convex/features/report"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/report"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

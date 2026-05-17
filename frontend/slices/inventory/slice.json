@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "inventory",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Inventory",
+  "description": "Inventory slice (rc-samata).",
+  "namespace": "@/slices/inventory",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/inventory/_schema.ts",
+    "rootPaths": [
+      "convex/features/inventory"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/inventory"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

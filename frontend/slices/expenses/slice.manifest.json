@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "expenses",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add expenses",
+    "consumerPath": "slices/expenses"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/expenses/_schema.ts",
+    "rootPaths": [
+      "convex/features/expenses"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

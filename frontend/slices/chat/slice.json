@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "chat",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Chat",
+  "description": "Chat slice (rc-samata).",
+  "namespace": "@/slices/chat",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/chat/_schema.ts",
+    "rootPaths": [
+      "convex/features/chat"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/chat"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

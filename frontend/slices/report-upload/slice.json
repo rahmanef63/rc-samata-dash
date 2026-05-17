@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "report-upload",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Report Upload",
+  "description": "Report Upload slice (rc-samata).",
+  "namespace": "@/slices/report-upload",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/report-upload/_schema.ts",
+    "rootPaths": [
+      "convex/features/report-upload"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/report-upload"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

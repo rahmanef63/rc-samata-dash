@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "payables",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Payables",
+  "description": "Payables slice (rc-samata).",
+  "namespace": "@/slices/payables",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/payables/_schema.ts",
+    "rootPaths": [
+      "convex/features/payables"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/payables"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

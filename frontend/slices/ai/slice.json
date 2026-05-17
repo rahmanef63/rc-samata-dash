@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "ai",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Ai",
+  "description": "Ai slice (rc-samata).",
+  "namespace": "@/slices/ai",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/ai/_schema.ts",
+    "rootPaths": [
+      "convex/features/ai"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/ai"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

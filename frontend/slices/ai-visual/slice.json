@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "ai-visual",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Ai Visual",
+  "description": "Ai Visual slice (rc-samata).",
+  "namespace": "@/slices/ai-visual",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/ai-visual/_schema.ts",
+    "rootPaths": [
+      "convex/features/ai-visual"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/ai-visual"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

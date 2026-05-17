@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "cashflow",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Cashflow",
+  "description": "Cashflow slice (rc-samata).",
+  "namespace": "@/slices/cashflow",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/cashflow/_schema.ts",
+    "rootPaths": [
+      "convex/features/cashflow"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/cashflow"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

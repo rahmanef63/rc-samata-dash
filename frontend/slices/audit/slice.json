@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "audit",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Audit",
+  "description": "Audit slice (rc-samata).",
+  "namespace": "@/slices/audit",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/audit/_schema.ts",
+    "rootPaths": [
+      "convex/features/audit"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/audit"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

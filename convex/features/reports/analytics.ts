@@ -16,12 +16,20 @@ async function fetchData(ctx: any, tableName: string, args: { reportId?: string;
     return ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", args.reportId)).collect();
   }
   if (!args.branchId) return [];
-  const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any)).collect();
+  // Bounded: last 52 reports + 5000 rows total to stay under Convex 8192.
+  const reports = await ctx.db
+    .query("weeklyReports")
+    .withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any))
+    .order("desc")
+    .take(52);
+  const ROW_CAP = 5000;
   let allData: any[] = [];
   for (const r of reports) {
     const data = await ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", r._id)).collect();
     allData.push(...data);
+    if (allData.length >= ROW_CAP) break;
   }
+  allData = allData.slice(0, ROW_CAP);
   if (args.timeFilter && args.timeFilter !== "all" && allData.length > 0) {
     const now = new Date();
     allData = allData.filter(d => {

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "audit",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add audit",
+    "consumerPath": "slices/audit"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/audit/_schema.ts",
+    "rootPaths": [
+      "convex/features/audit"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

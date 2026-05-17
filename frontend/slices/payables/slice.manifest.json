@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "payables",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add payables",
+    "consumerPath": "slices/payables"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/payables/_schema.ts",
+    "rootPaths": [
+      "convex/features/payables"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

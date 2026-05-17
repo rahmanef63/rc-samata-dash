@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "analytics",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Analytics",
+  "description": "Analytics slice (rc-samata).",
+  "namespace": "@/slices/analytics",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/analytics/_schema.ts",
+    "rootPaths": [
+      "convex/features/analytics"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/analytics"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}

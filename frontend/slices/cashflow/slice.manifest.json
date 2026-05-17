@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "cashflow",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add cashflow",
+    "consumerPath": "slices/cashflow"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/cashflow/_schema.ts",
+    "rootPaths": [
+      "convex/features/cashflow"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

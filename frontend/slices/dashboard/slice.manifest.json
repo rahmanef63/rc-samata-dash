@@ -1,0 +1,24 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-manifest-schema.json",
+  "slug": "dashboard",
+  "version": "0.1.0",
+  "tier": 3,
+  "distribution": {
+    "method": "cli-copy",
+    "command": "npx rr add dashboard",
+    "consumerPath": "slices/dashboard"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "convex": {
+    "schemaPath": "convex/features/dashboard/_schema.ts",
+    "rootPaths": [
+      "convex/features/dashboard"
+    ]
+  },
+  "imports": {
+    "shared": [],
+    "external": []
+  }
+}

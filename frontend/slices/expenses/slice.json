@@ -1,0 +1,26 @@
+{
+  "$schema": "https://resource.rahmanef.com/slice-schema.json",
+  "slug": "expenses",
+  "version": "0.1.0",
+  "category": "uncategorized",
+  "title": "Expenses",
+  "description": "Expenses slice (rc-samata).",
+  "namespace": "@/slices/expenses",
+  "kind": "full",
+  "convex": {
+    "schemaPath": "convex/features/expenses/_schema.ts",
+    "rootPaths": [
+      "convex/features/expenses"
+    ]
+  },
+  "frontend": {
+    "slicePath": "frontend/slices/expenses"
+  },
+  "deps": {
+    "shared": [],
+    "slices": [],
+    "convex": [],
+    "shadcn": [],
+    "npm": []
+  }
+}
