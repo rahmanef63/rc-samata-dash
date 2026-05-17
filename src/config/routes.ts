@@ -27,6 +27,7 @@ export type RouteGroup = {
 };
 
 const ADMIN_ROLES: Role[] = ["super_admin", "staff"];
+const SUPER_ADMIN_ONLY: Role[] = ["super_admin"];
 
 export const ROUTE_GROUPS: RouteGroup[] = [
   {
@@ -72,10 +73,11 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Inventaris", url: "/operation", icon: Package },
       { title: "Mutasi Stok", url: "/operation/stock-movements", icon: History },
       { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
-      { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList },
+      { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
       { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
       { title: "Master Data", url: "/operation/master-data", icon: Database },
-      { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot },
+      { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot, roles: SUPER_ADMIN_ONLY },
+      { title: "Manajemen User", url: "/operation/users", icon: Users, roles: SUPER_ADMIN_ONLY },
       { title: "Pengaturan", url: "/operation/settings", icon: Settings },
     ],
   },
