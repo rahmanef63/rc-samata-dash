@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
+import { useFilteredByDate } from "@/shared/hooks";
 import { api } from "../../../../convex/_generated/api";
 import { FileText, Upload, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ export function ReportOverview() {
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
 
-  const monthlySales = useQuery(
+  const rawMonthlySales = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
     branchId ? { branchId } : "skip",
   );
@@ -32,15 +33,17 @@ export function ReportOverview() {
     api.features.reports.dashboardQueries.getCashflowWaterfall,
     branchId ? { branchId } : "skip",
   );
-  const reports = useQuery(
+  const rawReports = useQuery(
     api.features.reports.queries.listWeeklyReports,
     branchId ? { branchId } : "skip",
   );
+  const monthlySales = useFilteredByDate(rawMonthlySales, "date");
+  const reports = useFilteredByDate(rawReports, "periodStart");
 
-  const isLoading = !monthlySales || !expenseData || !waterfallData || !reports;
+  const isLoading = !rawMonthlySales || !expenseData || !waterfallData || !rawReports;
 
   // Total revenue from monthly sales data
-  const totalRevenue = monthlySales?.reduce((s, d) => s + d.value, 0) ?? 0;
+  const totalRevenue = monthlySales.reduce((s, d) => s + d.value, 0);
 
   if (isLoading) {
     return (

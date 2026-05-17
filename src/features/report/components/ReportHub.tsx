@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
+import { useFilteredByDate } from "@/shared/hooks";
 import { api } from "../../../../convex/_generated/api";
 import {
   FileText,
@@ -59,19 +60,21 @@ export default function ReportHub() {
     null;
   const branchId = branch?._id ?? null;
 
-  const reports = useQuery(
+  const rawReports = useQuery(
     api.features.reports.queries.listWeeklyReports,
     branchId ? { branchId } : "skip",
   );
-  const monthlySales = useQuery(
+  const rawMonthlySales = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
     branchId ? { branchId } : "skip",
   );
+  const reports = useFilteredByDate(rawReports, "periodStart");
+  const monthlySales = useFilteredByDate(rawMonthlySales, "date");
 
   const [search, setSearch] = useState("");
 
   const isLoading =
-    !branches || (branchId && (!reports || !monthlySales));
+    !branches || (branchId && (!rawReports || !rawMonthlySales));
 
   const filteredReports = useMemo(() => {
     if (!reports) return [];
@@ -86,12 +89,12 @@ export default function ReportHub() {
   }, [reports, search]);
 
   const totalRevenue = useMemo(
-    () => monthlySales?.reduce((s, d) => s + d.value, 0) ?? 0,
+    () => monthlySales.reduce((s, d) => s + d.value, 0),
     [monthlySales],
   );
   const lastReport = reports?.[0];
   const periodLabel =
-    monthlySales && monthlySales.length > 0
+    monthlySales.length > 0
       ? formatDateRange(
           monthlySales[0].date,
           monthlySales[monthlySales.length - 1].date,

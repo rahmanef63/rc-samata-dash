@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader, DataTable, CrudDialog, TabBar } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
-import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { StockItem, StockMovement } from "@/shared/types";
 import { movementTypeLabels } from "../lib";
 import { useStockItems, useCreateStockItem, useUpdateStockItem, useDeleteStockItem, useRecordMovement, useAllStockMovements } from "../api";
@@ -71,7 +71,8 @@ export function InventoryOverview() {
   const itemsData = (rawItems || []).map(i => ({ ...i, id: i._id })) as unknown as StockItem[];
 
   const rawMovements = useAllStockMovements(currentBranchId || "");
-  const movementsData = (rawMovements || []).map(m => ({ ...m, id: m._id })) as unknown as StockMovement[];
+  const movementsAll = (rawMovements || []).map(m => ({ ...m, id: m._id })) as unknown as StockMovement[];
+  const movementsData = useFilteredByDate(movementsAll, "date");
 
   const itemMutations = {
     createMutation: useCreateStockItem(),

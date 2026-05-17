@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -16,14 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   useDateScope,
-  DATE_PRESET_LABELS,
-  type DatePreset,
+  MONTH_NAMES_ID,
   type DateGranularity,
 } from "@/features/dashboard/context/DateScopeContext";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type DateRange } from "react-day-picker";
 
 const GRANULARITY_OPTIONS: { value: DateGranularity; label: string }[] = [
   { value: "day", label: "Hari" },
@@ -31,104 +29,199 @@ const GRANULARITY_OPTIONS: { value: DateGranularity; label: string }[] = [
   { value: "month", label: "Bulan" },
 ];
 
-const PRESET_OPTIONS: Exclude<DatePreset, "custom">[] = [
-  "today",
-  "7d",
-  "wtd",
-  "30d",
-  "mtd",
-  "qtd",
-  "ytd",
-];
+function yearRange(): number[] {
+  const now = new Date().getFullYear();
+  return [now - 2, now - 1, now, now + 1];
+}
 
 export function DateRangePicker({ className }: { className?: string }) {
   const {
-    preset,
-    startDate,
-    endDate,
     granularity,
-    setPreset,
-    setCustomRange,
+    day,
+    month,
+    week,
+    rangeLabel,
     setGranularity,
+    setDay,
+    setMonth,
+    setWeek,
+    goPrev,
+    goNext,
+    goToday,
   } = useDateScope();
-  const [open, setOpen] = useState(false);
-
-  const handleSelect = (range: DateRange | undefined) => {
-    if (range?.from && range?.to) {
-      const start = range.from.getTime();
-      const endNext = new Date(
-        range.to.getFullYear(),
-        range.to.getMonth(),
-        range.to.getDate() + 1,
-      ).getTime();
-      setCustomRange(start, endNext);
-      setOpen(false);
-    }
-  };
-
-  const formatRange = () => {
-    if (preset !== "custom") return DATE_PRESET_LABELS[preset];
-    const from = new Date(startDate);
-    const to = new Date(endDate - 1);
-    const fmt = (d: Date) =>
-      d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-    return `${fmt(from)} – ${fmt(to)}`;
-  };
+  const [calOpen, setCalOpen] = useState(false);
 
   return (
     <div className={`flex flex-wrap items-center gap-1 ${className ?? ""}`}>
-      <Select
-        value={preset === "custom" ? undefined : preset}
-        onValueChange={(v) => setPreset(v as Exclude<DatePreset, "custom">)}
-      >
-        <SelectTrigger className="h-8 w-auto min-w-24 gap-1.5 text-xs">
-          <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-          <SelectValue>{formatRange()}</SelectValue>
-        </SelectTrigger>
-        <SelectContent align="end">
-          {PRESET_OPTIONS.map((p) => (
-            <SelectItem key={p} value={p}>
-              {DATE_PRESET_LABELS[p]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Pilih rentang custom">
-            <CalendarIcon className="h-3.5 w-3.5" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-auto p-0">
-          <Calendar
-            mode="range"
-            selected={{ from: new Date(startDate), to: new Date(endDate - 1) }}
-            onSelect={handleSelect}
-            numberOfMonths={2}
-          />
-        </PopoverContent>
-      </Popover>
       <ToggleGroup
         type="single"
         size="sm"
         value={granularity}
         onValueChange={(v) => {
-          if (!v) return; /* ignore empty value when toggling off */
+          if (!v) return;
           setGranularity(v as DateGranularity);
         }}
-        className="h-8 ml-1"
+        className="h-8"
       >
         {GRANULARITY_OPTIONS.map((g) => (
           <ToggleGroupItem
             key={g.value}
             value={g.value}
             className="h-7 px-2 text-[11px]"
-            title={`Tampilkan data per ${g.label.toLowerCase()}`}
+            title={`Filter per ${g.label.toLowerCase()}`}
           >
             {g.label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={goPrev}
+        title="Sebelumnya"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </Button>
+
+      {/* Mode-specific picker */}
+      {granularity === "day" && (
+        <Popover open={calOpen} onOpenChange={setCalOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1.5"
+            >
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {rangeLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={new Date(day.y, day.m - 1, day.d)}
+              onSelect={(d) => {
+                if (!d) return;
+                setDay({ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() });
+                setCalOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {granularity === "month" && (
+        <>
+          <Select
+            value={String(month.m)}
+            onValueChange={(v) => setMonth({ y: month.y, m: Number(v) })}
+          >
+            <SelectTrigger className="h-7 w-auto min-w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {MONTH_NAMES_ID.map((name, i) => (
+                <SelectItem key={i} value={String(i + 1)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(month.y)}
+            onValueChange={(v) => setMonth({ y: Number(v), m: month.m })}
+          >
+            <SelectTrigger className="h-7 w-auto min-w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {yearRange().map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+
+      {granularity === "week" && (
+        <>
+          <Select
+            value={String(week.w)}
+            onValueChange={(v) =>
+              setWeek({ y: week.y, m: week.m, w: Number(v) })
+            }
+          >
+            <SelectTrigger className="h-7 w-auto min-w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {[1, 2, 3, 4, 5].map((w) => (
+                <SelectItem key={w} value={String(w)}>
+                  Minggu {w}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(week.m)}
+            onValueChange={(v) =>
+              setWeek({ y: week.y, m: Number(v), w: week.w })
+            }
+          >
+            <SelectTrigger className="h-7 w-auto min-w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {MONTH_NAMES_ID.map((name, i) => (
+                <SelectItem key={i} value={String(i + 1)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(week.y)}
+            onValueChange={(v) =>
+              setWeek({ y: Number(v), m: week.m, w: week.w })
+            }
+          >
+            <SelectTrigger className="h-7 w-auto min-w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {yearRange().map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={goNext}
+        title="Berikutnya"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 px-2 text-[11px]"
+        onClick={goToday}
+        title="Reset ke hari ini"
+      >
+        Kini
+      </Button>
     </div>
   );
 }

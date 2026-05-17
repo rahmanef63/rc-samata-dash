@@ -8,6 +8,7 @@ import { AreaChartCard, TransactionRow, SectionHeader } from "@/shared/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRp } from "@/shared/lib";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 
 export function CashflowOverview() {
   const { branchId: scopeBranchId, branches } = useBranchScope();
@@ -17,16 +18,18 @@ export function CashflowOverview() {
     api.features.reports.dashboardQueries.getCashflowWaterfall,
     branchId ? { branchId } : "skip"
   );
-  const recentTx = useQuery(
+  const rawRecentTx = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
     branchId ? { branchId } : "skip"
   );
-  const weeklySales = useQuery(
+  const rawWeeklySales = useQuery(
     api.features.reports.dashboardQueries.getWeeklySalesTrend,
     branchId ? { branchId } : "skip"
   );
+  const recentTx = useFilteredByDate(rawRecentTx, "time");
+  const weeklySales = useFilteredByDate(rawWeeklySales, "date");
 
-  if (!branches || !waterfall || !recentTx) {
+  if (!branches || !waterfall || !rawRecentTx) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-28 w-full rounded-2xl" />
@@ -42,7 +45,7 @@ export function CashflowOverview() {
     .filter((w) => w.value < 0)
     .reduce((s, w) => s + Math.abs(w.value), 0);
 
-  const chartData = (weeklySales || []).map((d) => ({ label: d.label, value: d.value }));
+  const chartData = weeklySales.map((d) => ({ label: d.label, value: d.value }));
   const chartTotal = chartData.reduce((s, d) => s + d.value, 0);
   const isPositive = net >= 0;
 
