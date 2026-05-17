@@ -15,17 +15,19 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/features/auth/useUserRole";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 
 export function DashboardTransactionLog() {
   const isOwner = useUserRole() === "owner";
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
-  const transactions = useQuery(
+  const rawTransactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
     branchId ? { branchId } : "skip",
   );
+  const transactions = useFilteredByDate(rawTransactions, "time");
 
-  if (!transactions) {
+  if (!rawTransactions) {
     return (
       <motion.div variants={itemVariants} className="hidden md:block space-y-4">
         <Skeleton className="h-5 w-48" />

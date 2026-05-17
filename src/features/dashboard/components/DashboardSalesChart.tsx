@@ -9,17 +9,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 
 export function DashboardSalesChart() {
   const isOwner = useUserRole() === "owner";
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
-  const salesTrend = useQuery(
+  const rawSalesTrend = useQuery(
     api.features.reports.dashboardQueries.getWeeklySalesTrend,
     branchId ? { branchId } : "skip",
   );
+  const salesTrend = useFilteredByDate(rawSalesTrend, "date");
 
-  if (!salesTrend) {
+  if (!rawSalesTrend) {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5 space-y-3">

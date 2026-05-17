@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 
 type TransactionItem = {
   id: string;
@@ -28,12 +29,13 @@ export function DashboardRecentTransactions() {
 
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
-  const transactions = useQuery(
+  const rawTransactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
     branchId ? { branchId } : "skip",
   );
+  const transactions = useFilteredByDate(rawTransactions, "time");
 
-  if (!transactions) {
+  if (!rawTransactions) {
     return (
       <motion.div variants={itemVariants} className="bg-card rounded-xl shadow-card p-4 md:p-5">
         <Skeleton className="h-4 w-40 mb-4" />

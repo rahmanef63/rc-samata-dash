@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatRpFull } from "@/shared/lib";
+import { useFilteredByDate } from "@/shared/hooks";
 
 type TabDef = {
   key: string;
@@ -63,15 +64,17 @@ function StatTile({ label, value }: { label: string; value: string }) {
 
 function DataTablePanel<T extends Record<string, unknown>>({
   data,
+  loading,
   columns,
 }: {
-  data: T[] | undefined;
+  data: T[];
+  loading?: boolean;
   columns: { key: keyof T & string; label: string; align?: "left" | "right"; format?: (v: unknown) => string }[];
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  if (data === undefined) {
+  if (loading) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -83,7 +86,7 @@ function DataTablePanel<T extends Record<string, unknown>>({
   if (data.length === 0) {
     return (
       <Card className="p-8 text-center text-sm text-muted-foreground">
-        Tidak ada data pada sheet ini.
+        Tidak ada data yang cocok dengan filter tanggal.
       </Card>
     );
   }
@@ -168,26 +171,42 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
   const [active, setActive] = useState<string>("summary");
 
   const report = useQuery(api.features.reports.queries.getWeeklyReport, { reportId });
-  const productSales = useQuery(api.features.reports.queries.getProductSales, { reportId });
-  const salesControl = useQuery(api.features.reports.queries.listSalesControl, { reportId });
-  const dailyCashSummary = useQuery(api.features.reports.queries.listDailyCashSummary, { reportId });
-  const dailyCashFlow = useQuery(api.features.reports.queries.getDailyCashFlow, { reportId });
-  const vendorPurchases = useQuery(api.features.reports.queries.getVendorPurchases, { reportId });
-  const creditPurchases = useQuery(api.features.reports.queries.listCreditPurchases, { reportId });
-  const inventoryValuation = useQuery(api.features.reports.queries.getInventoryValuation, { reportId });
-  const foodCostSummary = useQuery(api.features.reports.queries.getFoodCostSummary, { reportId });
-  const costAnalysis = useQuery(api.features.reports.queries.getCostAnalysis, { reportId });
-  const productHPP = useQuery(api.features.reports.queries.getProductHPP, { reportId });
-  const leftoverItems = useQuery(api.features.reports.queries.listLeftoverItems, { reportId });
-  const transferItems = useQuery(api.features.reports.queries.getTransferItems, { reportId });
-  const productChanges = useQuery(api.features.reports.queries.listProductChanges,
+  const rawProductSales = useQuery(api.features.reports.queries.getProductSales, { reportId });
+  const rawSalesControl = useQuery(api.features.reports.queries.listSalesControl, { reportId });
+  const rawDailyCashSummary = useQuery(api.features.reports.queries.listDailyCashSummary, { reportId });
+  const rawDailyCashFlow = useQuery(api.features.reports.queries.getDailyCashFlow, { reportId });
+  const rawVendorPurchases = useQuery(api.features.reports.queries.getVendorPurchases, { reportId });
+  const rawCreditPurchases = useQuery(api.features.reports.queries.listCreditPurchases, { reportId });
+  const rawInventoryValuation = useQuery(api.features.reports.queries.getInventoryValuation, { reportId });
+  const rawFoodCostSummary = useQuery(api.features.reports.queries.getFoodCostSummary, { reportId });
+  const rawCostAnalysis = useQuery(api.features.reports.queries.getCostAnalysis, { reportId });
+  const rawProductHPP = useQuery(api.features.reports.queries.getProductHPP, { reportId });
+  const rawLeftoverItems = useQuery(api.features.reports.queries.listLeftoverItems, { reportId });
+  const rawTransferItems = useQuery(api.features.reports.queries.getTransferItems, { reportId });
+  const rawProductChanges = useQuery(api.features.reports.queries.listProductChanges,
     report?.branchId ? { branchId: report.branchId } : "skip");
-  const employeeIncentives = useQuery(api.features.reports.queries.getEmployeeIncentives, { reportId });
+  const rawEmployeeIncentives = useQuery(api.features.reports.queries.getEmployeeIncentives, { reportId });
   const employeeAllowances = useQuery(api.features.reports.queries.listEmployeeAllowances,
     report?.branchId ? { branchId: report.branchId } : "skip");
 
+  // DRY date scope filter — driven by header DateRangePicker.
+  const productSales = useFilteredByDate(rawProductSales, "businessDate");
+  const salesControl = useFilteredByDate(rawSalesControl, "businessDate");
+  const dailyCashSummary = useFilteredByDate(rawDailyCashSummary, "businessDate");
+  const dailyCashFlow = useFilteredByDate(rawDailyCashFlow, "businessDate");
+  const vendorPurchases = useFilteredByDate(rawVendorPurchases, "weekStart");
+  const creditPurchases = useFilteredByDate(rawCreditPurchases, "purchaseDate");
+  const inventoryValuation = useFilteredByDate(rawInventoryValuation, "valuationDate");
+  const foodCostSummary = useFilteredByDate(rawFoodCostSummary, "periodStart");
+  const costAnalysis = useFilteredByDate(rawCostAnalysis, "periodStart");
+  const productHPP = useFilteredByDate(rawProductHPP, "periodStart");
+  const leftoverItems = useFilteredByDate(rawLeftoverItems, "businessDate");
+  const transferItems = useFilteredByDate(rawTransferItems, "periodStart");
+  const productChanges = useFilteredByDate(rawProductChanges, "periodStart");
+  const employeeIncentives = useFilteredByDate(rawEmployeeIncentives, "periodStart");
+
   const summary = useMemo(() => {
-    if (!productSales || !foodCostSummary || !dailyCashFlow) return null;
+    if (!rawProductSales || !rawFoodCostSummary || !rawDailyCashFlow) return null;
     const totalRevenue = productSales
       .filter((s) => !s.channel || s.channel === "all")
       .reduce((sum, s) => sum + s.amount, 0);
@@ -198,7 +217,14 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         ? dailyCashFlow[dailyCashFlow.length - 1].closingBalance
         : 0;
     return { totalRevenue, totalCOGS, grossProfit, closingCashLast };
-  }, [productSales, foodCostSummary, dailyCashFlow]);
+  }, [
+    rawProductSales,
+    rawFoodCostSummary,
+    rawDailyCashFlow,
+    productSales,
+    foodCostSummary,
+    dailyCashFlow,
+  ]);
 
   if (report === undefined) {
     return (
@@ -304,6 +330,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "productSales" && (
         <DataTablePanel
           data={productSales}
+          loading={rawProductSales === undefined}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "productName", label: "Produk" },
@@ -317,6 +344,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "salesControl" && (
         <DataTablePanel
           data={salesControl}
+          loading={rawSalesControl === undefined}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "netSales", label: "Net Sales", align: "right", format: rp },
@@ -331,6 +359,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "dailyCashSummary" && (
         <DataTablePanel
           data={dailyCashSummary}
+          loading={rawDailyCashSummary === undefined}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "grossSales", label: "Gross Sales", align: "right", format: rp },
@@ -345,6 +374,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "dailyCashFlow" && (
         <DataTablePanel
           data={dailyCashFlow}
+          loading={rawDailyCashFlow === undefined}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "openingBalance", label: "Opening", align: "right", format: rp },
@@ -360,6 +390,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "vendorPurchases" && (
         <DataTablePanel
           data={vendorPurchases}
+          loading={rawVendorPurchases === undefined}
           columns={[
             { key: "weekStart", label: "Minggu" },
             { key: "commodityName", label: "Komoditi" },
@@ -375,6 +406,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "creditPurchases" && (
         <DataTablePanel
           data={creditPurchases}
+          loading={rawCreditPurchases === undefined}
           columns={[
             { key: "purchaseDate", label: "Tanggal" },
             { key: "supplierName", label: "Supplier" },
@@ -388,6 +420,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "inventoryValuation" && (
         <DataTablePanel
           data={inventoryValuation}
+          loading={rawInventoryValuation === undefined}
           columns={[
             { key: "valuationDate", label: "Tanggal" },
             { key: "itemName", label: "Item" },
@@ -402,6 +435,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "foodCostSummary" && (
         <DataTablePanel
           data={foodCostSummary}
+          loading={rawFoodCostSummary === undefined}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "category", label: "Kategori" },
@@ -416,6 +450,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "costAnalysis" && (
         <DataTablePanel
           data={costAnalysis}
+          loading={rawCostAnalysis === undefined}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "itemName", label: "Item" },
@@ -431,6 +466,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "productHPP" && (
         <DataTablePanel
           data={productHPP}
+          loading={rawProductHPP === undefined}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "productName", label: "Produk" },
@@ -444,6 +480,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "leftoverItems" && (
         <DataTablePanel
           data={leftoverItems}
+          loading={rawLeftoverItems === undefined}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "itemName", label: "Item" },
@@ -455,6 +492,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "transferItems" && (
         <DataTablePanel
           data={transferItems}
+          loading={rawTransferItems === undefined}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "direction", label: "Arah" },
@@ -469,6 +507,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "productChanges" && (
         <DataTablePanel
           data={productChanges}
+          loading={rawProductChanges === undefined}
           columns={[
             { key: "periodLabel", label: "Periode" },
             { key: "itemName", label: "Item" },
@@ -482,6 +521,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       {active === "employeeIncentives" && (
         <DataTablePanel
           data={employeeIncentives}
+          loading={rawEmployeeIncentives === undefined}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "employeeName", label: "Karyawan" },
@@ -493,7 +533,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
 
       {active === "employeeAllowances" && (
         <DataTablePanel
-          data={employeeAllowances}
+          data={employeeAllowances ?? []}
+          loading={employeeAllowances === undefined}
           columns={[
             { key: "employeeName", label: "Karyawan" },
             { key: "position", label: "Posisi" },

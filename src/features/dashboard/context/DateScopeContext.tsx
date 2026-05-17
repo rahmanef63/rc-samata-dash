@@ -175,11 +175,21 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
 
   const setGranularity = useCallback(
     (g: DateGranularity) => {
+      // Granularity also implies a sensible default range:
+      // Hari → today, Minggu → wtd, Bulan → mtd. User can still override
+      // via the preset dropdown or custom calendar afterwards.
+      const impliedPreset: Exclude<DatePreset, "custom"> =
+        g === "day" ? "today" : g === "week" ? "wtd" : "mtd";
       setGranularityState(g);
+      setPresetState(impliedPreset);
+      setCustomRangeState(null);
       const sp = searchParamsRef.current;
       const params = new URLSearchParams(sp.toString());
       if (g === "day") params.delete("g");
       else params.set("g", g);
+      params.set("p", impliedPreset);
+      params.delete("from");
+      params.delete("to");
       const qs = params.toString();
       router.replace(
         qs ? `${pathnameRef.current}?${qs}` : pathnameRef.current,

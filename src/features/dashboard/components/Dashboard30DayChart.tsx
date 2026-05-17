@@ -8,16 +8,18 @@ import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useFilteredByDate } from "@/shared/hooks";
 
 export function Dashboard30DayChart() {
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
-  const monthlyTrend = useQuery(
+  const rawMonthlyTrend = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
     branchId ? { branchId } : "skip",
   );
+  const monthlyTrend = useFilteredByDate(rawMonthlyTrend, "date");
 
-  if (!monthlyTrend) {
+  if (!rawMonthlyTrend) {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5 space-y-3">
