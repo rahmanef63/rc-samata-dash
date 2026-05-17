@@ -289,3 +289,49 @@ export const getCashFlowByBranch = query({
     return all.sort((a, b) => b.businessDate.localeCompare(a.businessDate));
   },
 });
+
+// ─── Per-report list queries (added 2026-05-17 for /laporan/[reportId] drill) ──
+
+export const listLeftoverItems = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("leftoverItems")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const listDailyCashSummary = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("dailyCashSummary")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const listCreditPurchases = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("creditPurchases")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
+
+export const listSalesControl = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    return await ctx.db
+      .query("salesControl")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+  },
+});
