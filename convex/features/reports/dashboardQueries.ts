@@ -5,6 +5,7 @@
 import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import type { Id } from "../../_generated/dataModel";
 
 /**
  * Sales trend for the last 7 days of uploaded data.
@@ -333,63 +334,87 @@ export const getRecentTransactions = query({
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
 
-    const results: {
+    type Row = {
       id: string;
       name: string;
       type: string;
       amount: string;
+      rawAmount: number;
       time: string;
       status: string;
       direction: "in" | "out";
-    }[] = [];
+      reportId?: string;
+      sourceFile?: string;
+      sourceSheet?: string;
+    };
+    const results: Row[] = [];
 
-    // Latest daily cash summaries as "Sales Deposit"
+    // Cache report file names so 50 rows don't fan-out 50 lookups.
+    const reportCache = new Map<string, string | undefined>();
+    const fileFor = async (reportId: string): Promise<string | undefined> => {
+      if (reportCache.has(reportId)) return reportCache.get(reportId);
+      const r = await ctx.db.get(reportId as Id<"weeklyReports">);
+      const name = r?.fileName;
+      reportCache.set(reportId, name);
+      return name;
+    };
+
+    // Take a wider window so the client-side date filter has rows to keep.
     const summaries = await ctx.db
       .query("dailyCashSummary")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .collect();
     const latestSummaries = summaries
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 3);
+      .slice(0, 30);
 
     for (const s of latestSummaries) {
+      const file = await fileFor(s.reportId);
       results.push({
         id: `SALES-${s.businessDate}`,
         name: `Penjualan ${s.businessDate}`,
         type: "Setoran Penjualan",
         amount: `+Rp ${s.grossSales.toLocaleString("id-ID")}`,
+        rawAmount: s.grossSales,
         time: s.businessDate,
         status: "completed",
         direction: "in",
+        reportId: s.reportId,
+        sourceFile: file,
+        sourceSheet: "dailyCashSummary",
       });
     }
 
-    // Latest cash flow expense entries
     const cashFlows = await ctx.db
       .query("dailyCashFlow")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .collect();
     const latestCF = cashFlows
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 3);
+      .slice(0, 30);
 
     for (const cf of latestCF) {
       if (cf.expenseOutflow > 0) {
-          results.push({
-            id: `EXP-${cf.businessDate}`,
-            name: `Belanja ${cf.businessDate}`,
-            type: "Pengeluaran",
-            amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
-            time: cf.businessDate,
-            status: "completed",
+        const file = await fileFor(cf.reportId);
+        results.push({
+          id: `EXP-${cf.businessDate}`,
+          name: `Belanja ${cf.businessDate}`,
+          type: "Pengeluaran",
+          amount: `-Rp ${cf.expenseOutflow.toLocaleString("id-ID")}`,
+          rawAmount: cf.expenseOutflow,
+          time: cf.businessDate,
+          status: "completed",
           direction: "out",
+          reportId: cf.reportId,
+          sourceFile: file,
+          sourceSheet: "dailyCashFlow",
         });
       }
     }
 
     return results
       .sort((a, b) => b.time.localeCompare(a.time))
-      .slice(0, 6);
+      .slice(0, 50);
   },
 });
 

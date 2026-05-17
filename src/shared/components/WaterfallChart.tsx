@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, ReferenceLine } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, ReferenceLine, LabelList } from "recharts";
 import { formatRp, formatRpFull } from "@/shared/lib";
 import { CHART_AXIS_COLOR, CHART_GRID_COLOR } from "@/shared/constants";
 
@@ -95,6 +95,20 @@ export function WaterfallChart({ data, title, subtitle, height = 220, headerRigh
                   }
                 />
               ))}
+              <LabelList
+                dataKey="rawValue"
+                position="top"
+                content={(props: { x?: number | string; y?: number | string; width?: number | string; value?: unknown }) => {
+                  const v = typeof props.value === "number" ? props.value : Number(props.value ?? 0);
+                  const x = Number(props.x ?? 0) + Number(props.width ?? 0) / 2;
+                  const y = Number(props.y ?? 0) - 4;
+                  return (
+                    <text x={x} y={y} fontSize={10} textAnchor="middle" fill={CHART_AXIS_COLOR}>
+                      {formatRpFull(v)}
+                    </text>
+                  );
+                }}
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

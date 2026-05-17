@@ -25,7 +25,7 @@ import {
   AreaChartCard,
   SectionHeader,
 } from "@/shared/components";
-import { formatRp } from "../lib";
+import { formatRpFull } from "@/shared/lib";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
 
@@ -120,7 +120,7 @@ export default function ReportHub() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiTile
           label="Total Pendapatan (30 hari)"
-          value={isLoading ? null : formatRp(totalRevenue)}
+          value={isLoading ? null : formatRpFull(totalRevenue)}
           hint={periodLabel}
           icon={<TrendingUp className="h-4 w-4 text-primary" />}
         />

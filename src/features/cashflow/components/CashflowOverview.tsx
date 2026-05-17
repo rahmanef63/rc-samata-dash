@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard, TransactionRow, SectionHeader } from "@/shared/components";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatRp } from "@/shared/lib";
+import { formatRpFull } from "@/shared/lib";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 
@@ -54,10 +54,10 @@ export function CashflowOverview() {
       {/* Balance Card */}
       <div className="bg-primary rounded-2xl p-5 text-primary-foreground">
         <p className="text-xs opacity-80 mb-1">Total Revenue (Periode Aktif)</p>
-        <p className="text-3xl font-bold font-mono-data tracking-tight">{formatRp(revenue)}</p>
+        <p className="text-3xl font-bold font-mono-data tracking-tight">{formatRpFull(revenue)}</p>
         <div className="flex items-center gap-4 mt-2">
           <p className="text-xs flex items-center gap-1 opacity-80">
-            <Wallet className="h-3 w-3" /> Net: {formatRp(net)}
+            <Wallet className="h-3 w-3" /> Net: {formatRpFull(net)}
           </p>
           <p className="text-xs flex items-center gap-1 opacity-80">
             {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -70,16 +70,16 @@ export function CashflowOverview() {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card rounded-xl shadow-card p-3">
           <p className="text-[10px] uppercase text-muted-foreground font-medium">Revenue</p>
-          <p className="text-sm font-bold font-mono-data text-success mt-1">{formatRp(revenue)}</p>
+          <p className="text-sm font-bold font-mono-data text-success mt-1">{formatRpFull(revenue)}</p>
         </div>
         <div className="bg-card rounded-xl shadow-card p-3">
           <p className="text-[10px] uppercase text-muted-foreground font-medium">Expense</p>
-          <p className="text-sm font-bold font-mono-data text-destructive mt-1">{formatRp(totalExpense)}</p>
+          <p className="text-sm font-bold font-mono-data text-destructive mt-1">{formatRpFull(totalExpense)}</p>
         </div>
         <div className="bg-card rounded-xl shadow-card p-3">
           <p className="text-[10px] uppercase text-muted-foreground font-medium">Net</p>
           <p className={`text-sm font-bold font-mono-data mt-1 ${isPositive ? "text-success" : "text-destructive"}`}>
-            {formatRp(net)}
+            {formatRpFull(net)}
           </p>
         </div>
       </div>
@@ -89,7 +89,7 @@ export function CashflowOverview() {
         <AreaChartCard
           data={chartData}
           title="Trend Penjualan"
-          subtitle={formatRp(chartTotal)}
+          subtitle={formatRpFull(chartTotal)}
           height={160}
           gradientId="cfGrad"
           showGrid={false}

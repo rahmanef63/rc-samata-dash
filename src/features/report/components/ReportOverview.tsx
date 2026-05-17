@@ -9,7 +9,7 @@ import { api } from "../../../../convex/_generated/api";
 import { FileText, Upload, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AreaChartCard, PieChartCard, WaterfallChart, SectionHeader } from "@/shared/components";
-import { formatRp } from "../lib";
+import { formatRpFull } from "@/shared/lib";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
@@ -84,7 +84,7 @@ export function ReportOverview() {
         </div>
         {hasData ? (
           <>
-            <p className="text-2xl font-bold font-mono-data tracking-tight">{formatRp(totalRevenue)}</p>
+            <p className="text-2xl font-bold font-mono-data tracking-tight">{formatRpFull(totalRevenue)}</p>
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
               <Calendar className="h-3 w-3" />
               {periodLabel}

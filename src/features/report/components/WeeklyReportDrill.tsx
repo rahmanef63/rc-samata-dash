@@ -25,6 +25,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatRpFull } from "@/shared/lib";
 import { useFilteredByDate } from "@/shared/hooks";
 
@@ -62,17 +63,71 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RowSourceDialog({
+  row,
+  sheet,
+  sourceFile,
+  reportPeriod,
+  onClose,
+}: {
+  row: Record<string, unknown> | null;
+  sheet: string;
+  sourceFile?: string;
+  reportPeriod?: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={!!row} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">Sumber baris</DialogTitle>
+          <DialogDescription className="text-xs space-y-0.5">
+            <span className="block">Sheet: <span className="font-mono">{sheet}</span></span>
+            {sourceFile && <span className="block truncate">File: <span className="font-mono">{sourceFile}</span></span>}
+            {reportPeriod && <span className="block">Periode: {reportPeriod}</span>}
+          </DialogDescription>
+        </DialogHeader>
+        {row && (
+          <div className="space-y-1.5 text-sm">
+            {Object.entries(row)
+              .filter(([k]) => !k.startsWith("_"))
+              .map(([k, v]) => (
+                <div key={k} className="grid grid-cols-3 gap-2 py-1 border-b border-dashed last:border-0">
+                  <span className="text-xs text-muted-foreground font-mono col-span-1 truncate">{k}</span>
+                  <span className="col-span-2 font-mono text-xs break-all">
+                    {typeof v === "number"
+                      ? v.toLocaleString("id-ID")
+                      : v == null
+                      ? "—"
+                      : String(v)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DataTablePanel<T extends Record<string, unknown>>({
   data,
   loading,
   columns,
+  sheet,
+  sourceFile,
+  reportPeriod,
 }: {
   data: T[];
   loading?: boolean;
   columns: { key: keyof T & string; label: string; align?: "left" | "right"; format?: (v: unknown) => string }[];
+  sheet: string;
+  sourceFile?: string;
+  reportPeriod?: string;
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [selectedRow, setSelectedRow] = useState<T | null>(null);
 
   if (loading) {
     return (
@@ -141,7 +196,12 @@ function DataTablePanel<T extends Record<string, unknown>>({
           </thead>
           <tbody>
             {sorted.map((row, i) => (
-              <tr key={i} className="border-t hover:bg-muted/30">
+              <tr
+                key={i}
+                className="border-t hover:bg-muted/40 cursor-pointer transition-colors"
+                onClick={() => setSelectedRow(row)}
+                title="Klik untuk lihat sumber baris"
+              >
                 {columns.map((c) => {
                   const raw = row[c.key];
                   const display = c.format ? c.format(raw) : String(raw ?? "—");
@@ -159,6 +219,13 @@ function DataTablePanel<T extends Record<string, unknown>>({
           </tbody>
         </table>
       </div>
+      <RowSourceDialog
+        row={selectedRow}
+        sheet={sheet}
+        sourceFile={sourceFile}
+        reportPeriod={reportPeriod}
+        onClose={() => setSelectedRow(null)}
+      />
     </Card>
   );
 }
@@ -248,6 +315,11 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
     );
   }
 
+  const tableMeta = {
+    sourceFile: report.fileName ?? undefined,
+    reportPeriod: `${report.periodStart} — ${report.periodEnd}`,
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -331,6 +403,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={productSales}
           loading={rawProductSales === undefined}
+          sheet="productSales"
+          {...tableMeta}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "productName", label: "Produk" },
@@ -345,6 +419,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={salesControl}
           loading={rawSalesControl === undefined}
+          sheet="salesControl"
+          {...tableMeta}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "netSales", label: "Net Sales", align: "right", format: rp },
@@ -360,6 +436,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={dailyCashSummary}
           loading={rawDailyCashSummary === undefined}
+          sheet="dailyCashSummary"
+          {...tableMeta}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "grossSales", label: "Gross Sales", align: "right", format: rp },
@@ -375,6 +453,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={dailyCashFlow}
           loading={rawDailyCashFlow === undefined}
+          sheet="dailyCashFlow"
+          {...tableMeta}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "openingBalance", label: "Opening", align: "right", format: rp },
@@ -391,6 +471,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={vendorPurchases}
           loading={rawVendorPurchases === undefined}
+          sheet="vendorPurchases"
+          {...tableMeta}
           columns={[
             { key: "weekStart", label: "Minggu" },
             { key: "commodityName", label: "Komoditi" },
@@ -407,6 +489,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={creditPurchases}
           loading={rawCreditPurchases === undefined}
+          sheet="creditPurchases"
+          {...tableMeta}
           columns={[
             { key: "purchaseDate", label: "Tanggal" },
             { key: "supplierName", label: "Supplier" },
@@ -421,6 +505,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={inventoryValuation}
           loading={rawInventoryValuation === undefined}
+          sheet="inventoryValuation"
+          {...tableMeta}
           columns={[
             { key: "valuationDate", label: "Tanggal" },
             { key: "itemName", label: "Item" },
@@ -436,6 +522,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={foodCostSummary}
           loading={rawFoodCostSummary === undefined}
+          sheet="foodCostSummary"
+          {...tableMeta}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "category", label: "Kategori" },
@@ -451,6 +539,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={costAnalysis}
           loading={rawCostAnalysis === undefined}
+          sheet="costAnalysis"
+          {...tableMeta}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "itemName", label: "Item" },
@@ -467,6 +557,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={productHPP}
           loading={rawProductHPP === undefined}
+          sheet="productHPP"
+          {...tableMeta}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "productName", label: "Produk" },
@@ -481,6 +573,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={leftoverItems}
           loading={rawLeftoverItems === undefined}
+          sheet="leftoverItems"
+          {...tableMeta}
           columns={[
             { key: "businessDate", label: "Tanggal" },
             { key: "itemName", label: "Item" },
@@ -493,6 +587,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={transferItems}
           loading={rawTransferItems === undefined}
+          sheet="transferItems"
+          {...tableMeta}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "direction", label: "Arah" },
@@ -508,6 +604,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={productChanges}
           loading={rawProductChanges === undefined}
+          sheet="productChanges"
+          {...tableMeta}
           columns={[
             { key: "periodLabel", label: "Periode" },
             { key: "itemName", label: "Item" },
@@ -522,6 +620,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={employeeIncentives}
           loading={rawEmployeeIncentives === undefined}
+          sheet="employeeIncentives"
+          {...tableMeta}
           columns={[
             { key: "periodStart", label: "Periode" },
             { key: "employeeName", label: "Karyawan" },
@@ -535,6 +635,8 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <DataTablePanel
           data={employeeAllowances ?? []}
           loading={employeeAllowances === undefined}
+          sheet="employeeAllowances"
+          {...tableMeta}
           columns={[
             { key: "employeeName", label: "Karyawan" },
             { key: "position", label: "Posisi" },
