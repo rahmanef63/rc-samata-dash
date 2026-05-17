@@ -2,8 +2,10 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   useEffect,
   type ReactNode,
@@ -51,7 +53,6 @@ function computeRange(preset: Exclude<DatePreset, "custom">): { start: number; e
     case "30d":
       return { start: endOfToday - 30 * 86_400_000, end: endOfToday };
     case "wtd": {
-      // Senin sebagai awal minggu (ISO). getDay: Sunday=0, Monday=1.
       const day = now.getDay();
       const daysSinceMonday = day === 0 ? 6 : day - 1;
       const start = new Date(
@@ -89,50 +90,78 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const urlPreset = (searchParams.get("p") as DatePreset | null) ?? "30d";
-  const urlFrom = Number(searchParams.get("from"));
-  const urlTo = Number(searchParams.get("to"));
+  const urlFromRaw = searchParams.get("from");
+  const urlToRaw = searchParams.get("to");
+  const urlFrom = urlFromRaw ? Number(urlFromRaw) : 0;
+  const urlTo = urlToRaw ? Number(urlToRaw) : 0;
 
   const [preset, setPresetState] = useState<DatePreset>(urlPreset);
   const [customRange, setCustomRangeState] = useState<{ start: number; end: number } | null>(
     urlPreset === "custom" && urlFrom && urlTo ? { start: urlFrom, end: urlTo } : null,
   );
 
+  // Sync URL → state without writing when unchanged (defeats Convex/React loops).
   useEffect(() => {
-    setPresetState(urlPreset);
+    setPresetState((prev) => (prev === urlPreset ? prev : urlPreset));
     if (urlPreset === "custom" && urlFrom && urlTo) {
-      setCustomRangeState({ start: urlFrom, end: urlTo });
+      setCustomRangeState((prev) =>
+        prev && prev.start === urlFrom && prev.end === urlTo
+          ? prev
+          : { start: urlFrom, end: urlTo },
+      );
+    } else {
+      setCustomRangeState((prev) => (prev === null ? prev : null));
     }
   }, [urlPreset, urlFrom, urlTo]);
 
-  const writeUrl = (newPreset: DatePreset, range?: { start: number; end: number } | null) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (newPreset === "30d") {
-      params.delete("p");
-    } else {
-      params.set("p", newPreset);
-    }
-    if (newPreset === "custom" && range) {
-      params.set("from", String(range.start));
-      params.set("to", String(range.end));
-    } else {
-      params.delete("from");
-      params.delete("to");
-    }
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
+  // Stable refs so the memoised setters don't restart subscribers each render.
+  const searchParamsRef = useRef(searchParams);
+  const pathnameRef = useRef(pathname);
+  searchParamsRef.current = searchParams;
+  pathnameRef.current = pathname;
 
-  const setPreset = (p: Exclude<DatePreset, "custom">) => {
-    setPresetState(p);
-    setCustomRangeState(null);
-    writeUrl(p);
-  };
+  const writeUrl = useCallback(
+    (newPreset: DatePreset, range?: { start: number; end: number } | null) => {
+      const sp = searchParamsRef.current;
+      const params = new URLSearchParams(sp.toString());
+      if (newPreset === "30d") {
+        params.delete("p");
+      } else {
+        params.set("p", newPreset);
+      }
+      if (newPreset === "custom" && range) {
+        params.set("from", String(range.start));
+        params.set("to", String(range.end));
+      } else {
+        params.delete("from");
+        params.delete("to");
+      }
+      const qs = params.toString();
+      router.replace(
+        qs ? `${pathnameRef.current}?${qs}` : pathnameRef.current,
+        { scroll: false },
+      );
+    },
+    [router],
+  );
 
-  const setCustomRange = (start: number, end: number) => {
-    setPresetState("custom");
-    setCustomRangeState({ start, end });
-    writeUrl("custom", { start, end });
-  };
+  const setPreset = useCallback(
+    (p: Exclude<DatePreset, "custom">) => {
+      setPresetState(p);
+      setCustomRangeState(null);
+      writeUrl(p);
+    },
+    [writeUrl],
+  );
+
+  const setCustomRange = useCallback(
+    (start: number, end: number) => {
+      setPresetState("custom");
+      setCustomRangeState({ start, end });
+      writeUrl("custom", { start, end });
+    },
+    [writeUrl],
+  );
 
   const { startDate, endDate } = useMemo(() => {
     if (preset === "custom" && customRange) {
@@ -145,8 +174,7 @@ export function DateScopeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DateScopeValue>(
     () => ({ preset, startDate, endDate, setPreset, setCustomRange }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [preset, startDate, endDate],
+    [preset, startDate, endDate, setPreset, setCustomRange],
   );
 
   return (
