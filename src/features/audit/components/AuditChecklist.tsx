@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import { Star, Camera, ClipboardCheck, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";

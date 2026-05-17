@@ -14,6 +14,7 @@ import { useState } from "react";
 import { TabBar } from "@/shared/components";
 import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useDeleteTransfer } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const closingFields: FieldConfig[] = [
@@ -78,8 +79,8 @@ type SubTab = typeof subTabs[number];
 export function DailyClosingPanel() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daily Closing");
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawClosings = useListClosings(currentBranchId || "");
   const reportCashFlow = useQuery(api.features.reports.queries.getCashFlowByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");

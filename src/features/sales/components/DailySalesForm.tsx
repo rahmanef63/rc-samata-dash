@@ -13,6 +13,7 @@ import { salesChannels, subTabs, formatRpFull } from "../lib";
 import { toast } from "sonner";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
@@ -43,8 +44,8 @@ export function DailySalesForm() {
   const [sub, setSub] = useState(0);
 
   // Auto-detect a branch ID for demo purposes
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawSales = useDailySales(currentBranchId || "");
   const reportSales = useQuery(api.features.reports.queries.getSalesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");

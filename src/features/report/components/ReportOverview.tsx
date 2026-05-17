@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import { FileText, Upload, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,8 +17,8 @@ export function ReportOverview() {
   const router = useRouter();
   const role = useUserRole();
   const isOwner = role === "owner";
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   const monthlySales = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,

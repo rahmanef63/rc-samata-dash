@@ -12,6 +12,7 @@ import type { Payable } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
 import { usePayables, useCreatePayable, useUpdatePayable, useDeletePayable } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
@@ -44,8 +45,8 @@ const columns: Column<Payable>[] = [
 
 export function PayablesOverview() {
   const [todayMs] = useState(() => Date.now());
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 

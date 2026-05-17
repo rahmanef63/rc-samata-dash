@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import {
   FileText,
@@ -50,9 +51,12 @@ export default function ReportHub() {
   const router = useRouter();
   const isOwner = useUserRole() === "owner";
 
-  // Single-cabang app — auto-pick the only branch, no selector.
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branch = branches?.[0] ?? null;
+  // Respect the global header BranchSelector via useBranchScope.
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branch =
+    (scopeBranchId && branches?.find((b) => b._id === scopeBranchId)) ||
+    branches?.[0] ||
+    null;
   const branchId = branch?._id ?? null;
 
   const reports = useQuery(

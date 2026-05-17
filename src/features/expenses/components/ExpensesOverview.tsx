@@ -11,6 +11,7 @@ import { paymentSourceLabels } from "../lib";
 import { formatRpFull } from "@/shared/lib";
 import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const columns: Column<Expense>[] = [
@@ -25,8 +26,8 @@ const columns: Column<Expense>[] = [
 ];
 
 export function ExpensesOverview() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -45,14 +46,14 @@ export default function ChatPage() {
 
   const sessions = useQuery(api.features.ai.queries.listChatSessions);
   const aiConfig = useQuery(api.features.ai.queries.getAiConfig);
-  const branches = useQuery(api.features.masterData.queries.listBranches);
+  const { branchId: scopeBranchId, branches } = useBranchScope();
   const createSession = useMutation(api.features.ai.mutations.createChatSession);
   const deleteSession = useMutation(api.features.ai.mutations.deleteChatSession);
 
   const activeProvider = aiConfig?.provider ?? null;
   const activeInstruction = aiConfig?.instruction ?? null;
   const enabledTools = aiConfig?.tools ?? [];
-  const branchId = branches?.[0]?._id;
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   // Build system prompt from active instruction + enabled tools
   const systemPrompt = activeInstruction?.content || FALLBACK_SYSTEM_PROMPT;

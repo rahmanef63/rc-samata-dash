@@ -11,6 +11,7 @@ import type { PettyCashRequest } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
 import { usePettyCashRequests, useCreatePettyCashRequest, useUpdatePettyCashRequest, useDeletePettyCashRequest } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
@@ -56,8 +57,8 @@ const columns: Column<PettyCashRequest>[] = [
 ];
 
 export function PettyCashOverview() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawRequests = usePettyCashRequests(currentBranchId || "");
   const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");

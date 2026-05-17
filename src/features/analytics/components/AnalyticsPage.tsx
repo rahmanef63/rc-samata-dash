@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { KpiCard } from "@/components/ui/kpi-card";
@@ -36,8 +37,8 @@ export default function AnalyticsPage() {
   const [timeFilter, setTimeFilter] = useState<string>("all");
   const searchParams = useSearchParams();
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const reports = useQuery(
     api.features.reports.queries.listWeeklyReports,
     branchId ? { branchId } : "skip"
@@ -508,8 +509,8 @@ function formatKPIValue(value: number, unit: string): string {
 
 function KPITab({ args }: { args: any }) {
   const data = useQuery(api.features.reports.kpiAnalytics.getKPIDashboard, args);
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const seedTargets = useMutation(api.features.reports.kpiAnalytics.seedDefaultKPITargets);
 
   if (!data) return <LoadingSkeleton />;

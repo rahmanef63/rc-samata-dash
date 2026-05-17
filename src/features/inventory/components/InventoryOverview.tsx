@@ -15,6 +15,7 @@ import type { StockItem, StockMovement } from "@/shared/types";
 import { movementTypeLabels } from "../lib";
 import { useStockItems, useCreateStockItem, useUpdateStockItem, useDeleteStockItem, useRecordMovement, useAllStockMovements } from "../api";
 import { useQuery } from "convex/react";
+import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 // Stock Items
@@ -63,8 +64,8 @@ type SubTab = typeof subTabs[number];
 export function InventoryOverview() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daftar Stok");
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const currentBranchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawItems = useStockItems(currentBranchId || "");
   const itemsData = (rawItems || []).map(i => ({ ...i, id: i._id })) as unknown as StockItem[];
