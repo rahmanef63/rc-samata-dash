@@ -11,6 +11,7 @@ import {
   DashboardExpenseChart,
   DashboardCashflowChart,
   Dashboard30DayChart,
+  DashboardTopProducts,
   containerVariants,
   itemVariants,
 } from "@/features/dashboard";
@@ -65,6 +66,11 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-5">
           <DashboardRecentTransactions />
+        </div>
+
+        {/* Row 4.5: Top Products — full width */}
+        <div className="lg:col-span-12">
+          <DashboardTopProducts />
         </div>
 
         {/* Row 5: Transaction Log — full width */}

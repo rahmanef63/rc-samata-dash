@@ -75,6 +75,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList },
       { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
       { title: "Master Data", url: "/operation/master-data", icon: Database },
+      { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot },
       { title: "Pengaturan", url: "/operation/settings", icon: Settings },
     ],
   },

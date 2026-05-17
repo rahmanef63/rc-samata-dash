@@ -244,9 +244,7 @@ export default function ReportHub() {
               <button
                 key={r._id}
                 type="button"
-                onClick={() =>
-                  router.push(`/laporan/analisis?report=${r._id}`)
-                }
+                onClick={() => router.push(`/laporan/${r._id}`)}
                 className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/20 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
