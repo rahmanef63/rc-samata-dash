@@ -7,10 +7,11 @@ import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
+import { useBranchScope } from "../context/BranchScopeContext";
 
 export function Dashboard30DayChart() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const monthlyTrend = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
     branchId ? { branchId } : "skip",

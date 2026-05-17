@@ -6,12 +6,16 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { formatLongDate, formatRpFull, getJakartaDateString } from "@/shared/lib";
+import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardKpiCards() {
   const router = useRouter();
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches: scopeBranches } = useBranchScope();
+  const branches = scopeBranches;
+  // "All branches" mode (null) falls back to first so single-branch
+  // operational KPIs stay populated. The 10 KPI Targets card handles "All".
+  const branchId = scopeBranchId ?? scopeBranches?.[0]?._id;
 
   const today = getJakartaDateString();
   const currentMonth = today.slice(0, 7);

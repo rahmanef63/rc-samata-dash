@@ -7,10 +7,11 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard, TransactionRow, SectionHeader } from "@/shared/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRp } from "@/shared/lib";
+import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 
 export function CashflowOverview() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   const waterfall = useQuery(
     api.features.reports.dashboardQueries.getCashflowWaterfall,

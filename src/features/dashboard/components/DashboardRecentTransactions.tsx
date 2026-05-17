@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBranchScope } from "../context/BranchScopeContext";
 
 type TransactionItem = {
   id: string;
@@ -25,8 +26,8 @@ export function DashboardRecentTransactions() {
   const router = useRouter();
   const [selected, setSelected] = useState<TransactionItem | null>(null);
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const transactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
     branchId ? { branchId } : "skip",

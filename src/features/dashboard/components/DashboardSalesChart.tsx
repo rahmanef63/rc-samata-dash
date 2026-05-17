@@ -8,11 +8,12 @@ import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
+import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardSalesChart() {
   const isOwner = useUserRole() === "owner";
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const salesTrend = useQuery(
     api.features.reports.dashboardQueries.getWeeklySalesTrend,
     branchId ? { branchId } : "skip",

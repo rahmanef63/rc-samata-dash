@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/features/auth/useUserRole";
+import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardTransactionLog() {
   const isOwner = useUserRole() === "owner";
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
+  const { branchId: scopeBranchId, branches } = useBranchScope();
+  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const transactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
     branchId ? { branchId } : "skip",

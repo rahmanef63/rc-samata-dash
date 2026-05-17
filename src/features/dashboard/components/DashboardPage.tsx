@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import {
   DashboardKpiCards,
+  DashboardKpiTargets,
   DashboardPettyCashRequests,
   DashboardSalesChart,
   DashboardRecentTransactions,
@@ -35,6 +36,11 @@ export default function DashboardPage() {
         {/* KPI Cards — full width */}
         <div className="lg:col-span-12">
           <DashboardKpiCards />
+        </div>
+
+        {/* KPI Target vs Aktual — full width */}
+        <div className="lg:col-span-12">
+          <DashboardKpiTargets />
         </div>
 
         {/* Row 2: Sales chart + Petty Cash */}
