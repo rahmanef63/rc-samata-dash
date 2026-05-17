@@ -15,7 +15,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:users": "npx tsx scripts/seed-users.ts"
+    "seed:users": "npx tsx scripts/seed-users.ts",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy --yes",
+    "convex:codegen": "convex dev --once",
+    "convex:push": "convex deploy --yes"
   },
   "dependencies": {
     "@auth/core": "^0.37.2",
