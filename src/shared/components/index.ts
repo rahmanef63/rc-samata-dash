@@ -10,5 +10,7 @@ export { FAB } from "./FAB";
 export { ViewAllButton } from "./ViewAllButton";
 export { CrudDialog } from "./CrudDialog";
 export { DataTable } from "./DataTable";
+export { BranchSelector } from "./BranchSelector";
+export { DateRangePicker } from "./DateRangePicker";
 export type { FieldConfig } from "./CrudDialog";
 export type { Column } from "./DataTable";

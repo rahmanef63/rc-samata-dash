@@ -4,6 +4,7 @@ import { Bell, Search, Sun, Moon, User, LogOut, Settings } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import { BranchSelector, DateRangePicker } from "@/shared/components";
 import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -125,6 +126,14 @@ export function TopHeader() {
       </div>
 
       <div className="flex items-center gap-1">
+        {/* Branch + Date scope (desktop only — mobile uses a dedicated drawer later) */}
+        {!isMobile && (
+          <div className="flex items-center gap-1.5 mr-2">
+            <BranchSelector />
+            <DateRangePicker />
+          </div>
+        )}
+
         {/* Search */}
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSearchOpen(true)}>
           <Search className="h-4 w-4 text-muted-foreground" />

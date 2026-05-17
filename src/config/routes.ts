@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users, Folder } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users, Folder, User, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -48,6 +48,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
         ],
       },
       { title: "Chat AI", url: "/chat", icon: Bot },
+      { title: "Profil", url: "/profile", icon: User },
     ],
   },
   {
@@ -59,6 +60,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
       { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
+      { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
     ],
   },

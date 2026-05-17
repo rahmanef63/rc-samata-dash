@@ -4,15 +4,23 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { DynamicPageLayout } from "@/components/layout/DynamicPageLayout";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { ReactNode } from "react";
+import { BranchScopeProvider } from "@/features/dashboard/context/BranchScopeContext";
+import { DateScopeProvider } from "@/features/dashboard/context/DateScopeContext";
+import { Suspense, ReactNode } from "react";
 
 export default function DashboardGroupLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <RoleGuard>
-        <DashboardLayout>
-          <DynamicPageLayout>{children}</DynamicPageLayout>
-        </DashboardLayout>
+        <Suspense fallback={null}>
+          <BranchScopeProvider>
+            <DateScopeProvider>
+              <DashboardLayout>
+                <DynamicPageLayout>{children}</DynamicPageLayout>
+              </DashboardLayout>
+            </DateScopeProvider>
+          </BranchScopeProvider>
+        </Suspense>
       </RoleGuard>
     </AuthGuard>
   );
