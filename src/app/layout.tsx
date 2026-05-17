@@ -52,17 +52,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen min-h-[100dvh] antialiased">
         <ConvexClientProvider>{children}</ConvexClientProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
-                });
-              }
-            `,
-          }}
-        />
+        {/* SW registration moved into ServiceWorkerRefresher inside
+         *  ConvexClientProvider so it runs once with React lifecycle and
+         *  calls reg.update() to pull a fresh /sw.js when the body changes. */}
       </body>
     </html>
   );

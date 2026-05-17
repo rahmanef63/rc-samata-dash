@@ -4,6 +4,11 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexHttpClient } from "convex/browser";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { type ReactNode, useState } from "react";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { ChunkErrorBoundary } from "@/shared/components/ChunkErrorBoundary";
+import { GlobalErrorListeners } from "@/shared/components/GlobalErrorListeners";
+import { ServiceWorkerRefresher } from "@/shared/components/ServiceWorkerRefresher";
+import { VersionWatcher } from "@/shared/components/VersionWatcher";
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   const [convex] = useState(() => {
@@ -22,5 +27,17 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
     return client;
   });
 
-  return <ConvexAuthProvider client={convex}>{children}</ConvexAuthProvider>;
+  return (
+    <ChunkErrorBoundary>
+      <ConvexAuthProvider client={convex}>
+        <GlobalErrorListeners />
+        <ServiceWorkerRefresher />
+        <VersionWatcher />
+        {/* Toaster at root so the version-update toast shows on auth/landing
+         *  routes too (outside the dashboard layout). */}
+        <SonnerToaster richColors closeButton />
+        {children}
+      </ConvexAuthProvider>
+    </ChunkErrorBoundary>
+  );
 }

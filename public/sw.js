@@ -1,9 +1,17 @@
 /// <reference lib="webworker" />
 
-const CACHE_NAME = "rc-samata-v1";
-const OFFLINE_URL = "/login";
+/* RC Samata service worker — minimal install-ability + offline fallback.
+ *
+ * IMPORTANT: this SW deliberately does NOT cache /_next/static/ assets
+ * (chunks, CSS) because after a redeploy the cached chunk filenames no
+ * longer exist on the server, producing "Failed to load chunk" errors.
+ * VersionWatcher prompts a reload on each redeploy; ChunkErrorBoundary
+ * + GlobalErrorListeners auto-reload as a safety net.
+ *
+ * Cached: PWA icons + manifest only. Everything else is network-first
+ * (no offline page fallback to keep things simple). */
 
-// Assets to precache
+const CACHE_NAME = "rc-samata-assets-v2";
 const PRECACHE_ASSETS = [
   "/pwa-192x192.png",
   "/pwa-512x512.png",
@@ -16,7 +24,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting()),
   );
 });
 
@@ -28,10 +36,10 @@ self.addEventListener("activate", (event) => {
         Promise.all(
           keys
             .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
-        )
+            .map((key) => caches.delete(key)),
+        ),
       )
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -39,12 +47,8 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET and cross-origin requests
-  if (request.method !== "GET" || url.origin !== self.location.origin) {
-    return;
-  }
-
-  // Skip Convex WebSocket and API requests
+  // Skip non-GET, cross-origin, and Convex backend traffic
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (
     url.pathname.includes("/api/") ||
     url.protocol === "wss:" ||
@@ -53,21 +57,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first strategy for navigation requests
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request).catch(() =>
-        caches.match(OFFLINE_URL).then((cached) => cached || new Response("Offline", { status: 503 }))
-      )
-    );
-    return;
-  }
-
-  // Cache-first for static assets
-  if (
-    url.pathname.startsWith("/_next/static") ||
-    url.pathname.match(/\.(png|jpg|jpeg|svg|gif|ico|woff2?)$/)
-  ) {
+  // Cache-first for ONLY the icons / manifest that are stable across builds
+  if (PRECACHE_ASSETS.includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
@@ -78,22 +69,12 @@ self.addEventListener("fetch", (event) => {
               caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
             }
             return response;
-          })
-      )
+          }),
+      ),
     );
     return;
   }
 
-  // Network-first for everything else
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached || new Response("Offline", { status: 503 })))
-  );
+  // Network-only for everything else (HTML + JS chunks + CSS).
+  // No cache => no stale chunks after deploy.
 });
