@@ -113,7 +113,7 @@ export const importLPKKBatch = mutation({
   },
   handler: async (ctx, { reportId, branchId, items }) => {
     await requireAuth(ctx);
-    const categories = await ctx.db.query("expenseCategories").collect();
+    const categories = await ctx.db.query("expenseCategories").take(500);
     const findCategory = (type: "cogs" | "utility" | "other") =>
       categories.find((c) => c.type === type) ??
       categories.find((c) => c.type === "other") ??

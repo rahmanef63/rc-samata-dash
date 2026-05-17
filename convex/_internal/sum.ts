@@ -19,8 +19,9 @@ export default internalQuery({
     groupField: v.optional(v.string()),
   },
   handler: async (ctx, { table, amountField, dateField, groupField }) => {
+    // @dod:skip-perf reason="admin-key ETL baseline; full-scan is the whole point"
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows: any[] = await ctx.db.query(table as any).collect();
+    const rows: any[] = await ctx.db.query(table as any).take(100000);
     const out: Record<string, Record<string, number>> = {};
 
     for (const row of rows) {

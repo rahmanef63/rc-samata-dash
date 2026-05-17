@@ -9,7 +9,7 @@ export const listProviders = query({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    const providers = await ctx.db.query("aiProviders").collect();
+    const providers = await ctx.db.query("aiProviders").take(1000);
     return providers.map((p) => ({
       ...p,
       apiKey: p.apiKey ? `${p.apiKey.slice(0, 8)}...${p.apiKey.slice(-4)}` : "",
@@ -60,7 +60,7 @@ export const listTools = query({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("aiTools").collect();
+    return await ctx.db.query("aiTools").take(1000);
   },
 });
 
@@ -82,7 +82,7 @@ export const listAgents = query({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("aiAgents").collect();
+    return await ctx.db.query("aiAgents").take(1000);
   },
 });
 
@@ -127,7 +127,7 @@ export const listInstructions = query({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("aiCustomInstructions").collect();
+    return await ctx.db.query("aiCustomInstructions").take(1000);
   },
 });
 
@@ -236,7 +236,7 @@ export const getEmbeddingStats = query({
       return { count: docs.length, indexed: docs.length > 0 };
     }
     // Total count
-    const allDocs = await ctx.db.query("aiEmbeddings").collect();
+    const allDocs = await ctx.db.query("aiEmbeddings").take(20000);
     return { count: allDocs.length, indexed: allDocs.length > 0 };
   },
 });

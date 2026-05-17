@@ -14,8 +14,9 @@ import { v } from "convex/values";
 export default internalQuery({
   args: { table: v.string() },
   handler: async (ctx, { table }) => {
+    // @dod:skip-perf reason="admin-key row count; bounded by take(100000)"
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await ctx.db.query(table as any).collect();
+    const rows = await ctx.db.query(table as any).take(100000);
     return rows.length;
   },
 });

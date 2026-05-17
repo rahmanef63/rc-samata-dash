@@ -241,7 +241,7 @@ export const seedDefaultAgents = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    const existing = await ctx.db.query("aiAgents").collect();
+    const existing = await ctx.db.query("aiAgents").take(1000);
     const existingByAgentId = new Map(existing.map((agent) => [agent.agentId, agent]));
 
     let inserted = 0;
@@ -306,7 +306,7 @@ export const seedDefaultTools = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    const existing = await ctx.db.query("aiTools").collect();
+    const existing = await ctx.db.query("aiTools").take(1000);
     const existingByToolId = new Map(existing.map((tool) => [tool.toolId, tool]));
 
     let inserted = 0;

@@ -40,7 +40,7 @@ export const countEmbeddings = internalQuery({
         .collect();
       return docs.length;
     }
-    const docs = await ctx.db.query("aiEmbeddings").collect();
+    const docs = await ctx.db.query("aiEmbeddings").take(20000);
     return docs.length;
   },
 });

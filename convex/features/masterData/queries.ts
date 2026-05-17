@@ -60,7 +60,7 @@ export const listMasterProducts = query({
   args: { activeOnly: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    const all = await ctx.db.query("masterProducts").collect();
+    const all = await ctx.db.query("masterProducts").take(5000);
     if (args.activeOnly) return all.filter((p) => p.isActive);
     return all;
   },
@@ -85,8 +85,8 @@ export const findMasterProductByName = query({
       .first();
     if (exact) return exact;
 
-    // Fallback: fuzzy search
-    const all = await ctx.db.query("masterProducts").collect();
+    // Fallback: fuzzy search (bounded)
+    const all = await ctx.db.query("masterProducts").take(5000);
     const idx = findBestMatch(name, all);
     return idx >= 0 ? all[idx] : null;
   },
@@ -98,7 +98,7 @@ export const listMasterIngredients = query({
   args: { activeOnly: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    const all = await ctx.db.query("masterIngredients").collect();
+    const all = await ctx.db.query("masterIngredients").take(5000);
     if (args.activeOnly) return all.filter((p) => p.isActive);
     return all;
   },
@@ -123,7 +123,7 @@ export const findMasterIngredientByName = query({
       .first();
     if (exact) return exact;
 
-    const all = await ctx.db.query("masterIngredients").collect();
+    const all = await ctx.db.query("masterIngredients").take(5000);
     const idx = findBestMatch(name, all);
     return idx >= 0 ? all[idx] : null;
   },
@@ -141,8 +141,8 @@ export const checkItemCoverage = query({
   handler: async (ctx, { productNames, ingredientNames }) => {
     await requireAuth(ctx);
 
-    const products = await ctx.db.query("masterProducts").collect();
-    const ingredients = await ctx.db.query("masterIngredients").collect();
+    const products = await ctx.db.query("masterProducts").take(5000);
+    const ingredients = await ctx.db.query("masterIngredients").take(5000);
 
     const unmatchedProducts: string[] = [];
     for (const name of productNames) {
