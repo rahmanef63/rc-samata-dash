@@ -5,7 +5,6 @@ import { useQuery, useMutation } from "convex/react";
 import { Users, Shield } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";

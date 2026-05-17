@@ -73,8 +73,9 @@ export function KpiTargetAdmin() {
       });
       toast.success("Target diperbarui");
       setEditing((prev) => {
-        const { [String(id)]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[String(id)];
+        return next;
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
