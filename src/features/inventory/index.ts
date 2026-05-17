@@ -1,2 +1,2 @@
-export { InventoryOverview } from "./components";
+export { InventoryOverview, StockMovementsLog } from "./components";
 export * from "./types";

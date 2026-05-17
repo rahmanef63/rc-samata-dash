@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users, Folder, User, TrendingUp } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -70,7 +70,10 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     roles: ADMIN_ROLES,
     items: [
       { title: "Inventaris", url: "/operation", icon: Package },
+      { title: "Mutasi Stok", url: "/operation/stock-movements", icon: History },
       { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
+      { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList },
+      { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
       { title: "Master Data", url: "/operation/master-data", icon: Database },
       { title: "Pengaturan", url: "/operation/settings", icon: Settings },
     ],
