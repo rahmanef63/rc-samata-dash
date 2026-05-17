@@ -92,3 +92,81 @@ The Password provider in `convex/auth.ts` currently uses **plaintext password st
 6. Returns `{token, refreshToken}` to client
 7. Client stores tokens and authenticates subsequent requests
 <!-- END:convex-selfhosted-auth-rules -->
+
+# Menu Routes & Role Gating (synced 2026-05-17)
+
+Single source of truth: `src/config/routes.ts`. Sidebar renders from
+`filterRouteGroups(role)` so changes to routes propagate automatically.
+
+## MENU UTAMA (all roles)
+- `/` Dashboard
+- `/report` Ringkasan Laporan
+- `/laporan` Semua Laporan
+- `/laporan/analisis` Analisis
+- `/laporan/upload` Upload Laporan (admin/staff)
+  - `/laporan/upload-pergantian` Pergantian Produk
+  - `/laporan/upload-tunjangan` Tunjangan Karyawan
+- `/laporan/[reportId]` Drill per weekly report (16 tabs, dynamic)
+- `/chat` Chat AI
+- `/profile` Profil
+
+## KEUANGAN (admin/staff)
+- `/finance` Penjualan
+- `/finance/expenses` Pengeluaran
+- `/finance/payables` Piutang Vendor
+- `/finance/petty-cash` Petty Cash
+- `/finance/cashflow` Cashflow
+- `/finance/closing` Closing & Setoran (includes Owner Transfers tab)
+
+## OPERASIONAL
+Staff + super_admin:
+- `/operation` Inventaris
+- `/operation/stock-movements` Mutasi Stok
+- `/operation/audit` Audit (checklist)
+- `/operation/kpi-targets` Target KPI
+- `/operation/master-data` Master Data
+- `/operation/settings` Pengaturan (includes persisted notification toggles)
+
+Super-admin only:
+- `/operation/audit/logs` Log Audit
+- `/operation/ai-config` Konfigurasi AI (Provider/Tools/Agents/Instructions)
+- `/operation/users` Manajemen User
+
+## Cross-cutting infrastructure
+
+**Branch + Date scope** — `BranchScopeProvider` + `DateScopeProvider`
+mounted in `src/app/(dashboard)/layout.tsx`. URL keys: `?b=ID|all`,
+`?p=today|7d|wtd|30d|mtd|qtd|ytd`, `?from=ms&to=ms`. New owner-facing
+queries should opt in via `useBranchScope()` / `useDateScope()`.
+
+**Version watcher** — `VersionWatcher` polls `/api/version` every 5
+min + on focus/visibility and shows a sonner toast "Versi baru
+tersedia · Muat ulang" when `NEXT_PUBLIC_BUILD_ID` changes. The
+`hardReload()` helper clears CacheStorage before navigating. Build
+id is derived in `next.config.ts` from
+`DOKPLOY_COMMIT_SHA / GITHUB_SHA / VERCEL_GIT_COMMIT_SHA / COMMIT_SHA`
+(fallback dev timestamp).
+
+**Chunk-error self-heal** — `ChunkErrorBoundary` wraps the tree;
+`GlobalErrorListeners` catches async chunk failures. Both auto-reload
+once (60s cooldown via sessionStorage `rcsamata:chunk-reloaded-at`).
+
+**Service worker** — `public/sw.js` deliberately caches ONLY
+PWA icons + manifest (network-only for `/_next/static/*`) so deploys
+don't strand cached stale chunks. `ServiceWorkerRefresher` re-registers
++ calls `reg.update()` each boot so SW body changes propagate.
+
+## Convex backend conventions used by these surfaces
+
+- All queries returning rows use `.withIndex(...)` and `.take(N)` —
+  no bare `.collect()` on large tables. `getSalesByBranch` and other
+  `*ByBranch` queries cap at 5000 rows / 52 weekly reports.
+- KPI thresholds + targets live in `convex/features/reports/kpiAnalytics.ts`
+  (`DEFAULT_KPIS`). 10 standard QSR KPIs seeded per-branch via
+  `seedDefaultKPITargets({branchId})` from `/operation/kpi-targets`.
+- Audit log helper: `convex/shared/helpers.ts#insertAuditLog` —
+  call from any mutation that mutates business data, viewable at
+  `/operation/audit/logs`.
+- User preferences: `convex/features/auth/_schema.ts#userPreferences`
+  (lazy-create on first write). Add new toggles by appending optional
+  fields — no migration needed.
