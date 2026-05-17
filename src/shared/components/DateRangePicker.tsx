@@ -26,8 +26,10 @@ import { type DateRange } from "react-day-picker";
 const PRESET_OPTIONS: Exclude<DatePreset, "custom">[] = [
   "today",
   "7d",
+  "wtd",
   "30d",
   "mtd",
+  "qtd",
   "ytd",
 ];
 

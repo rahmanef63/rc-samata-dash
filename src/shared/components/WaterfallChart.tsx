@@ -86,10 +86,12 @@ export function WaterfallChart({ data, title, subtitle, height = 220, headerRigh
                   key={i}
                   fill={
                     entry.isTotal
-                      ? "#3b82f6"
+                      ? entry.rawValue >= 0
+                        ? "#10b981" /* profit: green */
+                        : "#ef4444" /* loss: red */
                       : entry.isPositive
-                      ? "#10b981"
-                      : "#ef4444"
+                      ? "#10b981" /* inflow: green */
+                      : "#ef4444" /* outflow: red */
                   }
                 />
               ))}

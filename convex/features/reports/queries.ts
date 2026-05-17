@@ -230,13 +230,26 @@ export const getSalesByBranch = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    // Convex returns max 8192 rows per query. Cap raw rows here so the
+    // dashboard / sales drill don't crash for branches with many weeks
+    // of uploaded productSales. Newest reports first; stop early once
+    // we've collected ROW_CAP entries.
+    const ROW_CAP = 5000;
+    const reports = await ctx.db
+      .query("weeklyReports")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .take(52);
     const all = [];
     for (const r of reports) {
-      const items = await ctx.db.query("productSales").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      const items = await ctx.db
+        .query("productSales")
+        .withIndex("by_report", (q) => q.eq("reportId", r._id))
+        .collect();
       all.push(...items);
+      if (all.length >= ROW_CAP) break;
     }
-    return all;
+    return all.slice(0, ROW_CAP);
   },
 });
 
@@ -244,11 +257,13 @@ export const getExpensesByBranch = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    // LPKK data is imported into the expenses table (not a report-linked table)
+    // LPKK data is imported into the expenses table (not a report-linked table).
+    // Cap at 5000 newest rows so Convex 8192-row return cap doesn't trip.
     const items = await ctx.db
       .query("expenses")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+      .order("desc")
+      .take(5000);
     return items.map((e) => ({
       _id: e._id,
       _creationTime: e._creationTime,
@@ -266,13 +281,22 @@ export const getPayablesByBranch = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const ROW_CAP = 5000;
+    const reports = await ctx.db
+      .query("weeklyReports")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .take(52);
     const all = [];
     for (const r of reports) {
-      const items = await ctx.db.query("creditPurchases").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      const items = await ctx.db
+        .query("creditPurchases")
+        .withIndex("by_report", (q) => q.eq("reportId", r._id))
+        .collect();
       all.push(...items);
+      if (all.length >= ROW_CAP) break;
     }
-    return all;
+    return all.slice(0, ROW_CAP);
   },
 });
 
@@ -280,13 +304,24 @@ export const getCashFlowByBranch = query({
   args: { branchId: v.id("branches") },
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
-    const reports = await ctx.db.query("weeklyReports").withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+    const ROW_CAP = 5000;
+    const reports = await ctx.db
+      .query("weeklyReports")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .take(52);
     const all = [];
     for (const r of reports) {
-      const items = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", r._id)).collect();
+      const items = await ctx.db
+        .query("dailyCashFlow")
+        .withIndex("by_report", (q) => q.eq("reportId", r._id))
+        .collect();
       all.push(...items);
+      if (all.length >= ROW_CAP) break;
     }
-    return all.sort((a, b) => b.businessDate.localeCompare(a.businessDate));
+    return all
+      .slice(0, ROW_CAP)
+      .sort((a, b) => b.businessDate.localeCompare(a.businessDate));
   },
 });
 
