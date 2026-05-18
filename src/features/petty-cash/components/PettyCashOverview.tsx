@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -57,6 +58,7 @@ const columns: Column<PettyCashRequest>[] = [
 ];
 
 export function PettyCashOverview() {
+  const [sourceRow, setSourceRow] = useState<PettyCashRequest | null>(null);
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
@@ -174,6 +176,7 @@ export function PettyCashOverview() {
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
         onDelete={crud.openDelete}
+        onRowClick={(item) => setSourceRow(item)}
         entityName="Petty Cash"
       />
       <CrudDialog<PettyCashRequest>
@@ -181,6 +184,22 @@ export function PettyCashOverview() {
         fields={fields} entityName="Petty Cash" onClose={crud.close}
         onSubmit={crud.mode === "edit" ? crud.onUpdate : customCreate}
         onDelete={crud.onDelete}
+      />
+      <RowSourceDialog
+        open={!!sourceRow}
+        onClose={() => setSourceRow(null)}
+        title="Detail Petty Cash"
+        row={sourceRow}
+        fields={sourceRow ? [
+          { label: "Tanggal", value: sourceRow.requestDate },
+          { label: "Diminta", value: sourceRow.requestedBy },
+          { label: "Kategori", value: sourceRow.purposeCategory },
+          { label: "Request", value: formatRpFull(sourceRow.requestedAmount) },
+          { label: "Approved", value: formatRpFull(sourceRow.approvedAmount) },
+          { label: "Realisasi", value: formatRpFull(sourceRow.actualAmount) },
+          { label: "Status", value: sourceRow.status },
+          { label: "Catatan", value: sourceRow.notes },
+        ] : []}
       />
     </motion.div>
   );

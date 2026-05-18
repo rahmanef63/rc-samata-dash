@@ -8,7 +8,7 @@ import { AlertTriangle, PackageSearch } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionHeader, DataTable, CrudDialog, TabBar } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, TabBar, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { StockItem, StockMovement } from "@/shared/types";
@@ -63,6 +63,7 @@ type SubTab = typeof subTabs[number];
 
 export function InventoryOverview() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daftar Stok");
+  const [movementSourceRow, setMovementSourceRow] = useState<StockMovement | null>(null);
 
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
@@ -198,7 +199,21 @@ export function InventoryOverview() {
             onAdd={moveCrud.openCreate}
             onEdit={moveCrud.openEdit}
             onDelete={moveCrud.openDelete}
+            onRowClick={(item) => setMovementSourceRow(item)}
             entityName="Pergerakan Stok"
+          />
+          <RowSourceDialog
+            open={!!movementSourceRow}
+            onClose={() => setMovementSourceRow(null)}
+            title="Detail Pergerakan Stok"
+            row={movementSourceRow}
+            fields={movementSourceRow ? [
+              { label: "Tanggal", value: movementSourceRow.date },
+              { label: "Item", value: movementSourceRow.itemName },
+              { label: "Tipe", value: movementTypeLabels[movementSourceRow.type] || movementSourceRow.type },
+              { label: "Qty", value: `${movementSourceRow.qty} ${movementSourceRow.unit}` },
+              { label: "Catatan", value: movementSourceRow.notes },
+            ] : []}
           />
           <CrudDialog<StockMovement>
             open={moveCrud.isOpen} mode={moveCrud.mode} item={moveCrud.selectedItem}

@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog, ProgressBar } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, ProgressBar, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -26,6 +27,7 @@ const columns: Column<Expense>[] = [
 ];
 
 export function ExpensesOverview() {
+  const [sourceRow, setSourceRow] = useState<Expense | null>(null);
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
@@ -167,6 +169,7 @@ export function ExpensesOverview() {
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
         onDelete={crud.openDelete}
+        onRowClick={(item) => setSourceRow(item)}
         entityName="Pengeluaran"
       />
       <CrudDialog<Expense>
@@ -174,6 +177,21 @@ export function ExpensesOverview() {
         fields={fields} entityName="Pengeluaran" onClose={crud.close}
         onSubmit={crud.mode === "edit" ? crud.onUpdate : customCreate}
         onDelete={crud.onDelete}
+      />
+      <RowSourceDialog
+        open={!!sourceRow}
+        onClose={() => setSourceRow(null)}
+        title="Detail Pengeluaran"
+        row={sourceRow}
+        fields={sourceRow ? [
+          { label: "Tanggal", value: sourceRow.expenseDate },
+          { label: "Deskripsi", value: sourceRow.description },
+          { label: "Kategori", value: sourceRow.categoryName },
+          { label: "Jumlah", value: formatRpFull(sourceRow.amount) },
+          { label: "Sumber Bayar", value: paymentSourceLabels[sourceRow.paymentSource] || sourceRow.paymentSource },
+          { label: "Vendor", value: sourceRow.vendorName },
+          { label: "Status", value: sourceRow.status },
+        ] : []}
       />
     </motion.div>
   );

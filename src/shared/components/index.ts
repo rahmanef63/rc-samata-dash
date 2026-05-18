@@ -12,5 +12,7 @@ export { CrudDialog } from "./CrudDialog";
 export { DataTable } from "./DataTable";
 export { BranchSelector } from "./BranchSelector";
 export { DateRangePicker } from "./DateRangePicker";
+export { RowSourceDialog } from "./RowSourceDialog";
 export type { FieldConfig } from "./CrudDialog";
+export type { RowField, RowSource } from "./RowSourceDialog";
 export type { Column } from "./DataTable";

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
@@ -42,6 +42,7 @@ const columns: Column<DailySale>[] = [
 
 export function DailySalesForm() {
   const [sub, setSub] = useState(0);
+  const [sourceRow, setSourceRow] = useState<DailySale | null>(null);
 
   // Auto-detect a branch ID for demo purposes
   const { branchId: scopeBranchId, branches } = useBranchScope();
@@ -171,7 +172,26 @@ export function DailySalesForm() {
             onAdd={crud.openCreate}
             onEdit={crud.openEdit}
             onDelete={crud.openDelete}
+            onRowClick={(item) => setSourceRow(item)}
             entityName="Penjualan"
+          />
+          <RowSourceDialog
+            open={!!sourceRow}
+            onClose={() => setSourceRow(null)}
+            title="Detail Penjualan"
+            row={sourceRow}
+            fields={sourceRow ? [
+              { label: "Tanggal", value: sourceRow.businessDate },
+              { label: "Channel", value: sourceRow.channelName },
+              { label: "Gross", value: formatRpFull(sourceRow.grossAmount) },
+              { label: "Platform Fee", value: formatRpFull(sourceRow.platformFee) },
+              { label: "Promo", value: formatRpFull(sourceRow.promoCost) },
+              { label: "Net", value: formatRpFull(sourceRow.netAmount) },
+              { label: "Cash Diterima", value: formatRpFull(sourceRow.cashReceivedAmount) },
+              { label: "Settlement", value: sourceRow.settlementDate },
+              { label: "No. Ref", value: sourceRow.referenceNo },
+              { label: "Status", value: sourceRow.status },
+            ] : []}
           />
           <CrudDialog<DailySale>
             open={crud.isOpen} mode={crud.mode} item={crud.selectedItem}

@@ -27,6 +27,8 @@ const GRANULARITY_OPTIONS: { value: DateGranularity; label: string }[] = [
   { value: "day", label: "Hari" },
   { value: "week", label: "Minggu" },
   { value: "month", label: "Bulan" },
+  { value: "quarter", label: "Kuartal" },
+  { value: "year", label: "Tahun" },
 ];
 
 function yearRange(): number[] {
@@ -40,11 +42,15 @@ export function DateRangePicker({ className }: { className?: string }) {
     day,
     month,
     week,
+    quarter,
+    year,
     rangeLabel,
     setGranularity,
     setDay,
     setMonth,
     setWeek,
+    setQuarter,
+    setYear,
     goPrev,
     goNext,
     goToday,
@@ -145,6 +151,59 @@ export function DateRangePicker({ className }: { className?: string }) {
             </SelectContent>
           </Select>
         </>
+      )}
+
+      {granularity === "quarter" && (
+        <>
+          <Select
+            value={String(quarter.q)}
+            onValueChange={(v) => setQuarter({ y: quarter.y, q: Number(v) })}
+          >
+            <SelectTrigger className="h-7 w-auto min-w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {[1, 2, 3, 4].map((q) => (
+                <SelectItem key={q} value={String(q)}>
+                  Q{q}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(quarter.y)}
+            onValueChange={(v) => setQuarter({ y: Number(v), q: quarter.q })}
+          >
+            <SelectTrigger className="h-7 w-auto min-w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {yearRange().map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+
+      {granularity === "year" && (
+        <Select
+          value={String(year.y)}
+          onValueChange={(v) => setYear({ y: Number(v) })}
+        >
+          <SelectTrigger className="h-7 w-auto min-w-20 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {yearRange().map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
 
       {granularity === "week" && (

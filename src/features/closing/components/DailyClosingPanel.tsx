@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Check } from "lucide-react";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -83,6 +83,8 @@ type SubTab = typeof subTabs[number];
 
 export function DailyClosingPanel() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daily Closing");
+  const [closingSourceRow, setClosingSourceRow] = useState<DailyClosing | null>(null);
+  const [transferSourceRow, setTransferSourceRow] = useState<OwnerTransfer | null>(null);
 
   const { branchId: scopeBranchId, branches } = useBranchScope();
   const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
@@ -212,7 +214,26 @@ export function DailyClosingPanel() {
             onAdd={closingCrud.openCreate}
             onEdit={closingCrud.openEdit}
             onDelete={closingCrud.openDelete}
+            onRowClick={(item) => setClosingSourceRow(item)}
             entityName="Closing"
+          />
+          <RowSourceDialog
+            open={!!closingSourceRow}
+            onClose={() => setClosingSourceRow(null)}
+            title="Detail Daily Closing"
+            row={closingSourceRow}
+            fields={closingSourceRow ? [
+              { label: "Tanggal", value: closingSourceRow.businessDate },
+              { label: "Opening Cash", value: formatRpFull(closingSourceRow.openingCash) },
+              { label: "Cash Sales", value: formatRpFull(closingSourceRow.cashSales) },
+              { label: "Non-Cash", value: formatRpFull(closingSourceRow.nonCashSales) },
+              { label: "Expense Cash", value: `-${formatRpFull(closingSourceRow.expensesPaidCash)}` },
+              { label: "Expected", value: formatRpFull(closingSourceRow.expectedCash) },
+              { label: "Actual", value: formatRpFull(closingSourceRow.actualCash) },
+              { label: "Selisih", value: formatRpFull(closingSourceRow.difference) },
+              { label: "Status", value: closingSourceRow.status },
+              { label: "Disetor oleh", value: closingSourceRow.submittedBy },
+            ] : []}
           />
           <CrudDialog<DailyClosing>
             open={closingCrud.isOpen} mode={closingCrud.mode} item={closingCrud.selectedItem}
@@ -248,7 +269,27 @@ export function DailyClosingPanel() {
             onAdd={transferCrud.openCreate}
             onEdit={transferCrud.openEdit}
             onDelete={transferCrud.openDelete}
+            onRowClick={(item) => setTransferSourceRow(item)}
             entityName="Transfer"
+          />
+          <RowSourceDialog
+            open={!!transferSourceRow}
+            onClose={() => setTransferSourceRow(null)}
+            title="Detail Transfer Owner"
+            row={transferSourceRow}
+            source={transferSourceRow?.reportId ? {
+              sheet: "LAP. CF",
+              reportId: transferSourceRow.reportId,
+            } : undefined}
+            fields={transferSourceRow ? [
+              { label: "Tanggal", value: transferSourceRow.transferDate },
+              { label: "Arah", value: transferSourceRow.direction },
+              { label: "Tujuan", value: purposeLabels[transferSourceRow.purpose] || transferSourceRow.purpose },
+              { label: "Jumlah", value: formatRpFull(transferSourceRow.amount) },
+              { label: "No. Ref", value: transferSourceRow.referenceNo },
+              { label: "Status", value: transferSourceRow.status },
+              { label: "Catatan", value: transferSourceRow.description },
+            ] : []}
           />
           <CrudDialog<OwnerTransfer>
             open={transferCrud.isOpen} mode={transferCrud.mode} item={transferCrud.selectedItem}
