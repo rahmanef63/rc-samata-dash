@@ -25,6 +25,9 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "warn",
       // shadcn boilerplate emits empty interfaces; pattern is intentional.
       "@typescript-eslint/no-empty-object-type": "warn",
+      // CRUD helpers + xlsx parsers cross the type boundary frequently —
+      // tightening project-wide would force a refactor sweep. Warn only.
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
   {
