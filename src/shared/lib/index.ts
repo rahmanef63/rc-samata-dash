@@ -65,11 +65,18 @@ export const formatRpFull = (val: number) => {
   })}`;
 };
 
-export const formatShortDate = (dateLike: string) =>
-  shortDateFormatter.format(toSafeDate(dateLike));
+// Defensive: Intl.DateTimeFormat.format(InvalidDate) throws RangeError
+// "Invalid time value". Charts on day/week filters can pass empty or
+// malformed bucket keys from Convex aggregates — never crash the dashboard.
+export const formatShortDate = (dateLike?: string | null) => {
+  if (!isValidDateLike(dateLike)) return "—";
+  return shortDateFormatter.format(toSafeDate(dateLike));
+};
 
-export const formatLongDate = (dateLike: string) =>
-  longDateFormatter.format(toSafeDate(dateLike));
+export const formatLongDate = (dateLike?: string | null) => {
+  if (!isValidDateLike(dateLike)) return "—";
+  return longDateFormatter.format(toSafeDate(dateLike));
+};
 
 export const formatDateRange = (start?: string, end?: string) => {
   if (isValidDateLike(start) && isValidDateLike(end)) {
