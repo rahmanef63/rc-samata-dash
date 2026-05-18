@@ -46,7 +46,7 @@ export function resolveEnv(): ResolvedEnv {
     resolve(REPO_ROOT, ".env.local"),
     resolve(REPO_ROOT, ".env"),
   ];
-  let fileEnv: Record<string, string> = {};
+  const fileEnv: Record<string, string> = {};
   for (const p of candidates) {
     if (existsSync(p)) {
       Object.assign(fileEnv, parseDotenv(readFileSync(p, "utf8")));

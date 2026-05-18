@@ -119,7 +119,7 @@ function parseSideBySideSections(
     const direction = classifyDirection(title);
     const category = extractCategory(title);
 
-    let foundSubTotal = false;
+    const foundSubTotal = false;
     let highRowIndex = 0;
 
     // First pass: find the SUB TOTAL row index to know where items end

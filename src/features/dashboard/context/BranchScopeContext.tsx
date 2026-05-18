@@ -4,10 +4,11 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  useEffect,
   type ReactNode,
 } from "react";
 import { useQuery } from "convex/react";
@@ -43,12 +44,16 @@ export function BranchScopeProvider({ children }: { children: ReactNode }) {
   const [branchId, setBranchIdState] = useState<Id<"branches"> | null>(null);
 
   // Keep latest refs to avoid stale closures inside the memoised setBranchId.
+  // Assignments live in a layout effect (not during render) so the React 19
+  // compiler doesn't warn about ref mutation during render.
   const searchParamsRef = useRef(searchParams);
   const branchesRef = useRef(branches);
   const pathnameRef = useRef(pathname);
-  searchParamsRef.current = searchParams;
-  branchesRef.current = branches;
-  pathnameRef.current = pathname;
+  useLayoutEffect(() => {
+    searchParamsRef.current = searchParams;
+    branchesRef.current = branches;
+    pathnameRef.current = pathname;
+  });
 
   // Resolve URL → state once branches load. Only sets state when the
   // resolved id differs from the current one (prevents loop when
