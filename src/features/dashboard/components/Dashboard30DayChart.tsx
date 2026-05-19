@@ -13,11 +13,11 @@ import { useFilteredByDate } from "@/shared/hooks";
 
 export function Dashboard30DayChart() {
   const { branchId: scopeBranchId, branches } = useBranchScope();
-  const { rangeLabel, setGranularity } = useDateScope();
+  const { rangeLabel, setGranularity, startDate, endDate } = useDateScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawMonthlyTrend = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
-    branchId ? { branchId } : "skip",
+    branchId ? { branchId, startDate, endDate } : "skip",
   );
   const monthlyTrend = useFilteredByDate(rawMonthlyTrend, "date");
 

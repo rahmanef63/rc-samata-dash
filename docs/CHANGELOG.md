@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-05-19
+
+### Changed — Dashboard merge & rich KPI cards
+`/laporan/analisis` (Analytics page) merged into Dashboard `/`. Old route now redirects. Sidebar item removed. ReportHub + ReportOverview tiles updated.
+
+New `DashboardKpiRichGrid` replaces `DashboardKpiCards` + `DashboardKpiTargets` — 10 cards each carrying:
+- **value** sekarang (`text-3xl` foreground-solid)
+- **Δ vs periode sebelumnya** (auto-adjust dengan granularity: hari/minggu/bulan/kuartal/tahun)
+- **Avg** — rata-rata 12 periode terakhir
+- **Ideal** — industry standard (DEFAULT_KPIS hardcoded)
+- **Target** — branch's customized target (kpiTargets table)
+- Gauge bar dengan marker biru (ideal) + hitam (target)
+- Accent bar warna status di kiri + chip status di pojok
+
+Backend: new `getKpiDashboardRich({branchId, startDate, endDate, granularity})` di `convex/features/reports/kpiAnalytics.ts`. Compute actuals 3× (current / prior / avg-window). `shiftRange` derives prior window per granularity, `avgWindows` returns rolling-N count (12 for day/week/month, 4 for quarter, 3 for year).
+
+New `DashboardAnalysisDrill` ports 5 analisis tabs (Item Prioritas / Profitabilitas / Efisiensi Beli / Pemborosan / Arus Kas) ke bawah dashboard. `timeFilter` mengikuti `granularity` (day → "daily", week → "weekly", etc).
+
+Deleted: `src/features/analytics/` (AnalyticsPage + ReportDataBrowser) + `DashboardKpiTargets.tsx` (dead).
+
+### Fixed — Dashboard polish (5 issues)
+1. **KPI card readability** — saturated colored bg dibuang; switch ke `bg-card` netral + 1px left accent bar (warna status) + `text-3xl` foreground value. Avg/Ideal/Target footer dapat border-top + larger `text-sm` font.
+2. **Waterfall chart bars flipped** — rewrite signed bars (positif up, negatif down) on zero `ReferenceLine`. Labels colored match bar (green inflow / red outflow), position auto-flip (atas untuk +, bawah untuk -). Replaces broken stacked-base waterfall yang sembunyiin bar negatif.
+3. **Recent transactions compactness** — wrap di `ScrollArea max-h-[320px]` + denser rows w/ hover bg.
+4. **Line chart filter** — `getWeeklySalesTrend` + `getMonthlySalesTrend` sekarang accept optional `startDate / endDate` (ms). Frontend kirim DateScope range. Chart judul + subtitle dynamic show `rangeLabel` + jumlah titik data. Empty state suggest switch granularity instead of dead-end placeholder.
+5. **Dead code** — `DashboardKpiTargets` (replaced) di-purge dari `index.ts` exports + file deleted.
+
+### Note
+Backend KPI rich query menjalankan 8 tables × 3 windows = 24 fetches per render. Cached Convex queries amortize cost, tapi cold cache pertama kali bisa ~1-2s. Future optimization: consolidate into single internal query if becomes bottleneck.
+
+---
+
 ## 2026-05-18
 
 ### Added — Row-source dialog on 7 surfaces

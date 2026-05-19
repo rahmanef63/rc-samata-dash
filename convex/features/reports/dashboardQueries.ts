@@ -12,30 +12,34 @@ import type { Id } from "../../_generated/dataModel";
  * Groups productSales by businessDate, sums amounts.
  */
 export const getWeeklySalesTrend = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {
+    branchId: v.id("branches"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { branchId, startDate, endDate }) => {
     await requireAuth(ctx);
 
-    // Get all product sales for this branch (last report or across reports)
     const sales = await ctx.db
       .query("productSales")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .collect();
 
-    // Group by date
     const byDate: Record<string, number> = {};
     for (const s of sales) {
+      if (startDate != null && endDate != null) {
+        const t = Date.parse(s.businessDate);
+        if (!Number.isFinite(t) || t < startDate || t >= endDate) continue;
+      }
       byDate[s.businessDate] = (byDate[s.businessDate] ?? 0) + s.amount;
     }
 
-    // Sort by date desc, take last 7
-    const sorted = Object.entries(byDate)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .slice(0, 7)
-      .reverse();
+    const entries = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b));
+    // If no explicit range, keep legacy "last 7 days" behavior.
+    const sliced = startDate != null ? entries : entries.slice(-7);
 
-    return sorted.map(([date, value]) => ({
-      label: date.slice(5), // "01-15" format
+    return sliced.map(([date, value]) => ({
+      label: date.slice(5),
       date,
       value,
     }));
@@ -74,8 +78,12 @@ export const getWeeklySalesTrendInternal = internalQuery({
  * Sales trend for last 30 days (from dailyCashSummary).
  */
 export const getMonthlySalesTrend = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {
+    branchId: v.id("branches"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { branchId, startDate, endDate }) => {
     await requireAuth(ctx);
 
     const sales = await ctx.db
@@ -85,14 +93,17 @@ export const getMonthlySalesTrend = query({
 
     const byDate: Record<string, number> = {};
     for (const sale of sales) {
+      if (startDate != null && endDate != null) {
+        const t = Date.parse(sale.businessDate);
+        if (!Number.isFinite(t) || t < startDate || t >= endDate) continue;
+      }
       byDate[sale.businessDate] = (byDate[sale.businessDate] ?? 0) + sale.amount;
     }
 
-    const sorted = Object.entries(byDate)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-30);
+    const entries = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b));
+    const sliced = startDate != null ? entries : entries.slice(-30);
 
-    return sorted.map(([date, value]) => ({
+    return sliced.map(([date, value]) => ({
       label: date.slice(8),
       date,
       value,

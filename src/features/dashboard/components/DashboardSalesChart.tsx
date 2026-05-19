@@ -15,11 +15,11 @@ import { useFilteredByDate } from "@/shared/hooks";
 export function DashboardSalesChart() {
   const isOwner = useUserRole() === "owner";
   const { branchId: scopeBranchId, branches } = useBranchScope();
-  const { rangeLabel, setGranularity } = useDateScope();
+  const { rangeLabel, setGranularity, startDate, endDate } = useDateScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawSalesTrend = useQuery(
     api.features.reports.dashboardQueries.getWeeklySalesTrend,
-    branchId ? { branchId } : "skip",
+    branchId ? { branchId, startDate, endDate } : "skip",
   );
   const salesTrend = useFilteredByDate(rawSalesTrend, "date");
 
