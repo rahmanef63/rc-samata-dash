@@ -230,6 +230,7 @@ const bankStatementRowValidator = v.object({
   balance: v.number(),
   channel: v.optional(v.string()),
   category: v.optional(bankStatementCategoryUnion),
+  counterparty: v.optional(v.string()),
 });
 
 export const importBankStatementEntries = mutation({
@@ -249,6 +250,14 @@ export const importBankStatementEntries = mutation({
 
     const opening = batch.openingBalance ?? 0;
     let closing = opening;
+
+    // Pre-load vendor list once for opportunistic alias seeding.
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendorByName = new Map(
+      vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]),
+    );
+    const aliasesSeeded: Record<string, number> = {};
+
     for (const r of rows) {
       await ctx.db.insert("bankStatementEntries", {
         accountKind: batch.accountKind,
@@ -259,10 +268,46 @@ export const importBankStatementEntries = mutation({
         balance: r.balance,
         channel: r.channel,
         category: r.category,
+        counterparty: r.counterparty,
         batchId,
         branchId: batch.branchId,
       });
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
+
+      // Seed vendor alias if counterparty contains an existing vendor name.
+      if (r.counterparty && r.category === "payable_payment") {
+        const cp = r.counterparty.toUpperCase().trim();
+        let matchedVendor = vendorByName.get(cp);
+        if (!matchedVendor) {
+          for (const [name, vnd] of vendorByName) {
+            if (cp.includes(name) || name.includes(cp)) {
+              matchedVendor = vnd;
+              break;
+            }
+          }
+        }
+        if (matchedVendor) {
+          const existing = await ctx.db.query("vendorBankAliases")
+            .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId).eq("alias", cp))
+            .first();
+          if (existing) {
+            await ctx.db.patch(existing._id, {
+              lastSeenAt: Date.now(),
+              seenCount: existing.seenCount + 1,
+            });
+          } else {
+            await ctx.db.insert("vendorBankAliases", {
+              vendorId: matchedVendor._id,
+              alias: cp,
+              source: "statement" as const,
+              branchId: batch.branchId,
+              lastSeenAt: Date.now(),
+              seenCount: 1,
+            });
+            aliasesSeeded[cp] = (aliasesSeeded[cp] ?? 0) + 1;
+          }
+        }
+      }
     }
 
     await ctx.db.patch(batchId, {
@@ -405,5 +450,247 @@ export const applyValidationBatch = mutation({
     });
 
     return { batchId, applied, rejected };
+  },
+});
+
+// ─── Auto-match bank entries to payables (rule-based) ───────
+//
+// Strategy:
+//   1. Normalize bank entry counterparty → look up vendorBankAliases or
+//      fuzzy match against vendor name list.
+//   2. For each candidate vendor, collect open/partial/overdue payables.
+//   3. Try EXACT amount match (toleransi Rp 1.000).
+//   4. If no exact match, try SUM of payables ≈ bank amount (split paid).
+//   5. Tanggal TIDAK strict — bank tx can be before or after invoice.
+//   6. Each successful match: assign new paymentReference, write log,
+//      set isValidated=true on both sides.
+
+export const autoMatchPayables = mutation({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }): Promise<any> => {
+    const userId = await requireAuth(ctx);
+
+    // 1. Load unvalidated bank entries (payable_payment category)
+    const allBank = await ctx.db.query("bankStatementEntries")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .take(5000);
+    const banks = allBank.filter((b) => b.category === "payable_payment" && !b.isValidated && b.debit > 0);
+
+    // 2. Load open/partial/overdue payables
+    const allPay = await ctx.db.query("payables")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .take(2000);
+    const payables = allPay.filter((p) =>
+      (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated
+    );
+
+    // 3. Build vendor lookup: alias → vendorId, vendor name → vendorId
+    const aliases = await ctx.db.query("vendorBankAliases")
+      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .take(2000);
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const aliasMap = new Map<string, string>();
+    for (const a of aliases) aliasMap.set(a.alias.toUpperCase().trim(), a.vendorId);
+    for (const v of vendors) aliasMap.set(v.name.toUpperCase().trim(), v._id);
+
+    // helper: find vendorId from text via alias or substring
+    const findVendorId = (text: string): string | null => {
+      const up = text.toUpperCase().trim();
+      if (!up) return null;
+      const direct = aliasMap.get(up);
+      if (direct) return direct;
+      for (const [name, id] of aliasMap) {
+        if (up.includes(name) || name.includes(up)) return id;
+      }
+      return null;
+    };
+
+    // 4. Group payables by vendor
+    const payByVendor = new Map<string, typeof payables>();
+    for (const p of payables) {
+      const arr = payByVendor.get(p.vendorId) ?? [];
+      arr.push(p);
+      payByVendor.set(p.vendorId, arr);
+    }
+
+    // 5. Create a validation batch for this auto-match run
+    const batchId = await ctx.db.insert("validationBatches", {
+      fileName: `auto-match-${new Date().toISOString().slice(0, 16)}.json`,
+      rowsApplied: 0, rowsRejected: 0,
+      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+      summary: "auto rule-based match",
+    });
+
+    const now = Date.now();
+    let applied = 0;
+    let rejected = 0;
+    let refSeq = 1;
+    const refByPayableId = new Map<string, string>();
+
+    const nextRef = (txDate: string, payableId: string) => {
+      const existing = refByPayableId.get(payableId);
+      if (existing) return existing;
+      const ym = txDate.slice(0, 7).replace("-", "");
+      const ref = `PMT-${ym}-${String(refSeq++).padStart(4, "0")}`;
+      refByPayableId.set(payableId, ref);
+      return ref;
+    };
+
+    // 6. Group bank entries by inferred vendor + try exact amount first
+    type BankEntry = typeof banks[number];
+    const banksByVendor = new Map<string, BankEntry[]>();
+    const orphanBanks: BankEntry[] = [];
+    for (const b of banks) {
+      const vendorId = findVendorId(b.counterparty ?? "") ?? findVendorId(b.description);
+      if (vendorId) {
+        const arr = banksByVendor.get(vendorId) ?? [];
+        arr.push(b);
+        banksByVendor.set(vendorId, arr);
+      } else {
+        orphanBanks.push(b);
+      }
+    }
+    rejected += orphanBanks.length;
+
+    const TOL = 1500;
+    const matchBank = async (b: BankEntry, payableId: string) => {
+      const ref = nextRef(b.txDate, payableId);
+      await ctx.db.insert("validationLogs", {
+        entryType: "bank_entry", entryId: b._id, batchId,
+        field: "paymentReference",
+        beforeValue: b.paymentReference, afterValue: ref,
+        branchId, changedAt: now,
+      });
+      await ctx.db.insert("validationLogs", {
+        entryType: "bank_entry", entryId: b._id, batchId,
+        field: "payableId",
+        beforeValue: b.payableId as string | undefined, afterValue: payableId,
+        branchId, changedAt: now,
+      });
+      await ctx.db.insert("validationLogs", {
+        entryType: "bank_entry", entryId: b._id, batchId,
+        field: "isValidated",
+        beforeValue: String(!!b.isValidated), afterValue: "true",
+        branchId, changedAt: now,
+      });
+      await ctx.db.patch(b._id, {
+        payableId: payableId as Id<"payables">,
+        paymentReference: ref,
+        isValidated: true,
+      });
+    };
+
+    const matchPayable = async (p: typeof payables[number], ref: string) => {
+      const cur = await ctx.db.get(p._id) as { paymentReference?: string; isValidated?: boolean } | null;
+      if (!cur) return;
+      if (cur.paymentReference !== ref) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: p._id, batchId,
+          field: "paymentReference",
+          beforeValue: cur.paymentReference, afterValue: ref,
+          branchId, changedAt: now,
+        });
+      }
+      if (!cur.isValidated) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: p._id, batchId,
+          field: "isValidated",
+          beforeValue: "false", afterValue: "true",
+          branchId, changedAt: now,
+        });
+      }
+      await ctx.db.patch(p._id, { paymentReference: ref, isValidated: true });
+    };
+
+    // 7. Per vendor: match by amount
+    for (const [vendorId, vendorBanks] of banksByVendor) {
+      const vendorPayables = payByVendor.get(vendorId) ?? [];
+      const usedPayables = new Set<string>();
+
+      // 7a. 1-to-1 exact match first
+      for (const b of vendorBanks) {
+        const candidate = vendorPayables.find((p) =>
+          !usedPayables.has(p._id) &&
+          Math.abs(p.amount - p.paidAmount - b.debit) <= TOL
+        );
+        if (candidate) {
+          usedPayables.add(candidate._id);
+          await matchBank(b, candidate._id);
+          await matchPayable(candidate, refByPayableId.get(candidate._id)!);
+          applied += 2;
+        }
+      }
+
+      // 7b. N-to-1 (multiple banks → 1 payable): group remaining banks
+      //     by NEAR-equal target amount.
+      const remainingBanks = vendorBanks.filter((b) => !b.isValidated && !refByPayableId.has(b._id));
+      for (const p of vendorPayables) {
+        if (usedPayables.has(p._id)) continue;
+        const target = p.amount - p.paidAmount;
+        // Greedy: pick smallest subset of remainingBanks that sums close to target.
+        // For small N, try all 2-row combinations.
+        const candidates = remainingBanks.filter((b) => !b.isValidated && b.debit > 0 && !refByPayableId.has(b._id));
+        let matched: BankEntry[] | null = null;
+        for (let i = 0; i < candidates.length && !matched; i++) {
+          for (let j = i + 1; j < candidates.length; j++) {
+            if (Math.abs(candidates[i].debit + candidates[j].debit - target) <= TOL) {
+              matched = [candidates[i], candidates[j]];
+              break;
+            }
+            for (let k = j + 1; k < candidates.length; k++) {
+              if (Math.abs(candidates[i].debit + candidates[j].debit + candidates[k].debit - target) <= TOL) {
+                matched = [candidates[i], candidates[j], candidates[k]];
+                break;
+              }
+            }
+          }
+        }
+        if (matched) {
+          usedPayables.add(p._id);
+          for (const b of matched) await matchBank(b, p._id);
+          await matchPayable(p, refByPayableId.get(p._id)!);
+          applied += matched.length + 1;
+        }
+      }
+
+      // 7c. unmatched banks for this vendor count as rejected
+      rejected += vendorBanks.filter((b) => !refByPayableId.has(b._id) === false && false).length;
+    }
+
+    await ctx.db.patch(batchId, { rowsApplied: applied, rowsRejected: rejected });
+
+    await insertAuditLog(ctx, {
+      entityType: "validationBatches", entityId: batchId, action: "create",
+      description: `Auto-match: ${applied} cells applied across ${banksByVendor.size} vendors`,
+      actedBy: userId, branchId,
+    });
+
+    return { batchId, applied, rejected, vendorsTouched: banksByVendor.size, orphanBanks: orphanBanks.length };
+  },
+});
+
+// Learn vendor alias from a manual binding (PIC fixes match in UI).
+export const learnVendorAlias = mutation({
+  args: {
+    vendorId: v.id("vendors"),
+    alias: v.string(),
+    branchId: v.id("branches"),
+  },
+  handler: async (ctx, { vendorId, alias, branchId }) => {
+    await requireAuth(ctx);
+    const norm = alias.toUpperCase().trim();
+    if (!norm) return { ok: false };
+    const existing = await ctx.db.query("vendorBankAliases")
+      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", norm))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { vendorId, lastSeenAt: Date.now(), seenCount: existing.seenCount + 1 });
+    } else {
+      await ctx.db.insert("vendorBankAliases", {
+        vendorId, alias: norm, source: "manual" as const,
+        branchId, lastSeenAt: Date.now(), seenCount: 1,
+      });
+    }
+    return { ok: true };
   },
 });

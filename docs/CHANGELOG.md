@@ -2,6 +2,47 @@
 
 ## 2026-05-19
 
+### Changed — Validator: auto-match + vendor alias learning + relaxed AI prompt
+
+Feedback: 186 perubahan ke 137 row tapi cuma 12 row beneran tervalidasi.
+AI terlalu konservatif karena prompt mensyaratkan tanggal >= invoice.
+User: "tanggal tidak harus sama, yang penting vendor + nominal cocok"
+plus minta vendor account dari statement disimpan.
+
+**Schema:**
+- `bankStatementEntries.counterparty` — kolom "Pihak" dari xlsx, dipake
+  buat alias matching (sebelumnya hanya di `description`).
+- `vendorBankAliases` table baru: vendorId, alias (UPPERCASE), source
+  (statement/validation/manual), branchId, lastSeenAt, seenCount.
+  Index by_alias + by_vendor + by_branch_alias.
+
+**Parser → import auto-seed alias:**
+`importBankStatementEntries` sekarang: pas insert row dgn category=
+payable_payment, kalau counterparty cocok (exact / substring) salah satu
+vendor master → seed `vendorBankAliases` (source=statement). Repeat
+sighting bump seenCount.
+
+**Auto-match mutation** `autoMatchPayables`:
+- Load unvalidated bank entries (payable_payment, isValidated=false)
+- Load open/partial/overdue payables
+- Group banks by vendor via alias map (substring match)
+- Per vendor: try exact amount match first (toleransi Rp 1.500),
+  then 2-row split, then 3-row split (greedy combination search)
+- Setiap match: write log + set paymentReference (PMT-YYYYMM-NNNN,
+  grup shared) + isValidated=true di both sides
+- Buat 1 validationBatch + log per perubahan — full traceability
+
+**UI** — tombol baru "Jalankan Auto-match" di Validator tab (atas
+Download/Upload CSV). Run ini dulu, baru kirim sisanya ke AI.
+
+**Relaxed AI prompt:**
+- TANGGAL TIDAK DIPAKAI sebagai filter (ditegasin di prompt)
+- Vendor: substring match, abaikan suffix INDONES/CV/PT/TBK
+- Default: kalau ragu, MATCH dulu. Lebih baik over-match.
+
+**Manual binding** `learnVendorAlias(vendorId, alias)` — kalau owner
+fix match manual di UI, alias di-save buat future auto-match.
+
 ### Added — Reconciliation Validator (CSV down + up + log history)
 
 Owner: butuh kolom reference + cara cocokkan bank tx ke payables.

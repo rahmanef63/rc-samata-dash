@@ -356,6 +356,7 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
           balance: row.balance,
           channel: row.channel,
           category: row.category,
+          counterparty: row.pihak,
         })),
       });
       toast.success(`${res.inserted} transaksi tersimpan · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`);
@@ -825,23 +826,40 @@ function RingkasanCard({ icon, label, primary, secondary }: { icon: React.ReactN
 
 const VALIDATOR_PROMPT = `Kamu asisten reconciliation RC Samata. File CSV ini berisi 2 jenis baris:
   - PAYABLE = piutang vendor (perlu dibayar)
-  - BANK    = transaksi bank statement (debit/kredit aktual)
+  - BANK    = transaksi bank statement (debit aktual = bayar keluar)
 
-Tugasmu: cocokkan BANK ke PAYABLE.
+Tugasmu: cocokkan BANK ke PAYABLE seagresif mungkin.
 
-Aturan match:
-1. Sum semua BANK rows yang match SATU payable HARUS sama dgn PAYABLE.amount (toleransi Rp 1.000).
-2. SATU payable bisa di-bayar 2-3 BANK rows (split-payment / salah transfer / retry).
-3. BANK.date harus >= PAYABLE.invoice_date (tidak boleh bayar sebelum invoice).
-4. BANK.party harus mengandung kata dari PAYABLE.vendor (case-insensitive).
-5. Kalau BANK gak match siapa pun, biarkan kosong (skip).
+ATURAN INTI (cuma 2):
+1. VENDOR cocok — vendor_or_party di BANK mengandung kata kunci dari
+   vendor_or_party PAYABLE (substring match, case-insensitive,
+   abaikan suffix "INDONES"/"CV"/"PT"/"TBK"). Contoh:
+   "JAPFA FOOD INDONES" cocok dengan "JAPFA".
+2. NOMINAL cocok — boleh salah satu:
+   a) Single match: BANK.amount ≈ PAYABLE.amount (toleransi Rp 1.500), ATAU
+   b) Split match (2-3 BANK rows): sum BANK.amount ≈ PAYABLE.amount.
 
-Yang harus diisi:
-- matched_payable_id : isi dgn PAYABLE.id yang di-bayar oleh BANK row ini (kosong utk PAYABLE rows)
-- payment_reference  : generate unique ID "PMT-YYYY-MM-NNNN". Multiple BANK rows yg bayar 1 payable HARUS pakai payment_reference SAMA. Set juga di PAYABLE row.
-- is_validated       : "true" utk row yang sudah ke-match. "false" utk yang gak match (atau biarkan kosong).
+TANGGAL TIDAK DIPAKAI sebagai filter. Bayar bisa sebelum/sesudah
+invoice — tetap match aja.
 
-Output: CSV yang sama persis (header sama), cuma 3 kolom terakhir keisi. Jangan ubah kolom lain.`;
+Multiple BANK row yang bayar SATU payable WAJIB pakai payment_reference
+SAMA. Generate "PMT-YYYYMM-NNNN" (YYYY MM dari tanggal BANK pertama).
+
+Yang harus diisi (BANK rows):
+- matched_payable_id : id PAYABLE yang di-bayar
+- payment_reference  : PMT-YYYYMM-NNNN (group identifier)
+- is_validated       : "true"
+
+Yang harus diisi (PAYABLE rows yang ke-match):
+- payment_reference  : sama dengan grup BANK
+- is_validated       : "true"
+
+Default: kalau ragu, MATCH dulu — owner bisa review.
+Lebih baik over-match daripada miss. Hanya kosongkan kalau BENAR-BENAR
+gak ada vendor candidate atau amount jauh berbeda.
+
+Output: CSV persis sama (header sama), 3 kolom terakhir keisi.
+Jangan ubah kolom lain. Jangan tambahin kolom lain.`;
 
 function buildValidationCsv(payables: any[], bank: any[]): string {
   const header = "type,id,date,vendor_or_party,amount,description,current_ref,matched_payable_id,payment_reference,is_validated";
@@ -941,12 +959,26 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
   const candidates = useQuery(api.features.closing.queries.listValidationCandidates, { branchId });
   const batches = useQuery(api.features.closing.queries.listValidationBatches, { branchId, limit: 20 });
   const applyBatch = useMutation(api.features.closing.mutations.applyValidationBatch);
+  const autoMatch = useMutation(api.features.closing.mutations.autoMatchPayables);
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
 
   const [uploading, setUploading] = useState(false);
+  const [autoMatching, setAutoMatching] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [openBatchLogId, setOpenBatchLogId] = useState<Id<"validationBatches"> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const runAutoMatch = async () => {
+    setAutoMatching(true);
+    try {
+      const res = await autoMatch({ branchId });
+      toast.success(`Auto-match: ${res.applied} perubahan · ${res.vendorsTouched} vendor · ${res.orphanBanks} bank tanpa vendor`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Auto-match gagal");
+    } finally {
+      setAutoMatching(false);
+    }
+  };
 
   const stats = useMemo(() => {
     if (!candidates) return null;
@@ -1033,6 +1065,26 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
             <StatCard label="Sudah Tervalidasi" value={stats.validated} color="text-green-600" />
           </div>
         )}
+
+        {/* Auto-match (rule-based, no AI needed) */}
+        <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/20 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-200">
+            <GitCompare className="h-4 w-4" />
+            Auto-match (sebelum kirim ke AI)
+          </div>
+          <p className="text-xs text-purple-800/80 dark:text-purple-300/80 leading-relaxed">
+            Coba match otomatis pakai aturan: <b>vendor alias</b> + <b>nominal cocok</b> (exact atau split 2-3 row).
+            Tanggal di-skip. Vendor alias auto-learned dari counterparty bank statement.
+          </p>
+          <button
+            onClick={runAutoMatch}
+            disabled={autoMatching}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-50"
+          >
+            {autoMatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitCompare className="h-3.5 w-3.5" />}
+            {autoMatching ? "Memproses..." : "Jalankan Auto-match"}
+          </button>
+        </div>
 
         {/* Download + Upload */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

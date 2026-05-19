@@ -80,6 +80,7 @@ export const closingTables = {
     debit: v.number(),          // out / pengeluaran
     credit: v.number(),         // in / penerimaan
     balance: v.number(),        // saldo setelah tx
+    counterparty: v.optional(v.string()), // "Pihak" column — vendor / person name
     channel: v.optional(v.string()), // cash | transfer | gofood | grabfood | shopeefood | ovo | dana | qris | other
     category: v.optional(v.union(
       v.literal("sales_inflow"),
@@ -118,6 +119,27 @@ export const closingTables = {
     uploadedAt: v.number(),
     uploadedBy: v.string(),
   }).index("by_branch", ["branchId"]),
+
+  // ─── Vendor bank aliases ──────────────────────────────────
+  // Pihak/account name as written in bank statement → vendor master.
+  // Learned on every successful AI-validated match, plus seeded from
+  // statement parser (when counterparty exactly equals an existing vendor).
+  vendorBankAliases: defineTable({
+    vendorId: v.id("vendors"),
+    alias: v.string(),         // normalized UPPERCASE
+    accountNo: v.optional(v.string()),
+    source: v.union(
+      v.literal("validation"),
+      v.literal("manual"),
+      v.literal("statement"),
+    ),
+    branchId: v.id("branches"),
+    lastSeenAt: v.number(),
+    seenCount: v.number(),
+  })
+    .index("by_alias", ["alias"])
+    .index("by_vendor", ["vendorId"])
+    .index("by_branch_alias", ["branchId", "alias"]),
 
   validationLogs: defineTable({
     entryType: v.union(
