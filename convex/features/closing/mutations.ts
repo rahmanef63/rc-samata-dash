@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import type { Id } from "../../_generated/dataModel";
 
 export const createClosing = mutation({
   args: {
@@ -277,5 +278,132 @@ export const importBankStatementEntries = mutation({
     });
 
     return { inserted: rows.length, closingBalance: closing };
+  },
+});
+
+// ─── Apply validation (reconciliation) ──────────────────────
+
+const validationUpdateValidator = v.object({
+  entryType: v.union(v.literal("bank_entry"), v.literal("payable")),
+  entryId: v.string(),
+  paymentReference: v.optional(v.string()),
+  matchedPayableId: v.optional(v.string()),  // id string; we'll normalize on apply
+  isValidated: v.optional(v.boolean()),
+});
+
+export const applyValidationBatch = mutation({
+  args: {
+    branchId: v.id("branches"),
+    fileName: v.string(),
+    fileStorageId: v.optional(v.id("_storage")),
+    updates: v.array(validationUpdateValidator),
+  },
+  handler: async (ctx, { branchId, fileName, fileStorageId, updates }) => {
+    const userId = await requireAuth(ctx);
+
+    const batchId = await ctx.db.insert("validationBatches", {
+      fileName, fileStorageId,
+      rowsApplied: 0, rowsRejected: 0,
+      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+    });
+
+    let applied = 0;
+    let rejected = 0;
+    const now = Date.now();
+
+    for (const u of updates) {
+      try {
+        if (u.entryType === "bank_entry") {
+          const id = u.entryId as Id<"bankStatementEntries">;
+          const cur = await ctx.db.get(id) as {
+            paymentReference?: string;
+            payableId?: Id<"payables">;
+            isValidated?: boolean;
+          } | null;
+          if (!cur) { rejected++; continue; }
+
+          const patch: {
+            paymentReference?: string;
+            payableId?: Id<"payables">;
+            isValidated?: boolean;
+          } = {};
+
+          if (u.paymentReference !== undefined && u.paymentReference !== cur.paymentReference) {
+            await ctx.db.insert("validationLogs", {
+              entryType: "bank_entry", entryId: u.entryId, batchId, field: "paymentReference",
+              beforeValue: cur.paymentReference, afterValue: u.paymentReference,
+              branchId, changedAt: now,
+            });
+            patch.paymentReference = u.paymentReference;
+          }
+
+          if (u.matchedPayableId !== undefined) {
+            const newPayableId = u.matchedPayableId ? (u.matchedPayableId as Id<"payables">) : undefined;
+            if (newPayableId !== cur.payableId) {
+              await ctx.db.insert("validationLogs", {
+                entryType: "bank_entry", entryId: u.entryId, batchId, field: "payableId",
+                beforeValue: cur.payableId as string | undefined,
+                afterValue: newPayableId as string | undefined,
+                branchId, changedAt: now,
+              });
+              patch.payableId = newPayableId;
+            }
+          }
+
+          if (u.isValidated !== undefined && u.isValidated !== cur.isValidated) {
+            await ctx.db.insert("validationLogs", {
+              entryType: "bank_entry", entryId: u.entryId, batchId, field: "isValidated",
+              beforeValue: String(cur.isValidated ?? false),
+              afterValue: String(u.isValidated),
+              branchId, changedAt: now,
+            });
+            patch.isValidated = u.isValidated;
+          }
+
+          if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+          applied++;
+        } else if (u.entryType === "payable") {
+          const id = u.entryId as Id<"payables">;
+          const cur = await ctx.db.get(id) as { paymentReference?: string; isValidated?: boolean } | null;
+          if (!cur) { rejected++; continue; }
+
+          const patch: { paymentReference?: string; isValidated?: boolean } = {};
+
+          if (u.paymentReference !== undefined && u.paymentReference !== cur.paymentReference) {
+            await ctx.db.insert("validationLogs", {
+              entryType: "payable", entryId: u.entryId, batchId, field: "paymentReference",
+              beforeValue: cur.paymentReference, afterValue: u.paymentReference,
+              branchId, changedAt: now,
+            });
+            patch.paymentReference = u.paymentReference;
+          }
+          if (u.isValidated !== undefined && u.isValidated !== cur.isValidated) {
+            await ctx.db.insert("validationLogs", {
+              entryType: "payable", entryId: u.entryId, batchId, field: "isValidated",
+              beforeValue: String(cur.isValidated ?? false),
+              afterValue: String(u.isValidated),
+              branchId, changedAt: now,
+            });
+            patch.isValidated = u.isValidated;
+          }
+          if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+          applied++;
+        } else {
+          rejected++;
+        }
+      } catch {
+        rejected++;
+      }
+    }
+
+    await ctx.db.patch(batchId, { rowsApplied: applied, rowsRejected: rejected });
+
+    await insertAuditLog(ctx, {
+      entityType: "validationBatches", entityId: batchId, action: "create",
+      description: `Apply validation ${fileName} — ${applied} applied / ${rejected} rejected`,
+      actedBy: userId, branchId,
+    });
+
+    return { batchId, applied, rejected };
   },
 });

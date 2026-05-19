@@ -92,12 +92,50 @@ export const closingTables = {
     )),
     payableId: v.optional(v.id("payables")),
     reportId: v.optional(v.id("weeklyReports")),
+    // Unified payment reference — same value across multiple entries
+    // means they pay ONE payable (split-payment retry scenario).
+    paymentReference: v.optional(v.string()),
+    isValidated: v.optional(v.boolean()),
     batchId: v.id("bankStatementBatches"),
     branchId: v.id("branches"),
   })
     .index("by_branch_date", ["branchId", "txDate"])
     .index("by_batch", ["batchId"])
-    .index("by_account_date", ["accountKind", "txDate"]),
+    .index("by_account_date", ["accountKind", "txDate"])
+    .index("by_payable", ["payableId"]),
+
+  // ─── Reconciliation: validation batches + log ─────────────
+  // Owner downloads CSV of unvalidated rows, sends to AI, uploads
+  // back fixed CSV. Each upload = a validationBatch. Every cell that
+  // changes generates a validationLog row so we never lose history.
+  validationBatches: defineTable({
+    fileName: v.string(),
+    fileStorageId: v.optional(v.id("_storage")),
+    rowsApplied: v.number(),
+    rowsRejected: v.number(),
+    summary: v.optional(v.string()),
+    branchId: v.id("branches"),
+    uploadedAt: v.number(),
+    uploadedBy: v.string(),
+  }).index("by_branch", ["branchId"]),
+
+  validationLogs: defineTable({
+    entryType: v.union(
+      v.literal("bank_entry"),
+      v.literal("payable"),
+      v.literal("receipt"),
+    ),
+    entryId: v.string(),   // doc id as string (avoid cross-table id types)
+    batchId: v.id("validationBatches"),
+    field: v.string(),     // paymentReference | matchedPayableId | isValidated
+    beforeValue: v.optional(v.string()),
+    afterValue: v.optional(v.string()),
+    branchId: v.id("branches"),
+    changedAt: v.number(),
+  })
+    .index("by_entry", ["entryType", "entryId"])
+    .index("by_batch", ["batchId"])
+    .index("by_branch", ["branchId"]),
 
   // Each statement file upload = one batch (so we can re-import).
   bankStatementBatches: defineTable({

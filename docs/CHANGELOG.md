@@ -2,6 +2,42 @@
 
 ## 2026-05-19
 
+### Added — Reconciliation Validator (CSV down + up + log history)
+
+Owner: butuh kolom reference + cara cocokkan bank tx ke payables.
+"Ada pembayaran 2-3 kali untuk satu invoice (salah transfer / retry)."
+
+**Schema** — `paymentReference` + `isValidated` ditambahkan ke:
+- `bankStatementEntries` (plus index by_payable)
+- `payables`
+
+Plus 2 table baru:
+- `validationBatches` — satu upload CSV = satu batch
+- `validationLogs` — per-cell history (entryType, entryId, field,
+  beforeValue, afterValue, batchId). Index by_entry + by_batch + by_branch.
+
+**Mutation** `applyValidationBatch`:
+- Terima array `{entryType, entryId, paymentReference?, matchedPayableId?, isValidated?}`
+- Per row: bandingkan vs current → kalau beda, tulis log + patch entry
+- Multiple bank entries dgn payment_reference SAMA = N:1 split-payment
+
+**UI** — tab ke-4 "Validator" di `/finance/owner-transfer`:
+- 3 stat card (Payables Open / Bank Belum Validasi / Sudah Tervalidasi)
+- Card "Download CSV Validasi" — generate CSV berisi PAYABLE+BANK rows
+  + AI prompt embed di header sebagai komentar (# lines)
+- Card "Upload File Tervalidasi" — terima CSV hasil AI, parse, apply
+- Riwayat batch sticky panel kanan — klik batch → Log Sheet
+  (entryType | entryId | field | sebelum | sesudah)
+- Tombol "Salin Prompt" — quick copy AI prompt untuk ke-ChatGPT
+
+**Format CSV**:
+```
+type, id, date, vendor_or_party, amount, description, current_ref,
+matched_payable_id, payment_reference, is_validated
+```
+AI cuma isi 3 kolom terakhir. Multiple BANK rows dgn payment_reference
+yang sama collectively bayar satu PAYABLE (split-payment / retry).
+
 ### Changed — Move "Bukti Bayar & Statement" to Upload menu + surface data
 
 User: "tidak tahu datanya di display dimana" — bank statement entries

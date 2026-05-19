@@ -98,3 +98,65 @@ export const listBankStatementEntries = query({
       .take(2000);
   },
 });
+
+// ─── Validation (reconciliation) ───────────────────────────
+
+export const listValidationCandidates = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    // Open / partial / overdue payables not yet validated
+    const payablesAll = await ctx.db.query("payables")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .take(1000);
+    const payables = payablesAll.filter((p) =>
+      (p.status === "open" || p.status === "partial" || p.status === "overdue" || (p.paidAmount > 0 && !p.isValidated))
+    );
+    // Bank entries with payable_payment category not yet validated
+    const bankAll = await ctx.db.query("bankStatementEntries")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .take(5000);
+    const bank = bankAll.filter((b) =>
+      b.category === "payable_payment" && !b.isValidated
+    );
+    return { payables, bank };
+  },
+});
+
+export const listValidationBatches = query({
+  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
+  handler: async (ctx, { branchId, limit }) => {
+    await requireAuth(ctx);
+    return await ctx.db.query("validationBatches")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .order("desc")
+      .take(limit ?? 30);
+  },
+});
+
+export const listValidationLogs = query({
+  args: {
+    branchId: v.id("branches"),
+    batchId: v.optional(v.id("validationBatches")),
+    entryType: v.optional(v.union(v.literal("bank_entry"), v.literal("payable"), v.literal("receipt"))),
+    entryId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    if (args.batchId) {
+      return await ctx.db.query("validationLogs")
+        .withIndex("by_batch", (q) => q.eq("batchId", args.batchId!))
+        .take(2000);
+    }
+    if (args.entryType && args.entryId) {
+      return await ctx.db.query("validationLogs")
+        .withIndex("by_entry", (q) => q.eq("entryType", args.entryType!).eq("entryId", args.entryId!))
+        .order("desc")
+        .take(50);
+    }
+    return await ctx.db.query("validationLogs")
+      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
+      .order("desc")
+      .take(100);
+  },
+});

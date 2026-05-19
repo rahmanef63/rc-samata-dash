@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   Landmark, Upload, Receipt as ReceiptIcon, FileSpreadsheet,
   Trash2, ExternalLink, Loader2, Info, FileText, CheckCircle, AlertTriangle,
+  Download, GitCompare, Copy, History,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -65,15 +66,18 @@ export default function OwnerTransferPage() {
       </div>
 
       <Tabs defaultValue="receipts" className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-4 w-full max-w-3xl">
           <TabsTrigger value="receipts" className="gap-1.5">
-            <ReceiptIcon className="h-3.5 w-3.5" /> Bukti Bayar Piutang
+            <ReceiptIcon className="h-3.5 w-3.5" /> Bukti Bayar
           </TabsTrigger>
           <TabsTrigger value="owner" className="gap-1.5">
-            <Landmark className="h-3.5 w-3.5" /> Statement Owner
+            <Landmark className="h-3.5 w-3.5" /> St. Owner
           </TabsTrigger>
           <TabsTrigger value="pic" className="gap-1.5">
-            <FileSpreadsheet className="h-3.5 w-3.5" /> Statement PIC
+            <FileSpreadsheet className="h-3.5 w-3.5" /> St. PIC
+          </TabsTrigger>
+          <TabsTrigger value="validator" className="gap-1.5">
+            <GitCompare className="h-3.5 w-3.5" /> Validator
           </TabsTrigger>
         </TabsList>
 
@@ -85,6 +89,9 @@ export default function OwnerTransferPage() {
         </TabsContent>
         <TabsContent value="pic">
           {branchId ? <StatementSection branchId={branchId} accountKind="pic" /> : <SkeletonText />}
+        </TabsContent>
+        <TabsContent value="validator">
+          {branchId ? <ValidatorSection branchId={branchId} /> : <SkeletonText />}
         </TabsContent>
       </Tabs>
     </div>
@@ -811,5 +818,393 @@ function RingkasanCard({ icon, label, primary, secondary }: { icon: React.ReactN
       <p className="text-lg font-bold text-foreground mt-1.5">{primary}</p>
       <p className="text-[11px] text-muted-foreground truncate" title={secondary}>{secondary}</p>
     </div>
+  );
+}
+
+// ─── Validator (reconciliation) section ─────────────────────
+
+const VALIDATOR_PROMPT = `Kamu asisten reconciliation RC Samata. File CSV ini berisi 2 jenis baris:
+  - PAYABLE = piutang vendor (perlu dibayar)
+  - BANK    = transaksi bank statement (debit/kredit aktual)
+
+Tugasmu: cocokkan BANK ke PAYABLE.
+
+Aturan match:
+1. Sum semua BANK rows yang match SATU payable HARUS sama dgn PAYABLE.amount (toleransi Rp 1.000).
+2. SATU payable bisa di-bayar 2-3 BANK rows (split-payment / salah transfer / retry).
+3. BANK.date harus >= PAYABLE.invoice_date (tidak boleh bayar sebelum invoice).
+4. BANK.party harus mengandung kata dari PAYABLE.vendor (case-insensitive).
+5. Kalau BANK gak match siapa pun, biarkan kosong (skip).
+
+Yang harus diisi:
+- matched_payable_id : isi dgn PAYABLE.id yang di-bayar oleh BANK row ini (kosong utk PAYABLE rows)
+- payment_reference  : generate unique ID "PMT-YYYY-MM-NNNN". Multiple BANK rows yg bayar 1 payable HARUS pakai payment_reference SAMA. Set juga di PAYABLE row.
+- is_validated       : "true" utk row yang sudah ke-match. "false" utk yang gak match (atau biarkan kosong).
+
+Output: CSV yang sama persis (header sama), cuma 3 kolom terakhir keisi. Jangan ubah kolom lain.`;
+
+function buildValidationCsv(payables: any[], bank: any[]): string {
+  const header = "type,id,date,vendor_or_party,amount,description,current_ref,matched_payable_id,payment_reference,is_validated";
+  const lines: string[] = [];
+  lines.push(`# RC SAMATA RECONCILIATION VALIDATOR — ${new Date().toISOString().slice(0, 10)}`);
+  lines.push(`#`);
+  lines.push(`# AI PROMPT (copy block di bawah, paste ke ChatGPT/Claude + attach file ini):`);
+  lines.push(`#`);
+  for (const line of VALIDATOR_PROMPT.split("\n")) lines.push(`# ${line}`);
+  lines.push(`#`);
+  lines.push(`# Total payables: ${payables.length}, total bank entries: ${bank.length}`);
+  lines.push(`#`);
+  lines.push(header);
+  for (const p of payables) {
+    lines.push([
+      "PAYABLE", p._id, p.invoiceDate, csv(p.vendorName), p.amount,
+      csv(p.description ?? ""),
+      csv(p.paymentReference ?? ""),
+      "", "", String(!!p.isValidated),
+    ].join(","));
+  }
+  for (const b of bank) {
+    const party = (b.description ?? "").split("|").pop()?.trim() ?? "";
+    lines.push([
+      "BANK", b._id, b.txDate, csv(party),
+      b.debit > 0 ? b.debit : b.credit,
+      csv(b.description ?? ""),
+      csv(b.paymentReference ?? ""),
+      csv(b.payableId ?? ""),
+      "", String(!!b.isValidated),
+    ].join(","));
+  }
+  return lines.join("\n");
+}
+
+function csv(s: string | undefined): string {
+  const v = String(s ?? "");
+  if (/[,"\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+  return v;
+}
+
+type CsvUpdate = {
+  entryType: "bank_entry" | "payable";
+  entryId: string;
+  paymentReference?: string;
+  matchedPayableId?: string;
+  isValidated?: boolean;
+};
+
+function parseValidationCsv(text: string): CsvUpdate[] {
+  const lines = text.split(/\r?\n/);
+  const rows: CsvUpdate[] = [];
+  let headerCols: string[] | null = null;
+  for (const raw of lines) {
+    if (!raw.trim()) continue;
+    if (raw.startsWith("#")) continue;
+    const cells = parseCsvLine(raw);
+    if (!headerCols) {
+      headerCols = cells.map((c) => c.trim().toLowerCase());
+      continue;
+    }
+    const obj: Record<string, string> = {};
+    headerCols.forEach((h, i) => { obj[h] = (cells[i] ?? "").trim(); });
+    if (!obj.id || !obj.type) continue;
+    rows.push({
+      entryType: obj.type.toUpperCase() === "BANK" ? "bank_entry" : "payable",
+      entryId: obj.id,
+      paymentReference: obj.payment_reference || undefined,
+      matchedPayableId: obj.matched_payable_id || undefined,
+      isValidated: obj.is_validated ? obj.is_validated.toLowerCase() === "true" : undefined,
+    });
+  }
+  return rows;
+}
+
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else cur += ch;
+    } else {
+      if (ch === ",") { out.push(cur); cur = ""; }
+      else if (ch === '"') inQ = true;
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
+  const candidates = useQuery(api.features.closing.queries.listValidationCandidates, { branchId });
+  const batches = useQuery(api.features.closing.queries.listValidationBatches, { branchId, limit: 20 });
+  const applyBatch = useMutation(api.features.closing.mutations.applyValidationBatch);
+  const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
+
+  const [uploading, setUploading] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [openBatchLogId, setOpenBatchLogId] = useState<Id<"validationBatches"> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const stats = useMemo(() => {
+    if (!candidates) return null;
+    const payValidated = candidates.payables.filter((p) => p.isValidated).length;
+    const bankValidated = candidates.bank.filter((b) => b.isValidated).length;
+    return {
+      payables: candidates.payables.length,
+      bank: candidates.bank.length,
+      validated: payValidated + bankValidated,
+    };
+  }, [candidates]);
+
+  const downloadCsv = () => {
+    if (!candidates) return;
+    const csvText = buildValidationCsv(candidates.payables, candidates.bank);
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rc-samata-validator-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(VALIDATOR_PROMPT);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 1500);
+    } catch { /* ignore */ }
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const text = await file.text();
+      const updates = parseValidationCsv(text);
+      if (updates.length === 0) {
+        toast.error("CSV kosong / format salah");
+        return;
+      }
+      // Upload file to storage for audit trail
+      const uploadUrl = await generateUrl();
+      const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type || "text/csv" }, body: file });
+      const { storageId } = await r.json() as { storageId: Id<"_storage"> };
+
+      const res = await applyBatch({
+        branchId,
+        fileName: file.name,
+        fileStorageId: storageId,
+        updates,
+      });
+      toast.success(`Validasi tersimpan: ${res.applied} applied, ${res.rejected} rejected`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal apply validasi");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4 flex items-start gap-3">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed space-y-1">
+            <p className="font-semibold">Reconciliation flow (cocokkan BANK ↔ PAYABLE):</p>
+            <ol className="list-decimal list-inside space-y-0.5 ml-1">
+              <li>Klik <b>Download CSV Validasi</b> — file berisi list payables + bank entries belum ke-match.</li>
+              <li>Copy <b>AI Prompt</b>, paste ke ChatGPT/Claude + attach CSV.</li>
+              <li>AI isi kolom <code className="bg-card px-1 rounded">matched_payable_id</code> + <code className="bg-card px-1 rounded">payment_reference</code>.</li>
+              <li>Upload CSV hasil AI — sistem update reference + log setiap perubahan.</li>
+            </ol>
+            <p className="mt-1 italic">Catatan: 1 payable bisa di-bayar 2-3 BANK rows (split / wrong transfer). AI handle ini via payment_reference sama.</p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-3 gap-2">
+            <StatCard label="Payables Open/Partial" value={stats.payables} />
+            <StatCard label="Bank Entries Belum Validasi" value={stats.bank} />
+            <StatCard label="Sudah Tervalidasi" value={stats.validated} color="text-green-600" />
+          </div>
+        )}
+
+        {/* Download + Upload */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Download className="h-4 w-4 text-primary" />
+              Download File Validasi
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              CSV berisi {candidates?.payables.length ?? 0} payables + {candidates?.bank.length ?? 0} bank entries + AI prompt di header.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={copyPrompt}
+                className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold inline-flex items-center gap-1.5"
+              >
+                {promptCopied ? <CheckCircle className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                {promptCopied ? "Disalin" : "Salin Prompt"}
+              </button>
+              <button
+                onClick={downloadCsv}
+                disabled={!candidates}
+                className="flex-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Download className="h-3 w-3" />
+                Download CSV
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Upload className="h-4 w-4 text-primary" />
+              Upload File Tervalidasi
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Upload CSV hasil AI. Sistem update <code className="bg-muted px-1 rounded">payment_reference</code> + <code className="bg-muted px-1 rounded">matched_payable_id</code> per row + log perubahan.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f);
+              }}
+              className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-primary-foreground file:font-semibold hover:file:bg-primary/90 disabled:opacity-50"
+            />
+            {uploading && (
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" /> Memproses...
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Riwayat batch validator */}
+      <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+        <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Riwayat Validasi
+          </h2>
+          {batches && (
+            <p className="text-xs text-muted-foreground mt-0.5">{batches.length} batch · klik untuk lihat log</p>
+          )}
+        </div>
+        <div className="p-2 flex-1 overflow-y-auto">
+          {!batches || batches.length === 0 ? (
+            <p className="p-6 text-xs text-center text-muted-foreground">Belum ada batch validasi</p>
+          ) : (
+            <div className="space-y-1">
+              {batches.map((b) => (
+                <button
+                  key={b._id}
+                  onClick={() => setOpenBatchLogId(b._id)}
+                  className="w-full text-left flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" title={b.fileName}>{b.fileName}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(b.uploadedAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-700">
+                        {b.rowsApplied} applied
+                      </span>
+                      {b.rowsRejected > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-yellow-100 text-yellow-700">
+                          {b.rowsRejected} rejected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {openBatchLogId && (
+        <ValidationLogSheet batchId={openBatchLogId} branchId={branchId} onClose={() => setOpenBatchLogId(null)} />
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, color = "" }: { label: string; value: number; color?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`text-lg font-bold mt-0.5 ${color || "text-foreground"}`}>{value}</p>
+    </div>
+  );
+}
+
+function ValidationLogSheet({ batchId, branchId, onClose }: { batchId: Id<"validationBatches">; branchId: Id<"branches">; onClose: () => void }) {
+  const logs = useQuery(api.features.closing.queries.listValidationLogs, { branchId, batchId });
+  return (
+    <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">
+        <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4 text-primary" />
+            Log Perubahan Validasi
+          </SheetTitle>
+          {logs && <p className="text-xs text-muted-foreground">{logs.length} perubahan ke {new Set(logs.map(l => l.entryId)).size} row</p>}
+        </SheetHeader>
+        {!logs ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Memuat...
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+            Tidak ada log
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-[11px]">
+              <thead className="bg-muted/40 sticky top-0 z-10">
+                <tr className="text-left">
+                  <th className="px-3 py-1.5 font-semibold">Type</th>
+                  <th className="px-3 py-1.5 font-semibold">Entry ID</th>
+                  <th className="px-3 py-1.5 font-semibold">Field</th>
+                  <th className="px-3 py-1.5 font-semibold">Sebelum</th>
+                  <th className="px-3 py-1.5 font-semibold">Sesudah</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((l) => (
+                  <tr key={l._id} className="border-t border-border/40 hover:bg-muted/20">
+                    <td className="px-3 py-1">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                        l.entryType === "bank_entry" ? "bg-blue-100 text-blue-700" :
+                        l.entryType === "payable" ? "bg-orange-100 text-orange-700" :
+                        "bg-gray-100 text-gray-700"
+                      }`}>{l.entryType}</span>
+                    </td>
+                    <td className="px-3 py-1 font-mono text-[10px] truncate max-w-[100px]" title={l.entryId}>{l.entryId.slice(-8)}</td>
+                    <td className="px-3 py-1 font-semibold">{l.field}</td>
+                    <td className="px-3 py-1 text-muted-foreground font-mono">{l.beforeValue ?? "—"}</td>
+                    <td className="px-3 py-1 text-primary font-mono">{l.afterValue ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -18,6 +18,11 @@ export const payablesTables = {
       v.literal("overdue")
     ),
     description: v.string(),
+    // Unified payment reference filled after AI reconciliation —
+    // multiple bank statement entries sharing the same paymentReference
+    // collectively pay this payable (split-payment / wrong-transfer retry).
+    paymentReference: v.optional(v.string()),
+    isValidated: v.optional(v.boolean()),
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
   })
