@@ -20,6 +20,12 @@ export const reportsTables = {
       message: v.string(),
       tip: v.string(),
     }))),
+    /**
+     * Sheet names in the uploaded xlsx that no parser matched. Lets the
+     * UI flag "data we haven't prepared yet" — owner can request a parser
+     * for a new sheet type without losing the upload.
+     */
+    unknownSheets: v.optional(v.array(v.string())),
     expenseCount: v.optional(v.number()),
     salesCount: v.optional(v.number()),
     vendorCount: v.optional(v.number()),

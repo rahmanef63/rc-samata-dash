@@ -50,6 +50,8 @@ type ParsedData = {
   cashFlow: DailyCashFlowItem[];
   ownerTransfers: OwnerTransferItem[];
   insentif: IncentiveItem[];
+  /** Sheets in the xlsx that no parser claimed — flagged for owner review. */
+  unknownSheets: string[];
   periodStart: string;
   periodEnd: string;
   fileName: string;
@@ -176,6 +178,18 @@ export default function LaporanUploadPage() {
     try {
       const wb = await parseExcelFile(file);
       const { start, end } = extractPeriod(file.name);
+      // Discover sheets we don't have a parser for — owner can request a new
+      // parser without losing data. Dynamic prep for future xlsx variants.
+      const KNOWN_SHEET_PATTERNS = [
+        "LPKK", "LAP. PENJUALAN", "LAP. PENJUALAN GRAB FOOD", "LAP. PENJUALAN GO FOOD", "LAP. PENJUALAN SHOPEE FOOD",
+        "VENDOR", "WEEKLY FC", "LEFT OVER", "LAPORAN KAS PERIODE", "SALES CONTROL",
+        "PEMBELIAN KREDIT", "IKHTISAR FOOD COST", "TO - TI", "HITUNGAN HPP PRODUK",
+        "FOOD COST ITEM KELAS", "COST ANALYSIS", "LAP. CF", "INSENTIF",
+      ];
+      const unknownSheets = wb.SheetNames.filter((sheetName) => {
+        const up = sheetName.toUpperCase();
+        return !KNOWN_SHEET_PATTERNS.some((p) => up.includes(p.toUpperCase()));
+      });
       const data: ParsedData = {
         lpkk:            parseLPKK(wb),
         penjualan:       parsePenjualan(wb),
@@ -192,6 +206,7 @@ export default function LaporanUploadPage() {
         costAnalysis:    parseCostAnalysis(wb),
         cashFlow:        parseLapCF(wb),
         ownerTransfers:  parseOwnerTransfers(wb, start),
+        unknownSheets,
         insentif:        parseInsentif(wb),
         periodStart:     start,
         periodEnd:       end,
@@ -275,7 +290,13 @@ export default function LaporanUploadPage() {
 
     try {
       setProgress({ current: ++current, total, label: "Membuat record laporan..." });
-      const reportId = await createReport({ branchId, fileName: parsed.fileName, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd });
+      const reportId = await createReport({
+        branchId,
+        fileName: parsed.fileName,
+        periodStart: parsed.periodStart,
+        periodEnd: parsed.periodEnd,
+        unknownSheets: parsed.unknownSheets.length > 0 ? parsed.unknownSheets : undefined,
+      });
 
       for (const chunk of lpkkChunks) {
         setProgress({ current: ++current, total, label: `Kas kecil (${counts.expense + chunk.length}/${parsed.lpkk.length})...` });

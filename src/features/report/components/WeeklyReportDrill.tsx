@@ -425,24 +425,48 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
 
       {/* Active tab body */}
       {active === "summary" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatTile
-            label="Total Revenue"
-            value={summary ? formatRpFull(summary.totalRevenue) : "…"}
-          />
-          <StatTile
-            label="Total COGS"
-            value={summary ? formatRpFull(summary.totalCOGS) : "…"}
-          />
-          <StatTile
-            label="Gross Profit"
-            value={summary ? formatRpFull(summary.grossProfit) : "…"}
-          />
-          <StatTile
-            label="Closing Cash (akhir)"
-            value={summary ? formatRpFull(summary.closingCashLast) : "…"}
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatTile
+              label="Total Revenue"
+              value={summary ? formatRpFull(summary.totalRevenue) : "…"}
+            />
+            <StatTile
+              label="Total COGS"
+              value={summary ? formatRpFull(summary.totalCOGS) : "…"}
+            />
+            <StatTile
+              label="Gross Profit"
+              value={summary ? formatRpFull(summary.grossProfit) : "…"}
+            />
+            <StatTile
+              label="Closing Cash (akhir)"
+              value={summary ? formatRpFull(summary.closingCashLast) : "…"}
+            />
+          </div>
+          {report.unknownSheets && report.unknownSheets.length > 0 && (
+            <Card className="p-4 mt-3 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+              <div className="flex items-start gap-2">
+                <FileText className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                    {report.unknownSheets.length} sheet belum punya parser
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Sheet ini ada di xlsx tapi tidak ter-extract. Data belum hilang — request parser baru kalau perlu.
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {report.unknownSheets.map((s) => (
+                      <span key={s} className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {active === "productSales" && (

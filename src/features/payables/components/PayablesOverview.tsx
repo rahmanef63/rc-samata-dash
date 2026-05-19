@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowUpRight, FileText } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { Payable } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
 import { usePayables, useCreatePayable, useUpdatePayable, useDeletePayable } from "../api";
@@ -46,8 +44,8 @@ const columns: Column<Payable>[] = [
     return <span className={`text-xs font-mono-data font-medium ${color}`}>{v} hari</span>;
   }},
   { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
-  { key: "sourceFile", label: "Sumber", render: (v) => v
-    ? <span className="text-xs text-muted-foreground font-mono truncate max-w-[180px] inline-block" title={String(v)}>{String(v)}</span>
+  { key: "etlSource", label: "Sumber", render: (v) => v
+    ? <span className="text-xs text-muted-foreground font-mono">ETL</span>
     : <span className="text-xs text-muted-foreground/60">manual</span>,
   },
 ];
@@ -191,7 +189,7 @@ export function PayablesOverview() {
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
         onDelete={crud.openDelete}
-        onRowClick={(item) => item.sourceFile && setSourceRow(item)}
+        onRowClick={(item) => setSourceRow(item)}
         entityName="Piutang"
       />
       <CrudDialog<Payable>
@@ -201,55 +199,25 @@ export function PayablesOverview() {
         onDelete={crud.onDelete}
       />
 
-      {/* Source-of-row dialog (rows imported from a weekly report) */}
-      <Dialog open={!!sourceRow} onOpenChange={(v) => !v && setSourceRow(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Sumber piutang
-            </DialogTitle>
-            <DialogDescription className="text-xs space-y-0.5">
-              <span className="block">Sheet: <span className="font-mono">PEMBELIAN KREDIT</span></span>
-              {sourceRow?.sourceFile && (
-                <span className="block truncate" title={sourceRow.sourceFile}>
-                  File: <span className="font-mono">{sourceRow.sourceFile}</span>
-                </span>
-              )}
-              {sourceRow?.reportPeriod && (
-                <span className="block">Periode: {sourceRow.reportPeriod}</span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {sourceRow && (
-            <div className="space-y-2 text-sm">
-              <Row label="Vendor" value={sourceRow.vendorName} />
-              <Row label="Bahan" value={sourceRow.description} />
-              {sourceRow.invoiceNo && <Row label="No Faktur" value={sourceRow.invoiceNo} />}
-              <Row label="Tgl Pembelian" value={sourceRow.invoiceDate} />
-              <Row label="Total" value={formatRpFull(sourceRow.amount)} mono />
-              {sourceRow.creditDays != null && (
-                <Row label="Lama Kredit" value={`${sourceRow.creditDays} hari`} />
-              )}
-              <Row label="Jatuh Tempo" value={sourceRow.dueDate || "—"} />
-              <Row
-                label="Tgl Dibayar"
-                value={sourceRow.paidDate || "Belum dibayar"}
-                valueClass={sourceRow.paidDate ? "text-success" : "text-warning"}
-              />
-              {sourceRow.reportId && (
-                <Link
-                  href={`/laporan/${sourceRow.reportId}`}
-                  onClick={() => setSourceRow(null)}
-                  className="mt-3 flex items-center justify-center gap-1.5 text-xs text-primary font-medium hover:underline"
-                >
-                  Buka laporan sumber <ArrowUpRight className="h-3 w-3" />
-                </Link>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <RowSourceDialog
+        open={!!sourceRow}
+        onClose={() => setSourceRow(null)}
+        title="Detail Piutang"
+        row={sourceRow}
+        source={sourceRow ? deriveSourceFromEtl(sourceRow) : undefined}
+        fields={sourceRow ? [
+          { label: "Vendor", value: sourceRow.vendorName },
+          { label: "Bahan / Deskripsi", value: sourceRow.description },
+          { label: "No Faktur", value: sourceRow.invoiceNo },
+          { label: "Tgl Invoice", value: sourceRow.invoiceDate },
+          { label: "Jatuh Tempo", value: sourceRow.dueDate },
+          { label: "Lama Kredit", value: sourceRow.creditDays != null ? `${sourceRow.creditDays} hari` : undefined },
+          { label: "Total", value: formatRpFull(sourceRow.amount) },
+          { label: "Dibayar", value: formatRpFull(sourceRow.paidAmount) },
+          { label: "Tgl Dibayar", value: sourceRow.paidDate || "Belum dibayar" },
+          { label: "Status", value: sourceRow.status },
+        ] : []}
+      />
     </motion.div>
   );
 }

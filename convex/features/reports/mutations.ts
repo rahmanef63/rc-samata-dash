@@ -93,6 +93,7 @@ export const createWeeklyReport = mutation({
     fileName: v.string(),
     periodStart: v.string(),
     periodEnd: v.string(),
+    unknownSheets: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);

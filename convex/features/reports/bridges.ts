@@ -465,7 +465,7 @@ export const bridgeOneReport = mutation({
 
 export const backfillAllReports = action({
   args: {},
-  handler: async (ctx): Promise<{ reports: number; results: any[] }> => {
+  handler: async (ctx): Promise<{ reports: number; results: any[]; movementsByBranch: any[] }> => {
     // 1. Seed master data first
     await ctx.runMutation(internal.features.reports.bridges.seedMasterDataInternal);
     await ctx.runMutation(internal.features.reports.bridges.deriveVendorsInternal);
@@ -474,23 +474,31 @@ export const backfillAllReports = action({
     const reports: any[] = await ctx.runQuery(internal.features.reports.bridges.listAllReportsInternal);
 
     const results: any[] = [];
+    const branchesTouched = new Set<string>();
     for (const r of reports) {
+      branchesTouched.add(r.branchId);
       const sales = await ctx.runMutation(internal.features.reports.bridges.bridgeProductSalesToDailySalesInternal, { reportId: r._id });
       const closings = await ctx.runMutation(internal.features.reports.bridges.bridgeDailyCashFlowToClosingsInternal, { reportId: r._id });
       const payables = await ctx.runMutation(internal.features.reports.bridges.bridgeCreditPurchasesToPayablesInternal, { reportId: r._id });
       const stock = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryToStockInternal, { reportId: r._id });
       const expenses = await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToExpensesInternal, { reportId: r._id });
+      const transfers = await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToOwnerTransfersInternal, { reportId: r._id });
+      const incentives = await ctx.runMutation(internal.features.reports.bridges.bridgeIncentivesToExpensesInternal, { reportId: r._id });
       results.push({
         reportId: r._id,
         fileName: r.fileName,
-        sales,
-        closings,
-        payables,
-        stock,
-        expenses,
+        sales, closings, payables, stock, expenses, transfers, incentives,
       });
     }
-    return { reports: reports.length, results };
+
+    // 3. After per-report inserts, compute inventory deltas across all reports per branch
+    const movementsByBranch: any[] = [];
+    for (const branchId of branchesTouched) {
+      const m = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: branchId as any });
+      movementsByBranch.push({ branchId, ...m });
+    }
+
+    return { reports: reports.length, results, movementsByBranch };
   },
 });
 
@@ -528,6 +536,16 @@ export const seedMasterDataInternal = internalMutation({
   },
 });
 
+function inferVendorType(name: string): "food_supplier" | "utility" | "service" | "payroll" | "misc" {
+  const up = name.toUpperCase();
+  if (up.includes("PLN") || up.includes("PDAM") || up.includes("LISTRIK") || up.includes("AIR") || up.includes("WIFI") || up.includes("INTERNET") || up.includes("INDIHOME")) return "utility";
+  if (up.includes("GAS") || up.includes("ELPIJI")) return "utility";
+  if (up.includes("KARYAWAN") || up.includes("GAJI") || up.includes("INSENTIF")) return "payroll";
+  if (up.includes("SERVICE") || up.includes("REPAIR") || up.includes("PERBAIKAN") || up.includes("BPJS")) return "service";
+  if (up.includes("FOTO COPY") || up.includes("ATK") || up.includes("KAS KECIL")) return "misc";
+  return "food_supplier";
+}
+
 export const deriveVendorsInternal = internalMutation({
   args: {},
   handler: async (ctx): Promise<any> => {
@@ -543,7 +561,7 @@ export const deriveVendorsInternal = internalMutation({
     for (const name of distinct) {
       if (existingNames.has(name.toLowerCase())) continue;
       await ctx.db.insert("vendors", {
-        name, type: "food_supplier", phone: "", notes: "Auto-derived", isActive: true, uploadedBy: "system",
+        name, type: inferVendorType(name), phone: "", notes: "Auto-derived", isActive: true, uploadedBy: "system",
       });
       inserted++;
     }
@@ -565,6 +583,12 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       g.gross += s.amount;
       groups.set(key, g);
     }
+    // Pre-compute total gross per date for proportional promo allocation
+    const grossByDate = new Map<string, number>();
+    for (const g of groups.values()) {
+      grossByDate.set(g.date, (grossByDate.get(g.date) ?? 0) + g.gross);
+    }
+
     const cashSummaries = await ctx.db.query("dailyCashSummary").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect();
     const summByDate = new Map<string, any>();
     for (const cs of cashSummaries) summByDate.set(cs.businessDate, cs);
@@ -582,7 +606,10 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       const platformFee = g.channel === "gofood" ? (summ?.komisiGofood ?? 0)
         : g.channel === "grabfood" ? (summ?.komisiGrabfood ?? 0)
         : g.channel === "shopeefood" ? (summ?.komisiShopeefood ?? 0) : 0;
-      const promoCost = g.channel !== "all" ? (summ?.discount ?? 0) / 4 : 0;
+      // Proportional promo: allocate total discount by channel's share of daily gross
+      const dayTotalGross = grossByDate.get(g.date) ?? 0;
+      const totalDiscount = summ?.discount ?? 0;
+      const promoCost = dayTotalGross > 0 ? (g.gross / dayTotalGross) * totalDiscount : 0;
       const netAmount = Math.max(0, g.gross - platformFee - promoCost);
       const cashReceivedAmount = g.channel === "all" ? netAmount : 0;
       const sheetMap: Record<string, string> = {
@@ -746,9 +773,13 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
     for (const f of flows) {
       const totalOut = f.expenseOutflow + f.otherOutflow;
       if (totalOut <= 0) continue;
+      const breakdown = f.otherOutflow > 0
+        ? `Kas Kecil Rp ${f.expenseOutflow.toLocaleString("id-ID")} + Lain-lain Rp ${f.otherOutflow.toLocaleString("id-ID")}`
+        : `Kas Kecil Rp ${f.expenseOutflow.toLocaleString("id-ID")}`;
       await ctx.db.insert("expenses", {
         expenseDate: f.businessDate, categoryId: cat._id, categoryName: cat.name,
-        amount: totalOut, description: `${tag}: pengeluaran harian dari LAP. CF`,
+        amount: totalOut,
+        description: `${tag}: pengeluaran harian ${f.businessDate} · ${breakdown}`,
         paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
@@ -760,5 +791,178 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
       rowIdx++;
     }
     return { inserted };
+  },
+});
+
+// ─── Bridge 6: inventoryValuation across reports → stockMovements ─
+
+export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }): Promise<any> => {
+    // Cross-report: take ALL valuations for branch ordered by valuationDate,
+    // group by itemName, compute delta between consecutive snapshots.
+    const valuations = await ctx.db
+      .query("inventoryValuation")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .collect();
+
+    // group by item
+    const byItem = new Map<string, any[]>();
+    for (const v of valuations) {
+      const arr = byItem.get(v.itemName) ?? [];
+      arr.push(v);
+      byItem.set(v.itemName, arr);
+    }
+
+    // Wipe ETL-tagged movements (note: prefix in notes field)
+    const tag = "etl:delta";
+    const existing = await ctx.db
+      .query("stockMovements")
+      .filter((q: any) => q.eq(q.field("branchId"), branchId))
+      .collect();
+    for (const e of existing) {
+      if (e.notes.startsWith(tag)) await ctx.db.delete(e._id);
+    }
+
+    let inserted = 0;
+    for (const [itemName, arr] of byItem) {
+      arr.sort((a, b) => a.valuationDate.localeCompare(b.valuationDate));
+      // Look up stockItems id for the FK
+      const stockItem = await ctx.db
+        .query("stockItems")
+        .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+        .filter((q: any) => q.eq(q.field("name"), itemName))
+        .first();
+      if (!stockItem) continue;
+
+      for (let i = 1; i < arr.length; i++) {
+        const prev = arr[i - 1];
+        const cur = arr[i];
+        const delta = cur.qty - prev.qty;
+        if (Math.abs(delta) < 0.01) continue;
+        // Heuristic: + = stock_in (could be purchase OR adjustment), - = usage
+        const type = delta > 0 ? "stock_in" as const : "usage" as const;
+        await ctx.db.insert("stockMovements", {
+          itemId: stockItem._id,
+          itemName,
+          type,
+          qty: Math.abs(delta),
+          unit: cur.unit,
+          date: cur.valuationDate,
+          notes: `${tag}: dari ${prev.valuationDate} (${prev.qty} ${prev.unit}) → ${cur.valuationDate} (${cur.qty} ${cur.unit})`,
+          branchId,
+        });
+        inserted++;
+      }
+    }
+    return { movementsInserted: inserted };
+  },
+});
+
+// ─── Bridge 7: dailyCashFlow.otherInflow/otherOutflow → ownerTransfers ─
+
+export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }): Promise<any> => {
+    const report: any = await ctx.db.get(reportId);
+    if (!report) return { inserted: 0 };
+
+    const flows = await ctx.db
+      .query("dailyCashFlow")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+
+    // Idempotent: clear ETL-tagged owner transfers for this report
+    const existing = await ctx.db
+      .query("ownerTransfers")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+    for (const e of existing) await ctx.db.delete(e._id);
+
+    let inserted = 0;
+    let rowIdx = 0;
+    for (const f of flows) {
+      // Penerimaan lain-lain (otherInflow) → owner_to_branch
+      if (f.otherInflow > 0) {
+        await ctx.db.insert("ownerTransfers", {
+          transferDate: f.businessDate,
+          direction: "owner_to_branch" as const,
+          purpose: "adjustment" as const,
+          amount: f.otherInflow,
+          referenceNo: `etl:${reportId}:in:${f.businessDate}`,
+          status: "completed" as const,
+          branchId: report.branchId,
+          reportId,
+          description: `Penerimaan lain-lain ${f.businessDate} dari LAP. CF`,
+        });
+        inserted++;
+        rowIdx++;
+      }
+      // Pengeluaran lain-lain (selain expenseOutflow) — only if material
+      // expenseOutflow already covered by bridgeCashFlowToExpenses. Skip duplication.
+    }
+    return { inserted };
+  },
+});
+
+// ─── Bridge 8: employeeIncentives → expenses (salary_support) ────
+
+export const bridgeIncentivesToExpensesInternal = internalMutation({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }): Promise<any> => {
+    const report: any = await ctx.db.get(reportId);
+    if (!report) return { inserted: 0 };
+    const categories = await ctx.db.query("expenseCategories").collect();
+    const cat = categories.find((c) => c.type === "salary_support") ?? categories.find((c) => c.name === "Insentif / Gaji");
+    if (!cat) return { inserted: 0, reason: "no salary_support category" };
+
+    const incentives = await ctx.db
+      .query("employeeIncentives")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .collect();
+    if (incentives.length === 0) return { inserted: 0 };
+
+    const tag = `etl:${reportId}:incentive`;
+
+    // Idempotent: clear ETL-tagged incentive expenses
+    const existing = await ctx.db
+      .query("expenses")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", report.periodStart))
+      .collect();
+    for (const e of existing) {
+      if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+    }
+
+    // Aggregate ALL incentives for this report into one expense per period
+    const total = incentives.reduce((sum, i) => sum + i.amount, 0);
+    if (total <= 0) return { inserted: 0 };
+
+    await ctx.db.insert("expenses", {
+      expenseDate: report.periodStart,
+      categoryId: cat._id,
+      categoryName: cat.name,
+      amount: total,
+      description: `${tag}: Insentif/Gaji ${incentives.length} karyawan periode ${report.periodStart} → ${report.periodEnd}`,
+      paymentSource: "owner_direct" as const,
+      status: "approved" as const,
+      hasAttachment: false,
+      branchId: report.branchId,
+      etlSource: {
+        reportId, stagingTable: "employeeIncentives", tabLabel: "Insentif",
+        rowIndex: 0, sheetName: "INSENTIF",
+        fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+      },
+    });
+    return { inserted: 1, employees: incentives.length, total };
+  },
+});
+
+// ─── Per-report bridge orchestrator (internal helper) ──────────
+
+export const bridgeOneReportInternal = internalMutation({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }): Promise<any> => {
+    // No-op — orchestration done by backfillAllReports action.
+    return { reportId };
   },
 });

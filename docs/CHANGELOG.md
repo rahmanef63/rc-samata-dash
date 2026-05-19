@@ -2,6 +2,47 @@
 
 ## 2026-05-19
 
+### Added — ETL fidelity round 2 (bridges, deltas, dynamic prep)
+
+**3 new bridges** (extend `convex/features/reports/bridges.ts`):
+- `bridgeInventoryDeltasToMovementsInternal` — cross-report scan of
+  `inventoryValuation`; for each item, sort valuations by date, emit
+  `stockMovements` row per consecutive delta (positive → `stock_in`,
+  negative → `usage`). Populates `/operation/stock-movements` page.
+- `bridgeCashFlowToOwnerTransfersInternal` — pulls `otherInflow` rows
+  (Penerimaan lain-lain) into `ownerTransfers` table with
+  `purpose="adjustment"`, `direction="owner_to_branch"`, reportId stamped.
+- `bridgeIncentivesToExpensesInternal` — aggregates `employeeIncentives`
+  per report period into one `expenses` row tagged `salary_support`,
+  paymentSource=owner_direct.
+
+**Existing bridge improvements**:
+- `bridgeProductSalesToDailySales`: `promoCost` now proportional to
+  channel's share of daily gross (was: discount/4 split). More accurate
+  fee allocation per channel.
+- `bridgeCashFlowToExpenses`: expense description shows actual
+  breakdown — `"Kas Kecil Rp X + Lain-lain Rp Y"` instead of generic
+  "pengeluaran harian".
+- `deriveVendorsInternal`: type inference from supplier name patterns
+  (PLN/PDAM → utility, BPJS/SERVICE → service, GAJI/INSENTIF → payroll,
+  ATK/FOTO COPY → misc, default → food_supplier). Replaces all-default
+  `food_supplier`.
+
+**Dynamic prep** for variable xlsx sheets:
+- `weeklyReports.unknownSheets` field added — captures sheet names
+  present in xlsx that no parser matched. LPKK or any future sheet type
+  is now visible-but-skipped rather than silently lost.
+- Upload page computes unknownSheets at parse time, sends to
+  `createWeeklyReport` mutation.
+- WeeklyReportDrill summary tab surfaces unknown sheets as amber alert
+  with sheet name list — owner can request a new parser without losing
+  the upload.
+
+**PayablesOverview**: replaced inline Dialog with shared
+`RowSourceDialog` + `deriveSourceFromEtl` — now shows tab "Pembelian
+Kredit" + row N + deep-link to /laporan/{reportId}?tab=&row=, same as
+other CRUD pages.
+
 ### Changed — Tabbed comparison charts (de-duplicate)
 Old `DashboardSalesChart` ("Tren Penjualan") + `Dashboard30DayChart` ("Tren Omzet") menampilkan data sumber sama (`productSales`). Removed.
 
