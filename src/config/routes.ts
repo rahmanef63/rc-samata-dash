@@ -45,6 +45,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
           { title: "Upload Laporan", url: "/laporan/upload", icon: UploadCloud },
           { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
           { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
+          { title: "Bukti Bayar & Statement", url: "/finance/owner-transfer", icon: Landmark },
         ],
       },
       { title: "Chat AI", url: "/chat", icon: Bot },
@@ -62,7 +63,6 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
-      { title: "Bukti Bayar & Statement", url: "/finance/owner-transfer", icon: Landmark },
     ],
   },
   {

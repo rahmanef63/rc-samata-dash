@@ -9,6 +9,7 @@ import {
   Trash2, ExternalLink, Loader2, Info, FileText, CheckCircle, AlertTriangle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatRpFull } from "@/shared/lib";
 import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
 import { parseBankStatement, type BankStatementRow } from "@/features/report-upload/parsers/parseBankStatement";
@@ -21,6 +22,13 @@ type PaidBy = "owner" | "pic";
 export default function OwnerTransferPage() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
+  const receipts = useQuery(api.features.closing.queries.listPaymentReceipts, branchId ? { branchId, limit: 1000 } : "skip");
+  const ownerBatches = useQuery(api.features.closing.queries.listBankStatementBatches, branchId ? { branchId, accountKind: "owner" as const } : "skip");
+  const picBatches = useQuery(api.features.closing.queries.listBankStatementBatches, branchId ? { branchId, accountKind: "pic" as const } : "skip");
+
+  const recAmount = useMemo(() => (receipts ?? []).reduce((s, r) => s + r.amount, 0), [receipts]);
+  const ownerTx = useMemo(() => (ownerBatches ?? []).reduce((s, b) => s + b.rowCount, 0), [ownerBatches]);
+  const picTx   = useMemo(() => (picBatches   ?? []).reduce((s, b) => s + b.rowCount, 0), [picBatches]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 lg:p-8">
@@ -33,6 +41,28 @@ export default function OwnerTransferPage() {
           Upload bukti pembayaran piutang + statement rekening owner/PIC. Sistem akan cocokkan ke laporan mingguan + payables.
         </p>
       </header>
+
+      {/* Ringkasan agregat — what's currently stored */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <RingkasanCard
+          icon={<ReceiptIcon className="h-4 w-4" />}
+          label="Bukti Bayar Piutang"
+          primary={`${receipts?.length ?? 0} bukti`}
+          secondary={recAmount > 0 ? `Total Rp ${recAmount.toLocaleString("id-ID")}` : "Belum ada"}
+        />
+        <RingkasanCard
+          icon={<Landmark className="h-4 w-4" />}
+          label="Statement Owner"
+          primary={`${ownerBatches?.length ?? 0} batch · ${ownerTx} tx`}
+          secondary={ownerBatches?.[0] ? `Terakhir: ${ownerBatches[0].fileName}` : "Belum ada"}
+        />
+        <RingkasanCard
+          icon={<FileSpreadsheet className="h-4 w-4" />}
+          label="Statement PIC"
+          primary={`${picBatches?.length ?? 0} batch · ${picTx} tx`}
+          secondary={picBatches?.[0] ? `Terakhir: ${picBatches[0].fileName}` : "Belum ada"}
+        />
+      </div>
 
       <Tabs defaultValue="receipts" className="space-y-4">
         <TabsList className="grid grid-cols-3 w-full max-w-2xl">
@@ -276,6 +306,7 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
   const [uploading, setUploading] = useState(false);
   const [parsed, setParsed] = useState<{ rows: BankStatementRow[]; file: File } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [detailBatchId, setDetailBatchId] = useState<Id<"bankStatementBatches"> | null>(null);
 
   const handleFile = async (file: File) => {
     setUploading(true);
@@ -421,11 +452,11 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
           ) : (
             <div className="space-y-1">
               {batches.map((b) => (
-                <div key={b._id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group">
+                <div key={b._id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer" onClick={() => setDetailBatchId(b._id)}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate" title={b.fileName}>{b.fileName}</p>
+                    <p className="text-xs font-medium truncate text-foreground group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
                     <p className="text-[10px] text-muted-foreground">{b.periodStart} → {b.periodEnd}</p>
-                    <div className="flex items-center gap-1 mt-1">
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                         b.status === "parsed" || b.status === "reconciled"
                           ? "bg-green-100 text-green-700"
@@ -433,11 +464,15 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
                       }`}>
                         {b.status}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">{b.rowCount} rows</span>
+                      <span className="text-[10px] text-muted-foreground">{b.rowCount} tx</span>
+                      {b.closingBalance != null && (
+                        <span className="text-[10px] font-mono text-primary">Rp {b.closingBalance.toLocaleString("id-ID")}</span>
+                      )}
                     </div>
                   </div>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (!confirm(`Hapus statement "${b.fileName}"?`)) return;
                       removeBatch({ id: b._id }).then(() => toast.success("Statement dihapus"));
                     }}
@@ -454,7 +489,148 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
       </div>
 
       <PanduanAiDialog open={showGuide} onOpenChange={setShowGuide} kind="bankStatement" />
+      {detailBatchId && (
+        <BatchDetailSheet batchId={detailBatchId} onClose={() => setDetailBatchId(null)} accountLabel={label} />
+      )}
     </div>
+  );
+}
+
+// ─── Batch detail sheet ────────────────────────────────────
+
+function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"bankStatementBatches">; onClose: () => void; accountLabel: string }) {
+  const entries = useQuery(api.features.closing.queries.listBankStatementEntries, { batchId });
+  const [catFilter, setCatFilter] = useState<string>("all");
+
+  const filtered = useMemo(() => {
+    if (!entries) return [];
+    if (catFilter === "all") return entries;
+    return entries.filter((e) => (e.category ?? "other") === catFilter);
+  }, [entries, catFilter]);
+
+  const summary = useMemo(() => {
+    if (!entries) return null;
+    const by: Record<string, { count: number; debit: number; credit: number }> = {};
+    let totalDebit = 0, totalCredit = 0;
+    for (const e of entries) {
+      const k = e.category ?? "other";
+      by[k] = by[k] ?? { count: 0, debit: 0, credit: 0 };
+      by[k].count++;
+      by[k].debit += e.debit;
+      by[k].credit += e.credit;
+      totalDebit += e.debit;
+      totalCredit += e.credit;
+    }
+    return { by, totalDebit, totalCredit, net: totalCredit - totalDebit };
+  }, [entries]);
+
+  return (
+    <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">
+        <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <Landmark className="h-4 w-4 text-primary" />
+            Detail Statement {accountLabel}
+          </SheetTitle>
+          {entries && (
+            <p className="text-xs text-muted-foreground">{entries.length} transaksi · klik chip kategori untuk filter</p>
+          )}
+        </SheetHeader>
+
+        {!entries ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Memuat...
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground gap-2">
+            <AlertTriangle className="h-4 w-4" /> Batch ini belum ada entries
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Summary */}
+            {summary && (
+              <div className="px-6 py-3 grid grid-cols-3 gap-2 border-b border-border shrink-0 bg-muted/10">
+                <div className="rounded-lg bg-card border border-border p-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Kredit Masuk</p>
+                  <p className="text-xs font-bold text-green-600 mt-0.5">{formatRpFull(summary.totalCredit)}</p>
+                </div>
+                <div className="rounded-lg bg-card border border-border p-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Debit Keluar</p>
+                  <p className="text-xs font-bold text-destructive mt-0.5">{formatRpFull(summary.totalDebit)}</p>
+                </div>
+                <div className="rounded-lg bg-card border border-border p-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Net</p>
+                  <p className={`text-xs font-bold mt-0.5 ${summary.net >= 0 ? "text-primary" : "text-destructive"}`}>{formatRpFull(summary.net)}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Category filter chips */}
+            {summary && (
+              <div className="px-6 py-2 border-b border-border shrink-0 flex gap-1.5 flex-wrap">
+                <FilterChip active={catFilter === "all"} onClick={() => setCatFilter("all")}>
+                  Semua ({entries.length})
+                </FilterChip>
+                {Object.entries(summary.by).map(([cat, v]) => (
+                  <FilterChip key={cat} active={catFilter === cat} onClick={() => setCatFilter(cat)}>
+                    {CATEGORY_LABELS[cat] ?? cat} ({v.count})
+                  </FilterChip>
+                ))}
+              </div>
+            )}
+
+            {/* Entry table */}
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-[11px]">
+                <thead className="bg-muted/40 sticky top-0 z-10">
+                  <tr className="text-left">
+                    <th className="px-3 py-1.5 font-semibold">Tgl</th>
+                    <th className="px-3 py-1.5 font-semibold">Kategori</th>
+                    <th className="px-3 py-1.5 font-semibold">Channel</th>
+                    <th className="px-3 py-1.5 font-semibold">Deskripsi</th>
+                    <th className="px-3 py-1.5 font-semibold text-right">Debit</th>
+                    <th className="px-3 py-1.5 font-semibold text-right">Kredit</th>
+                    <th className="px-3 py-1.5 font-semibold text-right">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((e) => (
+                    <tr key={e._id} className="border-t border-border/40 hover:bg-muted/20">
+                      <td className="px-3 py-1 font-mono">{e.txDate}</td>
+                      <td className="px-3 py-1">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold">
+                          {CATEGORY_LABELS[e.category ?? "other"]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1 text-muted-foreground">{e.channel ?? "-"}</td>
+                      <td className="px-3 py-1 truncate max-w-[200px]" title={e.description}>{e.description}</td>
+                      <td className="px-3 py-1 text-right font-mono text-destructive">{e.debit > 0 ? formatRpFull(e.debit) : "—"}</td>
+                      <td className="px-3 py-1 text-right font-mono text-green-600">{e.credit > 0 ? formatRpFull(e.credit) : "—"}</td>
+                      <td className="px-3 py-1 text-right font-mono text-muted-foreground">{e.balance > 0 ? formatRpFull(e.balance) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted text-muted-foreground hover:bg-muted-foreground/10"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -624,3 +800,16 @@ function Field({ label, children, className = "" }: { label: string; children: R
 }
 
 const inputCls = "rounded-lg border border-border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40";
+
+function RingkasanCard({ icon, label, primary, secondary }: { icon: React.ReactNode; label: string; primary: string; secondary: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+      </div>
+      <p className="text-lg font-bold text-foreground mt-1.5">{primary}</p>
+      <p className="text-[11px] text-muted-foreground truncate" title={secondary}>{secondary}</p>
+    </div>
+  );
+}

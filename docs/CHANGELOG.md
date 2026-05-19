@@ -2,6 +2,26 @@
 
 ## 2026-05-19
 
+### Changed — Move "Bukti Bayar & Statement" to Upload menu + surface data
+
+User: "tidak tahu datanya di display dimana" — bank statement entries
+yang udah di-import gak terlihat selain count di sidebar. Plus menu
+posisi salah (KEUANGAN, harusnya nempel dgn Upload Laporan).
+
+- Menu: `Bukti Bayar & Statement` pindah dari KEUANGAN → MENU UTAMA
+  sebagai child dari "Upload" (nempel `/laporan/upload`,
+  `/laporan/upload-pergantian`, `/laporan/upload-tunjangan`).
+- Ringkasan card di atas tabs: `Bukti Bayar Piutang: N bukti · Total Rp …`
+  · `Statement Owner: N batch · X tx · last file` · `Statement PIC: …`.
+  Owner langsung lihat total data tersimpan tanpa scroll.
+- **Batch click → BatchDetailSheet** slide-over kanan:
+  - 3-card summary (Kredit Masuk · Debit Keluar · Net) per batch
+  - Filter chips per kategori (Penjualan / Pengeluaran / Bayar Vendor /
+    Topup PIC / Modal Owner / Transfer / Lainnya) — click untuk filter
+  - Full entry table dengan kolom Tgl / Kategori / Channel / Deskripsi /
+    Debit / Kredit / Saldo
+- Batch row sekarang tampilkan closing balance + cursor pointer.
+
 ### Added — Bank statement parser + Panduan AI (Owner / PIC)
 
 Berdasarkan contoh file PIC ("Gabungan Transaksi Feb-Mar-Apr" — sudah
