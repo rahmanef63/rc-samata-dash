@@ -2,6 +2,29 @@
 
 ## 2026-05-19
 
+### Fixed — Validator: close-the-loop payable.paidAmount + status
+
+Bug kritis: setelah commit validation, `payables.paidAmount` + `status`
+gak ke-update. Akibat: `/finance/payables` masih kelihatan unpaid
+padahal udah ter-rekonsil — validasi gak punya efek nyata.
+
+**Fix:**
+- `commitAutoMatchSuggestions`: hitung `matchSum` (sum bank debit dari
+  match) → `newPaid = min(amount, oldPaid + matchSum)` → patch payable
+  paidAmount + status (open/partial/paid). Log perubahan ke
+  validationLogs juga.
+- `applyValidationBatch`: setelah loop update, recompute paidAmount +
+  status untuk setiap payable yang ke-touch — bank.payableId match
+  reverse-query via `bankStatementEntries.by_payable` index, sum
+  debit, set authoritative paidAmount.
+
+**Indikator visual di BatchDetailSheet** (klik batch row):
+- Kolom baru: ✓ green check kalau isValidated, dot kalau belum
+- Kolom baru: "Pihak" (counterparty langsung), bukan deskripsi panjang
+- Kolom baru: "Payment Ref" (PMT-YYYYMM-NNNN)
+- Filter chip "Validasi": Semua / Tervalidasi (N) / Belum (N)
+- Owner langsung lihat mana yang udah lewat reconciliation
+
 ### Changed — Validator: preview → accept/deny session before commit
 
 User: "seharusnya ketika upload kita perlu satu sesion seperti upload

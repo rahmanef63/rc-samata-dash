@@ -509,12 +509,23 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
 function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"bankStatementBatches">; onClose: () => void; accountLabel: string }) {
   const entries = useQuery(api.features.closing.queries.listBankStatementEntries, { batchId });
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [valFilter, setValFilter] = useState<"all" | "validated" | "unvalidated">("all");
 
   const filtered = useMemo(() => {
     if (!entries) return [];
-    if (catFilter === "all") return entries;
-    return entries.filter((e) => (e.category ?? "other") === catFilter);
-  }, [entries, catFilter]);
+    let arr = entries;
+    if (catFilter !== "all") arr = arr.filter((e) => (e.category ?? "other") === catFilter);
+    if (valFilter === "validated") arr = arr.filter((e) => !!e.isValidated);
+    if (valFilter === "unvalidated") arr = arr.filter((e) => !e.isValidated);
+    return arr;
+  }, [entries, catFilter, valFilter]);
+
+  const validatedStats = useMemo(() => {
+    if (!entries) return { validated: 0, unvalidated: 0 };
+    let v = 0, u = 0;
+    for (const e of entries) (e.isValidated ? v++ : u++);
+    return { validated: v, unvalidated: u };
+  }, [entries]);
 
   const summary = useMemo(() => {
     if (!entries) return null;
@@ -587,15 +598,30 @@ function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"ban
               </div>
             )}
 
+            {/* Validation filter chips */}
+            <div className="px-6 py-2 border-b border-border shrink-0 flex gap-1.5 flex-wrap items-center">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Validasi:</span>
+              <FilterChip active={valFilter === "all"} onClick={() => setValFilter("all")}>
+                Semua
+              </FilterChip>
+              <FilterChip active={valFilter === "validated"} onClick={() => setValFilter("validated")}>
+                Tervalidasi ({validatedStats.validated})
+              </FilterChip>
+              <FilterChip active={valFilter === "unvalidated"} onClick={() => setValFilter("unvalidated")}>
+                Belum ({validatedStats.unvalidated})
+              </FilterChip>
+            </div>
+
             {/* Entry table */}
             <div className="flex-1 overflow-auto">
               <table className="w-full text-[11px]">
                 <thead className="bg-muted/40 sticky top-0 z-10">
                   <tr className="text-left">
+                    <th className="px-3 py-1.5 font-semibold w-6"></th>
                     <th className="px-3 py-1.5 font-semibold">Tgl</th>
                     <th className="px-3 py-1.5 font-semibold">Kategori</th>
-                    <th className="px-3 py-1.5 font-semibold">Channel</th>
-                    <th className="px-3 py-1.5 font-semibold">Deskripsi</th>
+                    <th className="px-3 py-1.5 font-semibold">Pihak</th>
+                    <th className="px-3 py-1.5 font-semibold">Payment Ref</th>
                     <th className="px-3 py-1.5 font-semibold text-right">Debit</th>
                     <th className="px-3 py-1.5 font-semibold text-right">Kredit</th>
                     <th className="px-3 py-1.5 font-semibold text-right">Saldo</th>
@@ -604,14 +630,19 @@ function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"ban
                 <tbody>
                   {filtered.map((e) => (
                     <tr key={e._id} className="border-t border-border/40 hover:bg-muted/20">
+                      <td className="px-3 py-1 text-center">
+                        {e.isValidated
+                          ? <CheckCircle className="h-3 w-3 text-green-600 inline" />
+                          : <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/30" />}
+                      </td>
                       <td className="px-3 py-1 font-mono">{e.txDate}</td>
                       <td className="px-3 py-1">
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold">
                           {CATEGORY_LABELS[e.category ?? "other"]}
                         </span>
                       </td>
-                      <td className="px-3 py-1 text-muted-foreground">{e.channel ?? "-"}</td>
-                      <td className="px-3 py-1 truncate max-w-[200px]" title={e.description}>{e.description}</td>
+                      <td className="px-3 py-1 truncate max-w-[140px]" title={e.counterparty ?? e.description}>{e.counterparty ?? "-"}</td>
+                      <td className="px-3 py-1 font-mono text-[10px] text-muted-foreground">{e.paymentReference ?? "—"}</td>
                       <td className="px-3 py-1 text-right font-mono text-destructive">{e.debit > 0 ? formatRpFull(e.debit) : "—"}</td>
                       <td className="px-3 py-1 text-right font-mono text-green-600">{e.credit > 0 ? formatRpFull(e.credit) : "—"}</td>
                       <td className="px-3 py-1 text-right font-mono text-muted-foreground">{e.balance > 0 ? formatRpFull(e.balance) : "—"}</td>

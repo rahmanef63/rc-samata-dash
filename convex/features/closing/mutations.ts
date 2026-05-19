@@ -441,6 +441,52 @@ export const applyValidationBatch = mutation({
       }
     }
 
+    // ─── Close the loop: recompute payable.paidAmount + status from
+    // all linked bank entries. Targets each payable that got a new
+    // matchedPayableId or paymentReference in this batch.
+    const touchedPayableIds = new Set<string>();
+    for (const u of updates) {
+      if (u.entryType === "bank_entry" && u.matchedPayableId) {
+        touchedPayableIds.add(u.matchedPayableId);
+      } else if (u.entryType === "payable" && (u.paymentReference !== undefined || u.isValidated)) {
+        touchedPayableIds.add(u.entryId);
+      }
+    }
+    for (const pidStr of touchedPayableIds) {
+      const pid = pidStr as Id<"payables">;
+      const p = await ctx.db.get(pid) as { amount?: number; paidAmount?: number; status?: "open" | "partial" | "paid" | "overdue" } | null;
+      if (!p) continue;
+      const linkedBanks = await ctx.db.query("bankStatementEntries")
+        .withIndex("by_payable", (q) => q.eq("payableId", pid))
+        .collect();
+      const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
+      const oldPaid = p.paidAmount ?? 0;
+      const newPaid = Math.min(p.amount ?? 0, bankSum);  // authoritative: bank-entry sum
+      const newStatus: "open" | "partial" | "paid" | "overdue" =
+        newPaid >= (p.amount ?? 0) ? "paid"
+        : newPaid > 0 ? "partial"
+        : (p.status ?? "open");
+      if (newPaid !== oldPaid) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: pidStr, batchId,
+          field: "paidAmount",
+          beforeValue: String(oldPaid), afterValue: String(newPaid),
+          branchId, changedAt: now,
+        });
+      }
+      if (newStatus !== p.status) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: pidStr, batchId,
+          field: "status",
+          beforeValue: p.status, afterValue: newStatus,
+          branchId, changedAt: now,
+        });
+      }
+      if (newPaid !== oldPaid || newStatus !== p.status) {
+        await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
+      }
+    }
+
     await ctx.db.patch(batchId, { rowsApplied: applied, rowsRejected: rejected });
 
     await insertAuditLog(ctx, {
@@ -724,13 +770,23 @@ export const commitAutoMatchSuggestions = mutation({
 
     for (const m of matches) {
       try {
-        const payable = await ctx.db.get(m.payableId) as { paymentReference?: string; isValidated?: boolean; vendorId?: Id<"vendors"> } | null;
+        const payable = await ctx.db.get(m.payableId) as {
+          paymentReference?: string; isValidated?: boolean; vendorId?: Id<"vendors">;
+          amount?: number; paidAmount?: number; status?: "open" | "partial" | "paid" | "overdue";
+        } | null;
         if (!payable) { rejected++; continue; }
 
-        // Get first bank to derive YYYYMM
-        const firstBank = await ctx.db.get(m.bankEntryIds[0]) as { txDate?: string; counterparty?: string } | null;
+        // Get first bank to derive YYYYMM + collect bank sum
+        const firstBank = await ctx.db.get(m.bankEntryIds[0]) as { txDate?: string; counterparty?: string; debit?: number } | null;
         const ym = (firstBank?.txDate ?? new Date().toISOString().slice(0, 10)).slice(0, 7).replace("-", "");
         const ref = `PMT-${ym}-${String(refSeq++).padStart(4, "0")}`;
+
+        // Pre-collect total this match adds to payable.paidAmount
+        let matchSum = 0;
+        for (const bid of m.bankEntryIds) {
+          const bk = await ctx.db.get(bid) as { debit?: number } | null;
+          if (bk?.debit) matchSum += bk.debit;
+        }
 
         // Patch each bank entry
         for (const bid of m.bankEntryIds) {
@@ -787,7 +843,7 @@ export const commitAutoMatchSuggestions = mutation({
           applied++;
         }
 
-        // Patch payable
+        // Patch payable — close the loop: update paidAmount + status
         if (payable.paymentReference !== ref) {
           await ctx.db.insert("validationLogs", {
             entryType: "payable", entryId: m.payableId, batchId,
@@ -804,7 +860,37 @@ export const commitAutoMatchSuggestions = mutation({
             branchId, changedAt: now,
           });
         }
-        await ctx.db.patch(m.payableId, { paymentReference: ref, isValidated: true });
+
+        const oldPaid = payable.paidAmount ?? 0;
+        const newPaid = Math.min(payable.amount ?? 0, oldPaid + matchSum);
+        const newStatus: "open" | "partial" | "paid" | "overdue" =
+          newPaid >= (payable.amount ?? 0) ? "paid"
+          : newPaid > 0 ? "partial"
+          : (payable.status ?? "open");
+
+        if (newPaid !== oldPaid) {
+          await ctx.db.insert("validationLogs", {
+            entryType: "payable", entryId: m.payableId, batchId,
+            field: "paidAmount",
+            beforeValue: String(oldPaid), afterValue: String(newPaid),
+            branchId, changedAt: now,
+          });
+        }
+        if (newStatus !== payable.status) {
+          await ctx.db.insert("validationLogs", {
+            entryType: "payable", entryId: m.payableId, batchId,
+            field: "status",
+            beforeValue: payable.status, afterValue: newStatus,
+            branchId, changedAt: now,
+          });
+        }
+
+        await ctx.db.patch(m.payableId, {
+          paymentReference: ref,
+          isValidated: true,
+          paidAmount: newPaid,
+          status: newStatus,
+        });
         applied++;
       } catch {
         rejected++;
