@@ -15,42 +15,17 @@ interface WaterfallChartProps {
   headerRight?: React.ReactNode;
 }
 
-interface WaterfallChartDatum {
-  name: string;
-  base: number;
-  bar: number;
-  rawValue: number;
-  isPositive: boolean;
-  isTotal: boolean;
-}
+const POSITIVE_COLOR = "#10b981";
+const NEGATIVE_COLOR = "#ef4444";
 
 export function WaterfallChart({ data, title, subtitle, height = 220, headerRight }: WaterfallChartProps) {
-  const { items: chartData } = data.reduce<{
-    items: WaterfallChartDatum[];
-    cumulative: number;
-  }>(
-    (state, item, index) => {
-      const isTotal = index === data.length - 1;
-      const base = isTotal ? 0 : Math.min(state.cumulative, state.cumulative + item.value);
-      const barValue = isTotal ? item.value : Math.abs(item.value);
-      const nextCumulative = isTotal ? state.cumulative : state.cumulative + item.value;
-
-      state.items.push({
-        name: item.name,
-        base,
-        bar: barValue,
-        rawValue: item.value,
-        isPositive: item.value >= 0,
-        isTotal,
-      });
-
-      return {
-        items: state.items,
-        cumulative: nextCumulative,
-      };
-    },
-    { items: [], cumulative: 0 },
-  );
+  // Signed bars (positive up, negative down) — simpler than stacked waterfall
+  // and renders correctly with zero ReferenceLine in middle of axis.
+  const chartData = data.map((item, index) => ({
+    name: item.name,
+    value: item.value,
+    isTotal: index === data.length - 1,
+  }));
 
   return (
     <div className="bg-card rounded-xl shadow-card p-4 md:p-5">
@@ -63,47 +38,42 @@ export function WaterfallChart({ data, title, subtitle, height = 220, headerRigh
       </div>
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} barCategoryGap="20%">
+          <BarChart data={chartData} barCategoryGap="20%" margin={{ top: 20, right: 8, bottom: 8, left: 8 }}>
             <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke={CHART_AXIS_COLOR} />
             <YAxis tickFormatter={formatRp} tick={{ fontSize: 10 }} stroke={CHART_AXIS_COLOR} />
             <Tooltip
-              formatter={(_value: number, _name: string, props: { payload?: WaterfallChartDatum }) => {
-                const raw = props.payload?.rawValue ?? 0;
-                return [
-                  formatRpFull(raw),
-                  props.payload?.isTotal ? "Total Bersih" : raw >= 0 ? "Arus Masuk" : "Arus Keluar",
-                ];
-              }}
+              formatter={(value: number, _name: string, props: { payload?: { isTotal?: boolean } }) => [
+                formatRpFull(value),
+                props.payload?.isTotal ? "Total Bersih" : value >= 0 ? "Arus Masuk" : "Arus Keluar",
+              ]}
               contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${CHART_GRID_COLOR}` }}
             />
-            <ReferenceLine y={0} stroke={CHART_GRID_COLOR} />
-            {/* Invisible base */}
-            <Bar dataKey="base" stackId="waterfall" fill="transparent" />
-            {/* Visible bar */}
-            <Bar dataKey="bar" stackId="waterfall" radius={[4, 4, 0, 0]}>
+            <ReferenceLine y={0} stroke={CHART_AXIS_COLOR} strokeWidth={1.5} />
+            <Bar dataKey="value" radius={[4, 4, 4, 4]}>
               {chartData.map((entry, i) => (
                 <Cell
                   key={i}
-                  fill={
-                    entry.isTotal
-                      ? entry.rawValue >= 0
-                        ? "#10b981" /* profit: green */
-                        : "#ef4444" /* loss: red */
-                      : entry.isPositive
-                      ? "#10b981" /* inflow: green */
-                      : "#ef4444" /* outflow: red */
-                  }
+                  fill={entry.value >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR}
                 />
               ))}
               <LabelList
-                dataKey="rawValue"
-                position="top"
-                content={(props: { x?: number | string; y?: number | string; width?: number | string; value?: unknown }) => {
+                dataKey="value"
+                content={(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown }) => {
                   const v = typeof props.value === "number" ? props.value : Number(props.value ?? 0);
                   const x = Number(props.x ?? 0) + Number(props.width ?? 0) / 2;
-                  const y = Number(props.y ?? 0) - 4;
+                  // Positive: label above bar top. Negative: label below bar bottom.
+                  const y = v >= 0
+                    ? Number(props.y ?? 0) - 4
+                    : Number(props.y ?? 0) + Number(props.height ?? 0) + 12;
                   return (
-                    <text x={x} y={y} fontSize={10} textAnchor="middle" fill={CHART_AXIS_COLOR}>
+                    <text
+                      x={x}
+                      y={y}
+                      fontSize={10}
+                      fontWeight={600}
+                      textAnchor="middle"
+                      fill={v >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR}
+                    >
                       {formatRpFull(v)}
                     </text>
                   );

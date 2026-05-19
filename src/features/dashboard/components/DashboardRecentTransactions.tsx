@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope } from "../context/DateScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
@@ -82,19 +83,25 @@ export function DashboardRecentTransactions() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {transactions.map((tx) => (
-              <div key={tx.id} className="cursor-pointer" onClick={() => setSelected(tx)}>
-                <TransactionRow
-                  title={tx.name}
-                  subtitle={tx.type}
-                  amount={tx.amount}
-                  direction={tx.direction}
-                  rightLabel={tx.time}
-                />
-              </div>
-            ))}
-          </div>
+          <ScrollArea className="h-[320px] pr-3">
+            <div className="space-y-1.5">
+              {transactions.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="cursor-pointer rounded-lg hover:bg-muted/40 -mx-2 px-2 py-1 transition-colors"
+                  onClick={() => setSelected(tx)}
+                >
+                  <TransactionRow
+                    title={tx.name}
+                    subtitle={tx.type}
+                    amount={tx.amount}
+                    direction={tx.direction}
+                    rightLabel={tx.time}
+                  />
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </motion.div>
 

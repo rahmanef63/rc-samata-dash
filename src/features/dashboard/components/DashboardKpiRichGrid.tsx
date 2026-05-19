@@ -12,27 +12,24 @@ import { formatRpFull } from "@/shared/lib";
 
 type KpiStatus = "good" | "warning" | "danger";
 
-const STATUS_STYLE: Record<KpiStatus, { ring: string; bg: string; text: string; chip: string; barFill: string }> = {
+const STATUS_STYLE: Record<KpiStatus, { accent: string; chip: string; barFill: string; label: string }> = {
   good: {
-    ring: "ring-emerald-200 dark:ring-emerald-900",
-    bg: "bg-emerald-50/60 dark:bg-emerald-950/40",
-    text: "text-emerald-700 dark:text-emerald-400",
-    chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+    accent: "bg-emerald-500",
+    chip: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100",
     barFill: "bg-emerald-500",
+    label: "SEHAT",
   },
   warning: {
-    ring: "ring-amber-200 dark:ring-amber-900",
-    bg: "bg-amber-50/60 dark:bg-amber-950/40",
-    text: "text-amber-700 dark:text-amber-400",
-    chip: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
+    accent: "bg-amber-500",
+    chip: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100",
     barFill: "bg-amber-500",
+    label: "PERHATIAN",
   },
   danger: {
-    ring: "ring-rose-200 dark:ring-rose-900",
-    bg: "bg-rose-50/60 dark:bg-rose-950/40",
-    text: "text-rose-700 dark:text-rose-400",
-    chip: "bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300",
+    accent: "bg-rose-500",
+    chip: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-100",
     barFill: "bg-rose-500",
+    label: "BAHAYA",
   },
 };
 
@@ -103,67 +100,71 @@ function KpiRichCard({ kpi, periodLabel }: { kpi: Kpi; periodLabel: string }) {
   const targetPct = gaugeMax > 0 ? Math.min(100, (kpi.target / gaugeMax) * 100) : 0;
 
   return (
-    <Card className={`p-3.5 ring-1 ${style.ring} ${style.bg} border-0`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
-            {kpi.kpiLabel}
-          </p>
-          <p className={`text-2xl font-bold font-mono mt-0.5 ${style.text}`}>
-            {formatValue(kpi.actual, kpi.unit)}
-          </p>
-        </div>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${style.chip}`}>
-          {kpi.status === "good" ? "SEHAT" : kpi.status === "warning" ? "PERHATIAN" : "BAHAYA"}
+    <Card className="relative overflow-hidden p-4 border bg-card hover:shadow-md transition-shadow">
+      {/* Status accent: vertical bar on left edge */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${style.accent}`} />
+
+      <div className="flex items-start justify-between gap-2 pl-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
+          {kpi.kpiLabel}
+        </p>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${style.chip}`}>
+          {style.label}
         </span>
       </div>
 
+      <p className="pl-1 mt-1 text-3xl font-bold font-mono tracking-tight text-foreground">
+        {formatValue(kpi.actual, kpi.unit)}
+      </p>
+
       {/* Delta row */}
-      <div className={`flex items-center gap-1 mt-1.5 text-[11px] font-medium ${sentiment.color}`}>
-        <Arrow className="h-3 w-3" />
+      <div className={`pl-1 flex items-center gap-1 mt-1 text-xs font-semibold ${sentiment.color}`}>
+        <Arrow className="h-3.5 w-3.5" />
         <span>
           {kpi.deltaPct === null
             ? "—"
             : `${sentiment.sign}${kpi.deltaPct.toFixed(1)}%`}
         </span>
-        <span className="text-[10px] text-muted-foreground font-normal ml-0.5">
+        <span className="text-[11px] text-muted-foreground font-normal ml-0.5">
           {periodLabel}
         </span>
       </div>
 
       {/* Gauge bar with ideal/target markers */}
-      <div className="relative mt-2 mb-1.5 h-1.5 rounded-full bg-muted overflow-visible">
-        <div
-          className={`absolute inset-y-0 left-0 rounded-full ${style.barFill}`}
-          style={{ width: `${pct}%` }}
-        />
-        {/* Ideal marker */}
-        <div
-          className="absolute -top-0.5 h-2.5 w-0.5 bg-blue-500"
-          style={{ left: `${idealPct}%` }}
-          title={`Ideal: ${formatValue(kpi.ideal, kpi.unit)}`}
-        />
-        {/* Target marker */}
-        <div
-          className="absolute -top-0.5 h-2.5 w-0.5 bg-foreground"
-          style={{ left: `${targetPct}%` }}
-          title={`Target: ${formatValue(kpi.target, kpi.unit)}`}
-        />
+      <div className="pl-1 mt-3 mb-1">
+        <div className="relative h-1.5 rounded-full bg-muted overflow-visible">
+          <div
+            className={`absolute inset-y-0 left-0 rounded-full ${style.barFill}`}
+            style={{ width: `${pct}%` }}
+          />
+          {/* Ideal marker (industry std) */}
+          <div
+            className="absolute -top-1 h-3.5 w-0.5 bg-sky-600 dark:bg-sky-400"
+            style={{ left: `${idealPct}%` }}
+            title={`Ideal: ${formatValue(kpi.ideal, kpi.unit)}`}
+          />
+          {/* Target marker (branch) */}
+          <div
+            className="absolute -top-1 h-3.5 w-0.5 bg-foreground"
+            style={{ left: `${targetPct}%` }}
+            title={`Target: ${formatValue(kpi.target, kpi.unit)}`}
+          />
+        </div>
       </div>
 
-      {/* Numbers row */}
-      <div className="grid grid-cols-3 gap-1 text-[10px] mt-1.5">
+      {/* Avg / Ideal / Target row */}
+      <div className="pl-1 grid grid-cols-3 gap-1 text-xs mt-2 border-t pt-2">
         <div>
-          <p className="text-muted-foreground">Avg</p>
-          <p className="font-semibold font-mono">{formatValue(kpi.average, kpi.unit)}</p>
+          <p className="text-[10px] text-muted-foreground font-medium uppercase">Avg</p>
+          <p className="font-bold font-mono text-foreground text-sm">{formatValue(kpi.average, kpi.unit)}</p>
         </div>
         <div>
-          <p className="text-blue-600 dark:text-blue-400">Ideal</p>
-          <p className="font-semibold font-mono">{formatValue(kpi.ideal, kpi.unit)}</p>
+          <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium uppercase">Ideal</p>
+          <p className="font-bold font-mono text-foreground text-sm">{formatValue(kpi.ideal, kpi.unit)}</p>
         </div>
         <div>
-          <p className="text-foreground/80">Target</p>
-          <p className="font-semibold font-mono">{formatValue(kpi.target, kpi.unit)}</p>
+          <p className="text-[10px] text-foreground/70 font-medium uppercase">Target</p>
+          <p className="font-bold font-mono text-foreground text-sm">{formatValue(kpi.target, kpi.unit)}</p>
         </div>
       </div>
     </Card>

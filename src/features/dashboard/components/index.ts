@@ -6,7 +6,6 @@ export { DashboardTransactionLog } from "./DashboardTransactionLog";
 export { DashboardExpenseChart } from "./DashboardExpenseChart";
 export { DashboardCashflowChart } from "./DashboardCashflowChart";
 export { Dashboard30DayChart } from "./Dashboard30DayChart";
-export { DashboardKpiTargets } from "./DashboardKpiTargets";
 export { DashboardKpiRichGrid } from "./DashboardKpiRichGrid";
 export { DashboardAnalysisDrill } from "./DashboardAnalysisDrill";
 export { DashboardTopProducts } from "./DashboardTopProducts";

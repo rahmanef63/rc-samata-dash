@@ -6,12 +6,14 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateRange, formatShortDate } from "@/shared/lib";
+import { formatShortDate } from "@/shared/lib";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useDateScope } from "../context/DateScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 
 export function Dashboard30DayChart() {
   const { branchId: scopeBranchId, branches } = useBranchScope();
+  const { rangeLabel, setGranularity } = useDateScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawMonthlyTrend = useQuery(
     api.features.reports.dashboardQueries.getMonthlySalesTrend,
@@ -34,10 +36,22 @@ export function Dashboard30DayChart() {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
-          <h2 className="text-sm font-semibold mb-2">Omzet 30 Hari Terakhir</h2>
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Belum ada data kas periode.
+          <h2 className="text-sm font-semibold mb-2">Tren Omzet</h2>
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            {rawMonthlyTrend.length === 0
+              ? "Belum ada data kas periode."
+              : `Tidak ada omzet pada ${rangeLabel}.`}
           </p>
+          {rawMonthlyTrend.length > 0 && (
+            <div className="text-center">
+              <button
+                onClick={() => setGranularity("quarter")}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                Lihat per kuartal →
+              </button>
+            </div>
+          )}
         </div>
       </motion.div>
     );
@@ -47,14 +61,13 @@ export function Dashboard30DayChart() {
     ...point,
     label: formatShortDate(point.date),
   }));
-  const dateRange = formatDateRange(monthlyTrend[0].date, monthlyTrend[monthlyTrend.length - 1].date);
 
   return (
     <motion.div variants={itemVariants}>
       <AreaChartCard
         data={chartData}
-        title="Omzet 30 Hari Terakhir"
-        subtitle={dateRange}
+        title="Tren Omzet"
+        subtitle={`${rangeLabel} · ${monthlyTrend.length} titik data`}
         height={200}
         gradientId="sales30Gradient"
         tooltipLabel="Omzet"

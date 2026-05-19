@@ -6,14 +6,16 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateRange, formatShortDate } from "@/shared/lib";
+import { formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
 import { useBranchScope } from "../context/BranchScopeContext";
+import { useDateScope } from "../context/DateScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 
 export function DashboardSalesChart() {
   const isOwner = useUserRole() === "owner";
   const { branchId: scopeBranchId, branches } = useBranchScope();
+  const { rangeLabel, setGranularity } = useDateScope();
   const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawSalesTrend = useQuery(
     api.features.reports.dashboardQueries.getWeeklySalesTrend,
@@ -36,12 +38,24 @@ export function DashboardSalesChart() {
     return (
       <motion.div variants={itemVariants}>
         <div className="bg-card rounded-xl shadow-card p-5">
-          <h2 className="text-sm font-semibold mb-2">Sales Last 7 Days</h2>
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            {isOwner
-              ? "Belum ada data penjualan."
-              : "Belum ada data penjualan. Upload laporan mingguan terlebih dahulu."}
+          <h2 className="text-sm font-semibold mb-2">Tren Penjualan</h2>
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            {rawSalesTrend.length === 0
+              ? isOwner
+                ? "Belum ada data penjualan."
+                : "Belum ada data penjualan. Upload laporan mingguan terlebih dahulu."
+              : `Tidak ada penjualan pada ${rangeLabel}.`}
           </p>
+          {rawSalesTrend.length > 0 && (
+            <div className="text-center">
+              <button
+                onClick={() => setGranularity("month")}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                Lihat per bulan →
+              </button>
+            </div>
+          )}
         </div>
       </motion.div>
     );
@@ -51,14 +65,13 @@ export function DashboardSalesChart() {
     ...point,
     label: formatShortDate(point.date),
   }));
-  const dateRange = formatDateRange(salesTrend[0].date, salesTrend[salesTrend.length - 1].date);
 
   return (
     <motion.div variants={itemVariants}>
       <AreaChartCard
         data={chartData}
-        title="Penjualan 7 Hari Terakhir"
-        subtitle={dateRange}
+        title="Tren Penjualan"
+        subtitle={`${rangeLabel} · ${salesTrend.length} titik data`}
         height={220}
         gradientId="salesGradient"
         tooltipLabel="Penjualan"
