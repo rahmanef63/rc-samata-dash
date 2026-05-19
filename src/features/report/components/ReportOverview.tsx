@@ -162,7 +162,7 @@ export function ReportOverview() {
             <div
               key={r._id}
               className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/20 transition-colors cursor-pointer"
-              onClick={() => router.push(`/laporan/analisis?report=${r._id}`)}
+              onClick={() => router.push(`/laporan/${r._id}`)}
             >
               <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
                 <FileText className="h-4 w-4 text-muted-foreground" />

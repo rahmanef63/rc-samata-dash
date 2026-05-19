@@ -3,22 +3,14 @@
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DashboardKpiCards,
-  containerVariants,
-  itemVariants,
-} from "@/features/dashboard";
+import { containerVariants, itemVariants } from "@/features/dashboard";
 
-// Lazy-loaded cards — each fetches its own Convex queries on mount.
-// Splitting reduces initial JS, isolates errors per card (one broken
-// card no longer takes the whole dashboard down), and lets the skeleton
-// fallback show until each card's data is ready.
 const CARD_FALLBACK = <Skeleton className="h-48 w-full rounded-xl" />;
 const TALL_FALLBACK = <Skeleton className="h-64 w-full rounded-xl" />;
 
-const DashboardKpiTargets = dynamic(
-  () => import("./DashboardKpiTargets").then((m) => m.DashboardKpiTargets),
-  { loading: () => CARD_FALLBACK, ssr: false },
+const DashboardKpiRichGrid = dynamic(
+  () => import("./DashboardKpiRichGrid").then((m) => m.DashboardKpiRichGrid),
+  { loading: () => <Skeleton className="h-80 w-full rounded-xl" />, ssr: false },
 );
 const DashboardBranchCompare = dynamic(
   () => import("./DashboardBranchCompare").then((m) => m.DashboardBranchCompare),
@@ -60,6 +52,10 @@ const DashboardTransactionLog = dynamic(
   () => import("./DashboardTransactionLog").then((m) => m.DashboardTransactionLog),
   { loading: () => TALL_FALLBACK, ssr: false },
 );
+const DashboardAnalysisDrill = dynamic(
+  () => import("./DashboardAnalysisDrill").then((m) => m.DashboardAnalysisDrill),
+  { loading: () => TALL_FALLBACK, ssr: false },
+);
 
 export default function DashboardPage() {
   return (
@@ -72,17 +68,14 @@ export default function DashboardPage() {
       <motion.div variants={itemVariants} className="mb-6">
         <h1 className="text-lg font-semibold tracking-tight">Dashboard Owner</h1>
         <p className="text-sm text-muted-foreground">
-          Kontrol penuh cabang Anda — omzet, kas, hutang, dan operasional.
+          Kontrol penuh cabang Anda — KPI, grafik, dan detail analisis dalam satu halaman.
         </p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Rich KPI grid — 10 cards w/ value, delta vs prev period, avg, ideal, target */}
         <div className="lg:col-span-12">
-          <DashboardKpiCards />
-        </div>
-
-        <div className="lg:col-span-12">
-          <DashboardKpiTargets />
+          <DashboardKpiRichGrid />
         </div>
 
         <div className="lg:col-span-7">
@@ -115,6 +108,10 @@ export default function DashboardPage() {
 
         <div className="lg:col-span-12">
           <DashboardTopProducts />
+        </div>
+
+        <div className="lg:col-span-12">
+          <DashboardAnalysisDrill />
         </div>
 
         <div className="lg:col-span-12">

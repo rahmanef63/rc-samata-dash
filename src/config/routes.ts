@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, PieChart, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -36,7 +36,6 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Dashboard", url: "/", icon: Home },
       { title: "Ringkasan Laporan", url: "/report", icon: BarChart3 },
       { title: "Semua Laporan", url: "/laporan", icon: Folder },
-      { title: "Analisis", url: "/laporan/analisis", icon: PieChart },
       {
         title: "Upload",
         url: "/laporan/upload",

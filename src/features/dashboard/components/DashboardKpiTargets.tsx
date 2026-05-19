@@ -78,7 +78,7 @@ export function DashboardKpiTargets() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold tracking-tight">KPI Target vs Aktual (Bulan ini)</h2>
         <Link
-          href="/laporan/analisis"
+          href="/operation/kpi-targets"
           className="text-xs text-muted-foreground hover:text-primary"
         >
           Detail →

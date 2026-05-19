@@ -182,25 +182,25 @@ export default function ReportHub() {
             icon={<PieChart className="h-5 w-5" />}
             title="Ikhtisar"
             subtitle="Ringkasan keuangan"
-            onClick={() => router.push("/laporan/analisis")}
+            onClick={() => router.push("/")}
           />
           <NavTile
             icon={<Gauge className="h-5 w-5" />}
             title="KPI"
             subtitle="Target vs aktual"
-            onClick={() => router.push("/laporan/analisis?tab=kpi")}
+            onClick={() => router.push("/")}
           />
           <NavTile
             icon={<TrendingUp className="h-5 w-5" />}
             title="Profitabilitas"
             subtitle="Margin produk"
-            onClick={() => router.push("/laporan/analisis?tab=profit")}
+            onClick={() => router.push("/")}
           />
           <NavTile
             icon={<TrendingDown className="h-5 w-5" />}
             title="Arus Kas"
             subtitle="Pemasukan vs pengeluaran"
-            onClick={() => router.push("/laporan/analisis?tab=cashflow")}
+            onClick={() => router.push("/")}
           />
         </div>
       </div>

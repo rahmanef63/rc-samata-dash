@@ -1,7 +1,5 @@
-"use client";
-
-import AnalyticsPage from "@/features/analytics/components/AnalyticsPage";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <AnalyticsPage />;
+  redirect("/");
 }
