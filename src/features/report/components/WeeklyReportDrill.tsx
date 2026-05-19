@@ -199,6 +199,7 @@ function DataTablePanel<T extends Record<string, unknown>>({
             {sorted.map((row, i) => (
               <tr
                 key={i}
+                data-row-idx={i}
                 className="border-t hover:bg-muted/40 cursor-pointer transition-colors"
                 onClick={() => setSelectedRow(row)}
                 title="Klik untuk lihat sumber baris"
