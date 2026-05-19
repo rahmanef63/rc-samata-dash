@@ -2,6 +2,28 @@
 
 ## 2026-05-19
 
+### Fixed — ETL tag prefix leaking into user-visible columns
+
+Owner saw expense descriptions like
+`etl:n9740d1wpb9thkfja2xjpd2mwn86vx6f: pengeluaran harian 2026-05-13 · Kas Kecil Rp 26.209.985`.
+
+Cause: bridges used `description.startsWith("etl:<reportId>")` for
+idempotent wipe-then-reinsert. The tag prefix was getting written to
+end-user fields (expenses.description, payables.description,
+stockMovements.notes, ownerTransfers.referenceNo).
+
+Fix:
+- Switch idempotency from string-prefix to `etlSource.reportId` check
+  in every bridge. `stockMovements` schema gained an `etlSource`
+  optional field so it follows the same pattern.
+- Inserted descriptions now read like `"Pengeluaran harian · Kas Kecil
+  Rp 26.209.985"` (clean), `"AYAM, ES BATU, MINYAK +3"` (payable),
+  `"Dari 2026-04-30 (5.2 KG) → 2026-05-07 (3.1 KG)"` (movement),
+  `"IN-2026-05-13"` (owner transfer referenceNo).
+- New `stripEtlPrefixes` action (calls `stripEtlPrefixesInternal`)
+  scans expenses + payables + stockMovements + ownerTransfers and
+  rewrites legacy values. Idempotent — safe to run multiple times.
+
 ### Added — Upload-time category validation + ingredient inference
 
 Owner reported food ingredients (bahan ayam, minyak, beras, …) were silently

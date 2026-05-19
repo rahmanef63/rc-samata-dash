@@ -297,17 +297,17 @@ export const bridgeCreditPurchasesToPayables = mutation({
       groups.set(key, g);
     }
 
-    // Wipe existing payables tagged to this report (description prefix)
-    const tag = `etl:${reportId}`;
+    // Wipe existing payables for this report (identified via etlSource)
     const existing = await ctx.db
       .query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
       .collect();
     for (const e of existing) {
-      if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+      if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
     }
 
     let inserted = 0;
+    let rowIdx = 0;
     for (const g of groups.values()) {
       const vendorId = await vendorIdByName(ctx, g.supplier);
       if (!vendorId) continue; // skip if vendor not in master
@@ -325,10 +325,16 @@ export const bridgeCreditPurchasesToPayables = mutation({
         amount: g.amount,
         paidAmount,
         status,
-        description: `${tag}: ${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
+        description: `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
         branchId: report.branchId,
+        etlSource: {
+          reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
+          rowIndex: rowIdx, sheetName: "PEMBELIAN KREDIT",
+          fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted, groupCount: groups.size };
   },
@@ -415,33 +421,39 @@ export const bridgeCashFlowToExpenses = mutation({
 
     // Idempotent: clear ETL-tagged expenses for this report's branch dates
     const datesIn = new Set(flows.map((f) => f.businessDate));
-    const tag = `etl:${reportId}`;
     for (const d of datesIn) {
       const existing = await ctx.db
         .query("expenses")
         .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", d))
         .collect();
       for (const e of existing) {
-        if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+        if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
       }
     }
 
     let inserted = 0;
+    let rowIdx = 0;
     for (const f of flows) {
       const totalOut = f.expenseOutflow + f.otherOutflow;
-      if (totalOut <= 0) continue;
+      if (totalOut <= 0) { rowIdx++; continue; }
       await ctx.db.insert("expenses", {
         expenseDate: f.businessDate,
         categoryId: cat._id,
         categoryName: cat.name,
         amount: totalOut,
-        description: `${tag}: pengeluaran harian (kas kecil + lain-lain) dari LAP. CF`,
+        description: "Pengeluaran harian (kas kecil + lain-lain)",
         paymentSource: "petty_cash" as const,
         status: "approved" as const,
         hasAttachment: false,
         branchId: report.branchId,
+        etlSource: {
+          reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
+          rowIndex: rowIdx, sheetName: "LAP. CF",
+          fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted };
   },
@@ -686,10 +698,9 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
       if (c.paidDate && (!g.paidDate || c.paidDate > g.paidDate)) g.paidDate = c.paidDate;
       groups.set(key, g);
     }
-    const tag = `etl:${reportId}`;
     const existing = await ctx.db.query("payables").withIndex("by_branch", (q) => q.eq("branchId", report.branchId)).collect();
     for (const e of existing) {
-      if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+      if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
     }
     let inserted = 0;
     let rowIdx = 0;
@@ -704,7 +715,7 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
       await ctx.db.insert("payables", {
         vendorId, vendorName: g.supplier, invoiceDate: g.invoiceDate, dueDate: g.dueDate,
         amount: g.amount, paidAmount, status,
-        description: `${tag}: ${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
+        description: `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
@@ -761,11 +772,10 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
     const cat = categories.find((c) => c.name === "Pengeluaran Kas Kecil") ?? categories.find((c) => c.type === "other") ?? categories[0];
     if (!cat) return { inserted: 0, reason: "no categories" };
     const flows = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect();
-    const tag = `etl:${reportId}`;
     for (const f of flows) {
       const existing = await ctx.db.query("expenses").withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", f.businessDate)).collect();
       for (const e of existing) {
-        if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+        if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
       }
     }
     let inserted = 0;
@@ -779,7 +789,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
       await ctx.db.insert("expenses", {
         expenseDate: f.businessDate, categoryId: cat._id, categoryName: cat.name,
         amount: totalOut,
-        description: `${tag}: pengeluaran harian ${f.businessDate} · ${breakdown}`,
+        description: `Pengeluaran harian · ${breakdown}`,
         paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
@@ -814,14 +824,13 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
       byItem.set(v.itemName, arr);
     }
 
-    // Wipe ETL-tagged movements (note: prefix in notes field)
-    const tag = "etl:delta";
+    // Wipe ETL-tagged movements (identified via etlSource)
     const existing = await ctx.db
       .query("stockMovements")
       .filter((q: any) => q.eq(q.field("branchId"), branchId))
       .collect();
     for (const e of existing) {
-      if (e.notes.startsWith(tag)) await ctx.db.delete(e._id);
+      if (e.etlSource !== undefined) await ctx.db.delete(e._id);
     }
 
     let inserted = 0;
@@ -842,6 +851,7 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
         if (Math.abs(delta) < 0.01) continue;
         // Heuristic: + = stock_in (could be purchase OR adjustment), - = usage
         const type = delta > 0 ? "stock_in" as const : "usage" as const;
+        const curReport: any = await ctx.db.get(cur.reportId);
         await ctx.db.insert("stockMovements", {
           itemId: stockItem._id,
           itemName,
@@ -849,8 +859,18 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
           qty: Math.abs(delta),
           unit: cur.unit,
           date: cur.valuationDate,
-          notes: `${tag}: dari ${prev.valuationDate} (${prev.qty} ${prev.unit}) → ${cur.valuationDate} (${cur.qty} ${cur.unit})`,
+          notes: `Dari ${prev.valuationDate} (${prev.qty} ${prev.unit}) → ${cur.valuationDate} (${cur.qty} ${cur.unit})`,
           branchId,
+          etlSource: {
+            reportId: cur.reportId,
+            stagingTable: "inventoryValuation",
+            tabLabel: "Stock Delta",
+            rowIndex: i,
+            sheetName: "WEEKLY FC",
+            fileName: curReport?.fileName,
+            periodStart: curReport?.periodStart,
+            periodEnd: curReport?.periodEnd,
+          },
         });
         inserted++;
       }
@@ -889,7 +909,7 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
           direction: "owner_to_branch" as const,
           purpose: "adjustment" as const,
           amount: f.otherInflow,
-          referenceNo: `etl:${reportId}:in:${f.businessDate}`,
+          referenceNo: `IN-${f.businessDate}`,
           status: "completed" as const,
           branchId: report.branchId,
           reportId,
@@ -922,15 +942,15 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
       .collect();
     if (incentives.length === 0) return { inserted: 0 };
 
-    const tag = `etl:${reportId}:incentive`;
-
-    // Idempotent: clear ETL-tagged incentive expenses
+    // Idempotent: clear ETL-tagged incentive expenses for this report
     const existing = await ctx.db
       .query("expenses")
       .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", report.periodStart))
       .collect();
     for (const e of existing) {
-      if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
+      if (e.etlSource?.reportId === reportId && e.etlSource?.stagingTable === "employeeIncentives") {
+        await ctx.db.delete(e._id);
+      }
     }
 
     // Aggregate ALL incentives for this report into one expense per period
@@ -942,7 +962,7 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
       categoryId: cat._id,
       categoryName: cat.name,
       amount: total,
-      description: `${tag}: Insentif/Gaji ${incentives.length} karyawan periode ${report.periodStart} → ${report.periodEnd}`,
+      description: `Insentif/Gaji ${incentives.length} karyawan periode ${report.periodStart} → ${report.periodEnd}`,
       paymentSource: "owner_direct" as const,
       status: "approved" as const,
       hasAttachment: false,
@@ -1034,7 +1054,7 @@ export const wipeStockTablesInternal = internalMutation({
     const moves = await ctx.db.query("stockMovements").collect();
     let movesDeleted = 0;
     for (const m of moves) {
-      if (m.notes.startsWith("etl:")) {
+      if (m.etlSource !== undefined || m.notes.startsWith("etl:")) {
         await ctx.db.delete(m._id);
         movesDeleted++;
       }
@@ -1092,11 +1112,61 @@ export const wipeStockTables = mutation({
     const moves = await ctx.db.query("stockMovements").collect();
     let movesDeleted = 0;
     for (const m of moves) {
-      if (m.notes.startsWith("etl:")) {
+      if (m.etlSource !== undefined || m.notes.startsWith("etl:")) {
         await ctx.db.delete(m._id);
         movesDeleted++;
       }
     }
     return { itemsDeleted, movementsDeleted: movesDeleted };
+  },
+});
+
+// ─── One-shot: strip "etl:<id>: " prefixes from existing rows ───
+// expenses.description, payables.description, stockMovements.notes, and
+// ownerTransfers.referenceNo accumulated ETL tag prefixes when bridges
+// used them for idempotency. New bridges use etlSource.reportId instead,
+// so the prefixes are dead weight and leak into UI labels.
+
+const ETL_PREFIX_RE = /^etl:[a-z0-9]+(?::[a-z]+)?:\s*/i;
+
+export const stripEtlPrefixesInternal = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    let expFixed = 0;
+    for (const e of await ctx.db.query("expenses").collect()) {
+      if (ETL_PREFIX_RE.test(e.description)) {
+        await ctx.db.patch(e._id, { description: e.description.replace(ETL_PREFIX_RE, "") });
+        expFixed++;
+      }
+    }
+    let payFixed = 0;
+    for (const p of await ctx.db.query("payables").collect()) {
+      if (ETL_PREFIX_RE.test(p.description)) {
+        await ctx.db.patch(p._id, { description: p.description.replace(ETL_PREFIX_RE, "") });
+        payFixed++;
+      }
+    }
+    let moveFixed = 0;
+    for (const m of await ctx.db.query("stockMovements").collect()) {
+      if (m.notes.startsWith("etl:delta:")) {
+        await ctx.db.patch(m._id, { notes: m.notes.replace(/^etl:delta:\s*/, "") });
+        moveFixed++;
+      }
+    }
+    let otFixed = 0;
+    for (const t of await ctx.db.query("ownerTransfers").collect()) {
+      if (t.referenceNo && /^etl:[a-z0-9]+:in:/.test(t.referenceNo)) {
+        await ctx.db.patch(t._id, { referenceNo: t.referenceNo.replace(/^etl:[a-z0-9]+:in:/, "IN-") });
+        otFixed++;
+      }
+    }
+    return { expensesFixed: expFixed, payablesFixed: payFixed, movementsFixed: moveFixed, ownerTransfersFixed: otFixed };
+  },
+});
+
+export const stripEtlPrefixes = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    return await ctx.runMutation(internal.features.reports.bridges.stripEtlPrefixesInternal);
   },
 });

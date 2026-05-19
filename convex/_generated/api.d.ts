@@ -59,6 +59,7 @@ import type * as features_sales_mutations from "../features/sales/mutations.js";
 import type * as features_sales_queries from "../features/sales/queries.js";
 import type * as http from "../http.js";
 import type * as shared_auth from "../shared/auth.js";
+import type * as shared_categoryInference from "../shared/categoryInference.js";
 import type * as shared_helpers from "../shared/helpers.js";
 import type * as shared_index from "../shared/index.js";
 import type * as shared_validators from "../shared/validators.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "features/sales/queries": typeof features_sales_queries;
   http: typeof http;
   "shared/auth": typeof shared_auth;
+  "shared/categoryInference": typeof shared_categoryInference;
   "shared/helpers": typeof shared_helpers;
   "shared/index": typeof shared_index;
   "shared/validators": typeof shared_validators;

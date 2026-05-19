@@ -31,5 +31,6 @@ export const inventoryTables = {
     date: v.string(),
     notes: v.string(),
     branchId: v.id("branches"),
+    etlSource: etlSourceValidator,
   }).index("by_branch_item", ["branchId", "itemId"]),
 };
