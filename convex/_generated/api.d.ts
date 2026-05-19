@@ -62,6 +62,7 @@ import type * as shared_auth from "../shared/auth.js";
 import type * as shared_categoryInference from "../shared/categoryInference.js";
 import type * as shared_helpers from "../shared/helpers.js";
 import type * as shared_index from "../shared/index.js";
+import type * as shared_uploadSchemas from "../shared/uploadSchemas.js";
 import type * as shared_validators from "../shared/validators.js";
 import type * as users from "../users.js";
 
@@ -126,6 +127,7 @@ declare const fullApi: ApiFromModules<{
   "shared/categoryInference": typeof shared_categoryInference;
   "shared/helpers": typeof shared_helpers;
   "shared/index": typeof shared_index;
+  "shared/uploadSchemas": typeof shared_uploadSchemas;
   "shared/validators": typeof shared_validators;
   users: typeof users;
 }>;

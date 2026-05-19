@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { AlertTriangle } from "lucide-react";
 import { formatRpFull } from "@/shared/lib";
 import { TagSelect, type TagOption } from "@/components/ui/tag-select";
 import type { LPKKItem } from "../parsers/parseLPKK";
@@ -223,8 +224,9 @@ function LPKKTable({ items, onChange }: { items: LPKKItem[]; onChange?: ChangeHa
     <div>
       {lainLainCount > 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800 text-xs">
-          <span className="text-amber-800 dark:text-amber-300 font-medium">
-            ⚠ {lainLainCount} baris masuk &quot;Lain-lain&quot; — review kategori sebelum import
+          <span className="text-amber-800 dark:text-amber-300 font-medium inline-flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {lainLainCount} baris masuk &quot;Lain-lain&quot; — review kategori sebelum import
           </span>
           <button
             onClick={() => setFilterUncategorized((v) => !v)}
@@ -433,8 +435,9 @@ function FCTable({ items, onChange }: { items: InventoryValuationItem[]; onChang
     <div>
       {lainLainCount > 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800 text-xs">
-          <span className="text-amber-800 dark:text-amber-300 font-medium">
-            ⚠ {lainLainCount} item tanpa kategori spesifik — review sebelum import
+          <span className="text-amber-800 dark:text-amber-300 font-medium inline-flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {lainLainCount} item tanpa kategori spesifik — review sebelum import
           </span>
           <button
             onClick={() => setFilterUncategorized((v) => !v)}

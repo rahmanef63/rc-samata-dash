@@ -6,7 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, Download, Check, FileText } from "lucide-react";
+import { Copy, Download, Check, FileText, BookOpen, Braces, Table } from "lucide-react";
 import {
   WEEKLY_SHEETS,
   PERGANTIAN_SCHEMA,
@@ -79,9 +79,15 @@ export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
         <Tabs defaultValue="md" className="flex-1 flex flex-col overflow-hidden">
           <div className="px-6 py-3 border-b border-border shrink-0">
             <TabsList className="grid grid-cols-3 w-full max-w-md">
-              <TabsTrigger value="md">📖 Markdown</TabsTrigger>
-              <TabsTrigger value="json">🧠 JSON</TabsTrigger>
-              <TabsTrigger value="csv">📊 CSV</TabsTrigger>
+              <TabsTrigger value="md" className="gap-1.5">
+                <BookOpen className="h-3.5 w-3.5" /> Markdown
+              </TabsTrigger>
+              <TabsTrigger value="json" className="gap-1.5">
+                <Braces className="h-3.5 w-3.5" /> JSON
+              </TabsTrigger>
+              <TabsTrigger value="csv" className="gap-1.5">
+                <Table className="h-3.5 w-3.5" /> CSV
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -174,8 +180,8 @@ function ContentPanel({
           </button>
         </div>
       </div>
-      <ScrollArea className="flex-1">
-        <pre className="px-6 py-4 text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words text-foreground/90">
+      <ScrollArea className="flex-1 max-h-full">
+        <pre className="px-6 py-4 text-[11px] leading-relaxed font-mono whitespace-pre text-foreground/90 min-w-max">
           <code className={`language-${language}`}>{text}</code>
         </pre>
       </ScrollArea>
@@ -253,7 +259,7 @@ function buildJson(kind: PanduanKind, schemas: SheetSpec[], cats: { name: string
         categoryType: r.type,
       })),
       inferenceNote:
-        "Untuk LPKK kolom LAIN-LAIN: cek deskripsi terhadap keywords. Match pertama menang. Tidak match → kategori 'Lain-lain' + tulis '⚠ butuh review manual' di catatan.",
+        "Untuk LPKK kolom LAIN-LAIN: cek deskripsi terhadap keywords. Match pertama menang. Tidak match → kategori 'Lain-lain' + tulis '[REVIEW] butuh review manual' di catatan.",
     }),
   };
   return JSON.stringify(data, null, 2);
@@ -304,7 +310,7 @@ function buildMarkdown(kind: PanduanKind, schemas: SheetSpec[], cats: { name: st
     lines.push("| Col | Nama | Tipe | Wajib | Contoh | Catatan |");
     lines.push("|---|---|---|---|---|---|");
     for (const c of s.columns) {
-      lines.push(`| ${c.index} | ${c.name} | ${c.type}${c.enumValues ? ` (${c.enumValues.join("/")})` : ""} | ${c.required ? "✅" : "—"} | ${c.example ?? "-"} | ${c.notes ?? "-"} |`);
+      lines.push(`| ${c.index} | ${c.name} | ${c.type}${c.enumValues ? ` (${c.enumValues.join("/")})` : ""} | ${c.required ? "WAJIB" : "-"} | ${c.example ?? "-"} | ${c.notes ?? "-"} |`);
     }
     lines.push("");
   }
@@ -335,7 +341,7 @@ function buildMarkdown(kind: PanduanKind, schemas: SheetSpec[], cats: { name: st
       lines.push(`| ${r.keywords.join(", ")} | ${r.label} | ${r.type} |`);
     }
     lines.push("");
-    lines.push("Tidak match → `Lain-lain` + tulis `⚠ butuh review manual` di catatan.");
+    lines.push("Tidak match → `Lain-lain` + tulis `[REVIEW] butuh review manual` di catatan.");
   }
   lines.push("");
   lines.push("---");
@@ -343,10 +349,10 @@ function buildMarkdown(kind: PanduanKind, schemas: SheetSpec[], cats: { name: st
   lines.push("## Output Akhir");
   lines.push("");
   lines.push("```");
-  lines.push("✅ Sheet diproses : N");
-  lines.push("✅ Baris dirapikan: N");
-  lines.push("⚠ Baris di-skip  : N (alasan)");
-  lines.push("🔧 Perubahan utama:");
+  lines.push("[OK]     Sheet diproses : N");
+  lines.push("[OK]     Baris dirapikan: N");
+  lines.push("[SKIP]   Baris di-skip  : N (alasan)");
+  lines.push("[EDIT]   Perubahan utama:");
   lines.push("   - Format tanggal: N baris diperbaiki ke YYYY-MM-DD");
   if (kind === "weekly") lines.push("   - Kategori auto-inferred: N baris LPKK LAIN-LAIN diklasifikasi");
   lines.push("   - Nama item normalisasi UPPERCASE: N baris");
