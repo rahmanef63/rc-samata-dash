@@ -2,7 +2,37 @@
 
 ## 2026-05-19
 
-### Added — AI guide templates for 3 upload pages
+### Changed — AI guide jadi dialog 3-tab dynamic (replaces static md)
+
+Button "Panduan AI" sekarang buka dialog dengan 3 tab:
+- **Markdown** — full prose guide, human-readable
+- **JSON** — schema lengkap (kolom + categories live + inference rules),
+  format paling AI-friendly
+- **CSV** — template header-only + 1 row contoh per sheet,
+  buka di Excel langsung
+Tiap tab punya tombol "Salin" + "Download".
+
+Konten **dynamic dari single source of truth**:
+- `convex/shared/uploadSchemas.ts` — semua sheet spec
+- `convex/shared/categoryInference.ts` — `INFERENCE_RULES` array
+- `useQuery(listExpenseCategories)` — live kategori dari DB
+
+Drift docs ↔ runtime tidak mungkin lagi: schema + inference rule
+yang sama dipake parser, bridge, AI guide.
+
+### Changed — sticky riwayat panel + info card stats
+
+Riwayat di 3 halaman upload (`/laporan/upload`, `/laporan/upload-pergantian`,
+`/laporan/upload-tunjangan`) sekarang:
+- Sticky `top-6` dengan `max-h-[calc(100vh-3rem)]` — pas viewport, gak
+  pernah overflow off-screen
+- Info card di header: total upload, status processed/needs_review, last upload date
+- Scroll body internal — long history scrollable tanpa hilangin upload area
+
+### Added — AI guide templates for 3 upload pages (DEPRECATED)
+Static `public/templates/*.md` dihapus, diganti dialog dynamic di atas.
+
+### Original — AI guide templates for 3 upload pages
 
 3 markdown panduan di `public/templates/` yang owner bisa download
 + kirim ke ChatGPT/Claude/AI lain sebelum upload. AI rapikan file

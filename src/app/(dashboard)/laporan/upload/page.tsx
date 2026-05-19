@@ -24,6 +24,7 @@ import { parseInsentif, type IncentiveItem } from "@/features/report-upload/pars
 import { BRAND } from "@/config/branding";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
+import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
 import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert, ClipboardList, FileText } from "lucide-react";
@@ -91,6 +92,7 @@ export default function LaporanUploadPage() {
   const [lastReportId, setLastReportId] = useState<Id<"weeklyReports"> | null>(null);
   const [indexingStatus, setIndexingStatus] = useState<"idle" | "indexing" | "done" | "error">("idle");
   const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [showPanduan, setShowPanduan] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<Id<"weeklyReports"> | null>(null);
   const [updateTargetId, setUpdateTargetId] = useState<Id<"weeklyReports"> | null>(null);
   const updateFileInputRef = useRef<HTMLInputElement>(null);
@@ -474,15 +476,14 @@ export default function LaporanUploadPage() {
             Upload file Excel &quot;NEW LAP&quot; — otomatis parse 15 sheet ke database.
           </p>
         </div>
-        <a
-          href="/templates/panduan-upload-laporan-mingguan.md"
-          download
+        <button
+          onClick={() => setShowPanduan(true)}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold transition-colors shadow-sm"
-          title="Download panduan AI untuk dikirim ke ChatGPT/Claude sebelum upload"
+          title="Buka panduan AI (CSV/JSON/MD) untuk dikirim ke ChatGPT/Claude sebelum upload"
         >
           <FileText className="h-3.5 w-3.5 text-primary" />
-          Panduan AI (untuk rapikan file dulu)
-        </a>
+          Panduan AI (rapikan file dulu)
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -824,14 +825,42 @@ export default function LaporanUploadPage() {
 
         {/* Kolom Kanan: Side Panel Riwayat Upload */}
         <div className="lg:col-span-1">
-          <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6">
-            <div className="p-4 border-b border-border/50 bg-muted/20">
+          <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+            <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Upload className="h-4 w-4 text-primary" />
                 Riwayat Mingguan
               </h2>
+              {recentReports && recentReports.length > 0 && (() => {
+                const total = recentReports.length;
+                const processed = recentReports.filter((r) => r.status === "processed").length;
+                const needsReview = recentReports.filter((r) => r.validationStatus === "needs_review").length;
+                const last = recentReports[0];
+                const lastDate = last ? new Date(last.uploadedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "";
+                return (
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <div className="rounded-lg bg-background/60 border border-border/50 px-2 py-1.5 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
+                      <p className="text-sm font-bold text-foreground">{total}</p>
+                    </div>
+                    <div className="rounded-lg bg-background/60 border border-border/50 px-2 py-1.5 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">OK</p>
+                      <p className="text-sm font-bold text-green-600">{processed}</p>
+                    </div>
+                    <div className="rounded-lg bg-background/60 border border-border/50 px-2 py-1.5 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Review</p>
+                      <p className={`text-sm font-bold ${needsReview > 0 ? "text-yellow-600" : "text-muted-foreground"}`}>{needsReview}</p>
+                    </div>
+                    {lastDate && (
+                      <div className="col-span-3 text-[10px] text-muted-foreground text-center mt-0.5">
+                        Terakhir: {lastDate}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
-            <div className="p-2 flex-1 max-h-[700px] overflow-y-auto">
+            <div className="p-2 flex-1 overflow-y-auto">
               {(!recentReports || recentReports.length === 0) ? (
                  <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
@@ -1140,6 +1169,8 @@ export default function LaporanUploadPage() {
           </Sheet>
         );
       })()}
+
+      <PanduanAiDialog open={showPanduan} onOpenChange={setShowPanduan} kind="weekly" />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   type ProductChangeItem,
 } from "@/features/report-upload/parsers/parseProductChanges";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
+import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
 import { formatRpFull } from "@/shared/lib";
 import {
   CheckCircle,
@@ -30,6 +31,7 @@ export default function UploadPergantianPage() {
   const [periodLabel, setPeriodLabel] = useState("");
   const [fileName, setFileName] = useState("");
   const [result, setResult] = useState<number | null>(null);
+  const [showPanduan, setShowPanduan] = useState(false);
 
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
@@ -119,15 +121,14 @@ export default function UploadPergantianPage() {
             Upload file Excel &quot;Pergantian Produk&quot; — data bahan yang diganti/expired.
           </p>
         </div>
-        <a
-          href="/templates/panduan-upload-pergantian-produk.md"
-          download
+        <button
+          onClick={() => setShowPanduan(true)}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold transition-colors shadow-sm"
-          title="Download panduan AI untuk dikirim ke ChatGPT/Claude sebelum upload"
+          title="Buka panduan AI (CSV/JSON/MD) untuk dikirim ke ChatGPT/Claude sebelum upload"
         >
           <FileText className="h-3.5 w-3.5 text-primary" />
-          Panduan AI (untuk rapikan file dulu)
-        </a>
+          Panduan AI (rapikan file dulu)
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -259,14 +260,26 @@ export default function UploadPergantianPage() {
 
         {/* Kolom Kanan: Side Panel Riwayat Upload */}
         <div className="lg:col-span-1">
-          <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6">
-            <div className="p-4 border-b border-border/50 bg-muted/20">
+          <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+            <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Package className="h-4 w-4 text-primary" />
                 Riwayat Upload
               </h2>
+              {uploadGroups.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <div className="rounded-lg bg-background/60 border border-border/50 px-2 py-1.5 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Upload</p>
+                    <p className="text-sm font-bold text-foreground">{uploadGroups.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-background/60 border border-border/50 px-2 py-1.5 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Item</p>
+                    <p className="text-sm font-bold text-primary">{uploadGroups.reduce((s, g) => s + g.count, 0)}</p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="p-2 flex-1 max-h-[600px] overflow-y-auto">
+            <div className="p-2 flex-1 overflow-y-auto">
               {uploadGroups.length === 0 ? (
                  <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
@@ -307,6 +320,8 @@ export default function UploadPergantianPage() {
           </div>
         </div>
       </div>
+
+      <PanduanAiDialog open={showPanduan} onOpenChange={setShowPanduan} kind="pergantian" />
     </div>
   );
 }
