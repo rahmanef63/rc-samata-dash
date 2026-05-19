@@ -966,3 +966,81 @@ export const bridgeOneReportInternal = internalMutation({
     return { reportId };
   },
 });
+
+// ─── One-time migration: fix parseWeeklyFC bug retroactively ───
+//
+// Pre-fix, parseWeeklyFC stored itemName = row number (col 0) when col 0
+// was a numeric "NO" column. The real item name leaked into the `unit`
+// field instead. This migration:
+//   1. Scans inventoryValuation rows where itemName matches /^\d+$/.
+//   2. If `unit` carries a non-numeric, non-trivial string → that's the
+//      real item name. Swap: itemName ← unit, unit ← "unit".
+//   3. Patches the row in place.
+//
+// After running, re-run backfillAllReports so stockItems + stockMovements
+// rebuild with correct names. Idempotent (already-clean rows skipped).
+
+export const migrateInventoryNamesInternal = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    const rows = await ctx.db.query("inventoryValuation").take(8000);
+    let fixed = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      if (!/^\d+(\.\d+)?$/.test(r.itemName)) { skipped++; continue; }
+      const u = (r.unit ?? "").trim();
+      // Only swap if unit has a real-looking name
+      if (!u || /^\d+(\.\d+)?$/.test(u) || u.toLowerCase() === "unit") { skipped++; continue; }
+      await ctx.db.patch(r._id, {
+        itemName: u,
+        unit: "unit",
+      });
+      fixed++;
+    }
+    return { fixed, skipped, total: rows.length };
+  },
+});
+
+export const migrateInventoryNames = mutation({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    await requireAuth(ctx);
+    const rows = await ctx.db.query("inventoryValuation").take(8000);
+    let fixed = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      if (!/^\d+(\.\d+)?$/.test(r.itemName)) { skipped++; continue; }
+      const u = (r.unit ?? "").trim();
+      if (!u || /^\d+(\.\d+)?$/.test(u) || u.toLowerCase() === "unit") { skipped++; continue; }
+      await ctx.db.patch(r._id, { itemName: u, unit: "unit" });
+      fixed++;
+    }
+    return { fixed, skipped, total: rows.length };
+  },
+});
+
+// Wipe stockItems + stockMovements before rebuild (avoid stale "1".."55" entries).
+// Run BETWEEN migrateInventoryNames and backfillAllReports for clean rebuild.
+export const wipeStockTables = mutation({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    await requireAuth(ctx);
+    const items = await ctx.db.query("stockItems").collect();
+    let itemsDeleted = 0;
+    for (const it of items) {
+      if (it.etlSource || /^\d+$/.test(it.name)) {
+        await ctx.db.delete(it._id);
+        itemsDeleted++;
+      }
+    }
+    const moves = await ctx.db.query("stockMovements").collect();
+    let movesDeleted = 0;
+    for (const m of moves) {
+      if (m.notes.startsWith("etl:")) {
+        await ctx.db.delete(m._id);
+        movesDeleted++;
+      }
+    }
+    return { itemsDeleted, movementsDeleted: movesDeleted };
+  },
+});
