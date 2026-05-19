@@ -26,6 +26,7 @@
  */
 
 import { getSheetRows, toDateString, toNumber, type RawSheet } from "../lib/xlsxHelpers";
+import { inferIngredientCategory } from "../../../../convex/shared/categoryInference";
 import type XLSX from "xlsx";
 
 export type LPKKItem = {
@@ -120,12 +121,18 @@ export function parseLPKK(wb: XLSX.WorkBook): LPKKItem[] {
       }
     }
 
-    // Jika tidak ada kolom spesifik tapi JUMLAH ada, masuk sebagai "other"
+    // Jika tidak ada kolom spesifik tapi JUMLAH ada, coba inferensi dari
+    // deskripsi sebelum jatuh ke "Lain-lain" — supaya item bahan makanan
+    // yang ngumpet di kolom JUMLAH (tanpa kolom kategori spesifik) tetap
+    // ke-tag ke kategori yang benar.
     if (!hasSpecificCategory && jumlah > 0) {
+      const inferred = inferIngredientCategory(description);
       result.push({
         expenseDate: lastDate,
-        categoryType: "other",
-        categoryLabel: "Lain-lain",
+        categoryType: inferred.type === "cogs" || inferred.type === "utility" || inferred.type === "other"
+          ? inferred.type
+          : "other",
+        categoryLabel: inferred.label,
         description,
         amount: jumlah,
         referenceNo,

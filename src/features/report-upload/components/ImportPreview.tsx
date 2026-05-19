@@ -202,16 +202,44 @@ type ChangeHandler = ((key: keyof ParsedData, index: number, field: string, valu
 function LPKKTable({ items, onChange }: { items: LPKKItem[]; onChange?: ChangeHandler }) {
   const SHOW = 80;
   const [customLabels, setCustomLabels] = useState<TagOption[]>([]);
+  const [filterUncategorized, setFilterUncategorized] = useState(false);
 
   const labelOptions = useMemo(() => {
     const existing = buildOptionsFromValues(items.map((i) => i.categoryLabel));
     return [...existing, ...customLabels.filter((c) => !existing.some((e) => e.value === c.value))];
   }, [items, customLabels]);
 
+  const lainLainCount = useMemo(
+    () => items.filter((i) => /^lain-lain$/i.test(i.categoryLabel)).length,
+    [items],
+  );
+
+  const visibleItems = useMemo(
+    () => filterUncategorized ? items.filter((i) => /^lain-lain$/i.test(i.categoryLabel)) : items,
+    [items, filterUncategorized],
+  );
+
   return (
-    <TableWrapper headers={["Tanggal", "Tipe", "Kategori", "Deskripsi", "Jumlah"]} empty={items.length === 0}>
-      {items.slice(0, SHOW).map((item, i) => (
-        <Tr key={i}>
+    <div>
+      {lainLainCount > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800 text-xs">
+          <span className="text-amber-800 dark:text-amber-300 font-medium">
+            ⚠ {lainLainCount} baris masuk &quot;Lain-lain&quot; — review kategori sebelum import
+          </span>
+          <button
+            onClick={() => setFilterUncategorized((v) => !v)}
+            className="px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-semibold"
+          >
+            {filterUncategorized ? "Tampilkan Semua" : `Tampilkan ${lainLainCount} Lain-lain`}
+          </button>
+        </div>
+      )}
+    <TableWrapper headers={["Tanggal", "Tipe", "Kategori", "Deskripsi", "Jumlah"]} empty={visibleItems.length === 0}>
+      {visibleItems.slice(0, SHOW).map((item, vi) => {
+        const i = items.indexOf(item);
+        const uncat = /^lain-lain$/i.test(item.categoryLabel);
+        return (
+        <Tr key={vi}>
           <Td className="text-muted-foreground">{item.expenseDate}</Td>
           {onChange ? (
             <TagCell
@@ -238,14 +266,20 @@ function LPKKTable({ items, onChange }: { items: LPKKItem[]; onChange?: ChangeHa
               }}
             />
           ) : (
-            <Td>{item.categoryLabel}</Td>
+            <Td>
+              <span className={uncat ? "px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" : ""}>
+                {item.categoryLabel}
+              </span>
+            </Td>
           )}
           <Td className="max-w-[160px] truncate">{item.description}</Td>
           <Td className="text-right font-mono text-destructive">{formatRpFull(item.amount)}</Td>
         </Tr>
-      ))}
-      <MoreRows shown={SHOW} total={items.length} cols={5} />
+        );
+      })}
+      <MoreRows shown={SHOW} total={visibleItems.length} cols={5} />
     </TableWrapper>
+    </div>
   );
 }
 
@@ -381,38 +415,69 @@ function VendorTable({ items, onChange }: { items: VendorPurchaseItem[]; onChang
 function FCTable({ items, onChange }: { items: InventoryValuationItem[]; onChange?: ChangeHandler }) {
   const SHOW = 80;
   const [customCats, setCustomCats] = useState<TagOption[]>([]);
+  const [filterUncategorized, setFilterUncategorized] = useState(false);
 
   const catOptions = useMemo(() => {
     const existing = buildOptionsFromValues(items.map((i) => i.category));
     return [...existing, ...customCats.filter((c) => !existing.some((e) => e.value === c.value))];
   }, [items, customCats]);
 
+  const isUncat = (cat: string) => /^(lain-lain|umum|other)$/i.test(cat.trim());
+  const lainLainCount = useMemo(() => items.filter((i) => isUncat(i.category)).length, [items]);
+  const visibleItems = useMemo(
+    () => filterUncategorized ? items.filter((i) => isUncat(i.category)) : items,
+    [items, filterUncategorized],
+  );
+
   return (
-    <TableWrapper headers={["Kategori", "Item", "Qty", "Satuan", "Harga", "Total"]} empty={items.length === 0}>
-      {items.slice(0, SHOW).map((item, i) => (
-        <Tr key={i}>
-          {onChange ? (
-            <TagCell
-              value={item.category}
-              options={catOptions}
-              onChange={(v) => onChange("weeklyFc", i, "category", v)}
-              onCreate={(label) => {
-                setCustomCats((prev) => [...prev, { value: label, label }]);
-                onChange("weeklyFc", i, "category", label);
-              }}
-            />
-          ) : (
-            <Td className="text-muted-foreground text-[10px]">{item.category}</Td>
-          )}
-          <Td className="font-medium">{item.itemName}</Td>
-          <Td className="text-right">{item.qty}</Td>
-          <Td>{item.unit}</Td>
-          <Td className="text-right font-mono">{formatRpFull(item.unitPrice)}</Td>
-          <Td className="text-right font-mono text-primary">{formatRpFull(item.totalValue)}</Td>
-        </Tr>
-      ))}
-      <MoreRows shown={SHOW} total={items.length} cols={6} />
-    </TableWrapper>
+    <div>
+      {lainLainCount > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800 text-xs">
+          <span className="text-amber-800 dark:text-amber-300 font-medium">
+            ⚠ {lainLainCount} item tanpa kategori spesifik — review sebelum import
+          </span>
+          <button
+            onClick={() => setFilterUncategorized((v) => !v)}
+            className="px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-semibold"
+          >
+            {filterUncategorized ? "Tampilkan Semua" : `Tampilkan ${lainLainCount}`}
+          </button>
+        </div>
+      )}
+      <TableWrapper headers={["Kategori", "Item", "Qty", "Satuan", "Harga", "Total"]} empty={visibleItems.length === 0}>
+        {visibleItems.slice(0, SHOW).map((item, vi) => {
+          const i = items.indexOf(item);
+          const uncat = isUncat(item.category);
+          return (
+            <Tr key={vi}>
+              {onChange ? (
+                <TagCell
+                  value={item.category}
+                  options={catOptions}
+                  onChange={(v) => onChange("weeklyFc", i, "category", v)}
+                  onCreate={(label) => {
+                    setCustomCats((prev) => [...prev, { value: label, label }]);
+                    onChange("weeklyFc", i, "category", label);
+                  }}
+                />
+              ) : (
+                <Td className={uncat ? "" : "text-muted-foreground text-[10px]"}>
+                  <span className={uncat ? "px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" : ""}>
+                    {item.category}
+                  </span>
+                </Td>
+              )}
+              <Td className="font-medium">{item.itemName}</Td>
+              <Td className="text-right">{item.qty}</Td>
+              <Td>{item.unit}</Td>
+              <Td className="text-right font-mono">{formatRpFull(item.unitPrice)}</Td>
+              <Td className="text-right font-mono text-primary">{formatRpFull(item.totalValue)}</Td>
+            </Tr>
+          );
+        })}
+        <MoreRows shown={SHOW} total={visibleItems.length} cols={6} />
+      </TableWrapper>
+    </div>
   );
 }
 

@@ -12,6 +12,9 @@ import type { ProductHPPItem } from "../parsers/parseHPPProduk";
 import type { CostAnalysisItem } from "../parsers/parseCostAnalysis";
 import type { DailyCashFlowItem } from "../parsers/parseLapCF";
 import type { DailyCashSummaryItem } from "../parsers/parseLaporanKasPeriode";
+import type { LPKKItem } from "../parsers/parseLPKK";
+import type { InventoryValuationItem } from "../parsers/parseWeeklyFC";
+import { isUncategorized } from "../../../../convex/shared/categoryInference";
 
 export type ValidationSeverity = "warning" | "info";
 
@@ -31,6 +34,9 @@ type ParsedDataForValidation = {
   costAnalysis: CostAnalysisItem[];
   cashFlow: DailyCashFlowItem[];
   kasPeriode: DailyCashSummaryItem[];
+  lpkk: LPKKItem[];
+  weeklyFc: InventoryValuationItem[];
+  unknownSheets?: string[];
   periodStart: string;
   periodEnd: string;
 };
@@ -204,5 +210,43 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     });
   }
 
+  // 9. Uncategorized expense rows — owner should validate before import
+  //    so food ingredients don't silently land in "Lain-lain" bucket.
+  const lpkkLainLain = (data.lpkk ?? []).filter((l) => isUncategorized(l.categoryLabel));
+  const weeklyFcLainLain = (data.weeklyFc ?? []).filter((w) => isUncategorized(w.category));
+  if (lpkkLainLain.length > 0 || weeklyFcLainLain.length > 0) {
+    const details: string[] = [];
+    if (lpkkLainLain.length > 0) {
+      details.push(`Kas Kecil: ${lpkkLainLain.length} baris tanpa kategori spesifik`);
+      details.push(...lpkkLainLain.slice(0, 5).map((l) => `· ${l.expenseDate} — ${l.description} (${formatRp(l.amount)})`));
+    }
+    if (weeklyFcLainLain.length > 0) {
+      details.push(`Food Cost: ${weeklyFcLainLain.length} item tanpa kategori`);
+      details.push(...weeklyFcLainLain.slice(0, 5).map((w) => `· ${w.itemName} (${w.qty} ${w.unit})`));
+    }
+    warnings.push({
+      severity: "warning",
+      category: "Kategori",
+      message: `${lpkkLainLain.length + weeklyFcLainLain.length} baris masuk ke "Lain-lain"`,
+      tip: "Inferensi otomatis gagal menebak kategori. Buka tab terkait di preview, klik kolom Kategori di tiap baris, lalu pilih kategori yang benar SEBELUM klik Import. Data masih bisa di-import tanpa diubah.",
+      details,
+    });
+  }
+
+  // 10. Unknown sheets — variant xlsx structure detected
+  if (data.unknownSheets && data.unknownSheets.length > 0) {
+    warnings.push({
+      severity: "info",
+      category: "Sheet Baru",
+      message: `${data.unknownSheets.length} sheet belum punya parser`,
+      tip: "Sheet ini ada di file tapi tidak ada parser yang mengenalinya. Data di sheet ini di-skip — laporkan ke developer kalau perlu dimuat.",
+      details: data.unknownSheets,
+    });
+  }
+
   return warnings;
+}
+
+function formatRp(n: number): string {
+  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
 }

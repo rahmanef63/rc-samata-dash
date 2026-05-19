@@ -2,6 +2,36 @@
 
 ## 2026-05-19
 
+### Added — Upload-time category validation + ingredient inference
+
+Owner reported food ingredients (bahan ayam, minyak, beras, …) were silently
+landing in **Lain-lain** because the LPKK row had no per-column amount and
+the WeeklyFC parser fell back to the generic "Umum" category. Added a
+validation step the owner can use to catch this **before** clicking Import.
+
+- `convex/shared/categoryInference.ts` — single source of truth.
+  `inferIngredientCategory(text)` matches keywords (AYAM / MINYAK / ES /
+  MINUMAN / PEMBUNGKUS / GROCERIES / PEMBERSIH / TRANSPORT / ATK / BPJS /
+  GAJI / MAINTENANCE / MARKETING / FEE) against item name or description
+  and returns `{label, type}` that maps 1-to-1 with seeded
+  `expenseCategories`.
+- `parseLPKK` — if no per-column amount, infer category from description
+  instead of defaulting to "Lain-lain".
+- `parseWeeklyFC` — when row's section header didn't match any keyword
+  ("Umum" fallback), infer from item name.
+- `importLPKKBatch` — matches `expenseCategories` by exact label first,
+  falls back to type. So "Bahan Ayam" row now binds to the actual
+  "Bahan Ayam" category id, not a random first-cogs id. Adds `etlSource`
+  so each expense deep-links back to the LPKK row.
+- `validateParsedData` — new rule 9: counts rows still landing in
+  "Lain-lain"/"Umum" across LPKK + WeeklyFC, emits a warning with
+  per-row preview. Rule 10: lists unknown sheets so owner can flag
+  variant xlsx structure.
+- `ImportPreview` — LPKK and Food Cost tabs now show an amber banner
+  with row count + a "Tampilkan N Lain-lain" filter button, plus an
+  amber badge on each uncategorized cell. Owner can use the existing
+  TagSelect to fix categories before import.
+
 ### Fixed — parseWeeklyFC col 0 bug + retro-migration
 
 Discovered during audit: parser was reading col 0 (NO column) as itemName,

@@ -13,6 +13,7 @@
  */
 
 import { getSheetRows, toNumber } from "../lib/xlsxHelpers";
+import { inferIngredientCategory, isUncategorized } from "../../../../convex/shared/categoryInference";
 import type XLSX from "xlsx";
 
 export type InventoryValuationItem = {
@@ -126,8 +127,17 @@ export function parseWeeklyFC(wb: XLSX.WorkBook): InventoryValuationItem[] {
     // Unit price = totalValue / qty (jika bisa dihitung)
     const unitPrice = qty > 0 ? totalValue / qty : 0;
 
+    // If row fell through to fallback category ("Umum") or no category
+    // detected yet, try to infer from item name so food items don't all
+    // get bucketed as miscellaneous.
+    let category = currentCategory;
+    if (isUncategorized(category)) {
+      const inferred = inferIngredientCategory(itemName);
+      if (!isUncategorized(inferred.label)) category = inferred.label;
+    }
+
     result.push({
-      category: currentCategory,
+      category,
       itemName,
       qty,
       unit,

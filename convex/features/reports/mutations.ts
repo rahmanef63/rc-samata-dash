@@ -117,27 +117,37 @@ export const importLPKKBatch = mutation({
   handler: async (ctx, { reportId, branchId, items }) => {
     await requireAuth(ctx);
     const categories = await ctx.db.query("expenseCategories").take(500);
-    const findCategory = (type: "cogs" | "utility" | "other") =>
+    const byLabel = new Map(categories.map((c) => [c.name.toLowerCase().trim(), c]));
+    const findCategory = (label: string, type: "cogs" | "utility" | "other") =>
+      byLabel.get(label.toLowerCase().trim()) ??
       categories.find((c) => c.type === type) ??
       categories.find((c) => c.type === "other") ??
       categories[0];
     let count = 0;
+    let rowIdx = 0;
+    const report: any = await ctx.db.get(reportId);
     for (const item of items) {
-      if (item.amount <= 0) continue;
-      const cat = findCategory(item.categoryType);
-      if (!cat) continue;
+      if (item.amount <= 0) { rowIdx++; continue; }
+      const cat = findCategory(item.categoryLabel, item.categoryType);
+      if (!cat) { rowIdx++; continue; }
       await ctx.db.insert("expenses", {
         expenseDate: item.expenseDate,
         categoryId: cat._id,
-        categoryName: item.categoryLabel,
+        categoryName: cat.name,
         amount: item.amount,
         description: item.description,
         paymentSource: "petty_cash",
         status: "draft",
         hasAttachment: false,
         branchId,
+        etlSource: {
+          reportId, stagingTable: "lpkk", tabLabel: "Kas Kecil",
+          rowIndex: rowIdx, sheetName: "LPKK",
+          fileName: report?.fileName, periodStart: report?.periodStart, periodEnd: report?.periodEnd,
+        },
       });
       count++;
+      rowIdx++;
     }
     return count;
   },
