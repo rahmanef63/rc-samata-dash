@@ -12,7 +12,7 @@ export { CrudDialog } from "./CrudDialog";
 export { DataTable } from "./DataTable";
 export { BranchSelector } from "./BranchSelector";
 export { DateRangePicker } from "./DateRangePicker";
-export { RowSourceDialog } from "./RowSourceDialog";
+export { RowSourceDialog, deriveSourceFromEtl } from "./RowSourceDialog";
 export { MultiLineChart } from "./MultiLineChart";
 export type { LineSeries, ReferenceMark } from "./MultiLineChart";
 export type { FieldConfig } from "./CrudDialog";

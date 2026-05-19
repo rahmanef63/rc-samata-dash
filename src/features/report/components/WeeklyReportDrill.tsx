@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
   ArrowLeft,
@@ -234,8 +235,52 @@ const rp = (v: unknown) => (typeof v === "number" ? formatRpFull(v) : "—");
 const num = (v: unknown) => (typeof v === "number" ? v.toLocaleString("id-ID") : "—");
 const pct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—");
 
+// Map a bridge `tabLabel` (e.g. "Arus Kas") onto a TABS.key (e.g. "dailyCashFlow").
+const TAB_LABEL_ALIAS: Record<string, string> = {
+  "Penjualan": "productSales",
+  "Arus Kas": "dailyCashFlow",
+  "Pembelian Kredit": "creditPurchases",
+  "Inventory": "inventoryValuation",
+  "Food Cost": "foodCostSummary",
+};
+
 export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> }) {
-  const [active, setActive] = useState<string>("summary");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const rowParam = searchParams.get("row");
+  const initialTab = useMemo(() => {
+    if (!tabParam) return "summary";
+    // Try direct key match first, then alias map, then label match (case-insensitive).
+    if (TABS.find((t) => t.key === tabParam)) return tabParam;
+    const aliased = TAB_LABEL_ALIAS[tabParam];
+    if (aliased) return aliased;
+    const byLabel = TABS.find((t) => t.label.toLowerCase() === tabParam.toLowerCase());
+    return byLabel?.key ?? "summary";
+  }, [tabParam]);
+  const [active, setActive] = useState<string>(initialTab);
+
+  // If URL tab changes (deep-link navigation), reflect it.
+  useEffect(() => {
+    setActive(initialTab);
+  }, [initialTab]);
+
+  // Scroll to row N after a tab has rendered.
+  useEffect(() => {
+    if (!rowParam || active === "summary") return;
+    const idx = Number(rowParam);
+    if (!Number.isFinite(idx)) return;
+    // Wait a tick for the table to render.
+    const t = setTimeout(() => {
+      const rows = document.querySelectorAll<HTMLElement>("[data-row-idx]");
+      const target = Array.from(rows).find((el) => el.dataset.rowIdx === String(idx));
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("ring-2", "ring-primary", "bg-primary/5");
+        setTimeout(() => target.classList.remove("ring-2", "ring-primary", "bg-primary/5"), 2400);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [rowParam, active]);
 
   const report = useQuery(api.features.reports.queries.getWeeklyReport, { reportId });
   const rawProductSales = useQuery(api.features.reports.queries.getProductSales, { reportId });

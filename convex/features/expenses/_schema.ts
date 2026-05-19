@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { etlSourceValidator } from "../../shared/validators";
 
 export const expensesTables = {
   expenses: defineTable({
@@ -24,6 +25,7 @@ export const expensesTables = {
     ),
     hasAttachment: v.boolean(),
     branchId: v.id("branches"),
+    etlSource: etlSourceValidator,
   })
     .index("by_branch_date", ["branchId", "expenseDate"])
     .index("by_status", ["status"]),

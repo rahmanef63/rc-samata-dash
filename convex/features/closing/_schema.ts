@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { etlSourceValidator } from "../../shared/validators";
 
 export const closingTables = {
   dailyClosings: defineTable({
@@ -19,6 +20,7 @@ export const closingTables = {
     submittedBy: v.string(),
     submittedAt: v.string(),
     branchId: v.id("branches"),
+    etlSource: etlSourceValidator,
   }).index("by_branch_date", ["branchId", "businessDate"]),
 
   ownerTransfers: defineTable({

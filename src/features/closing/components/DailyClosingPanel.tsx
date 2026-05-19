@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Check } from "lucide-react";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -222,6 +222,7 @@ export function DailyClosingPanel() {
             onClose={() => setClosingSourceRow(null)}
             title="Detail Daily Closing"
             row={closingSourceRow}
+            source={closingSourceRow ? deriveSourceFromEtl(closingSourceRow) : undefined}
             fields={closingSourceRow ? [
               { label: "Tanggal", value: closingSourceRow.businessDate },
               { label: "Opening Cash", value: formatRpFull(closingSourceRow.openingCash) },

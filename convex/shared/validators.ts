@@ -89,3 +89,23 @@ export const auditActionValidator = v.union(
   v.literal("reject"),
   v.literal("pay")
 );
+
+// ─── ETL Source Provenance ──────────────────────────────────
+/**
+ * Optional metadata stamped on CRUD rows that were bridged from
+ * weeklyReports staging tables. Lets the UI's RowSourceDialog show
+ * "this row came from sheet X, tab Y, row N of the original report"
+ * and deep-link to /laporan/{reportId}?tab=&row=.
+ */
+export const etlSourceValidator = v.optional(
+  v.object({
+    reportId: v.id("weeklyReports"),
+    stagingTable: v.string(),  // e.g. "dailyCashFlow"
+    tabLabel: v.string(),      // human label, e.g. "Arus Kas"
+    rowIndex: v.number(),      // 0-based row position within tab
+    sheetName: v.optional(v.string()),   // original xlsx sheet
+    fileName: v.optional(v.string()),    // denormalized from weeklyReports
+    periodStart: v.optional(v.string()),
+    periodEnd: v.optional(v.string()),
+  })
+);

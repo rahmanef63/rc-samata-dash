@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { SectionHeader, DataTable, CrudDialog, ProgressBar, RowSourceDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, ProgressBar, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -183,6 +183,7 @@ export function ExpensesOverview() {
         onClose={() => setSourceRow(null)}
         title="Detail Pengeluaran"
         row={sourceRow}
+        source={sourceRow ? deriveSourceFromEtl(sourceRow) : undefined}
         fields={sourceRow ? [
           { label: "Tanggal", value: sourceRow.expenseDate },
           { label: "Deskripsi", value: sourceRow.description },

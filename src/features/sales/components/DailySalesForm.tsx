@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
+import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
@@ -180,6 +180,7 @@ export function DailySalesForm() {
             onClose={() => setSourceRow(null)}
             title="Detail Penjualan"
             row={sourceRow}
+            source={sourceRow ? deriveSourceFromEtl(sourceRow) : undefined}
             fields={sourceRow ? [
               { label: "Tanggal", value: sourceRow.businessDate },
               { label: "Channel", value: sourceRow.channelName },

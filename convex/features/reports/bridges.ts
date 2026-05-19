@@ -574,6 +574,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       for (const e of existing) await ctx.db.delete(e._id);
     }
     let inserted = 0;
+    let rowIdx = 0;
     for (const g of groups.values()) {
       const chan = await channelIdByPattern(ctx, g.channel);
       if (!chan) continue;
@@ -584,13 +585,28 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       const promoCost = g.channel !== "all" ? (summ?.discount ?? 0) / 4 : 0;
       const netAmount = Math.max(0, g.gross - platformFee - promoCost);
       const cashReceivedAmount = g.channel === "all" ? netAmount : 0;
+      const sheetMap: Record<string, string> = {
+        all: "LAP. PENJUALAN", gofood: "LAP. PENJUALAN GRAB FOOD",
+        grabfood: "LAP. PENJUALAN GRAB FOOD", shopeefood: "LAP. PENJUALAN SHOPEE FOOD", tambahan: "LAP. PENJUALAN",
+      };
       await ctx.db.insert("dailySales", {
         businessDate: g.date, channelId: chan.id, channelName: chan.name,
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
         settlementDate: undefined, referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
         status: "recorded", branchId: report.branchId,
+        etlSource: {
+          reportId,
+          stagingTable: "productSales",
+          tabLabel: "Penjualan",
+          rowIndex: rowIdx,
+          sheetName: sheetMap[g.channel] ?? "LAP. PENJUALAN",
+          fileName: report.fileName,
+          periodStart: report.periodStart,
+          periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted };
   },
@@ -603,6 +619,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
     if (!report) return { inserted: 0 };
     const flows = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect();
     let inserted = 0;
+    let rowIdx = 0;
     for (const f of flows) {
       const existing = await ctx.db.query("dailyClosings").withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("businessDate", f.businessDate)).collect();
       for (const e of existing) await ctx.db.delete(e._id);
@@ -613,8 +630,14 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         businessDate: f.businessDate, openingCash: f.openingBalance, cashSales: f.salesInflow,
         nonCashSales: 0, expensesPaidCash, expectedCash, actualCash: f.closingBalance, difference,
         status: "submitted", submittedBy: "system", submittedAt: new Date().toISOString(), branchId: report.branchId,
+        etlSource: {
+          reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
+          rowIndex: rowIdx, sheetName: "LAP. CF",
+          fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted };
   },
@@ -642,6 +665,7 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
       if (e.description.startsWith(tag)) await ctx.db.delete(e._id);
     }
     let inserted = 0;
+    let rowIdx = 0;
     for (const g of groups.values()) {
       const vendorId = await vendorIdByName(ctx, g.supplier);
       if (!vendorId) continue;
@@ -655,8 +679,14 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         amount: g.amount, paidAmount, status,
         description: `${tag}: ${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
         branchId: report.branchId,
+        etlSource: {
+          reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
+          rowIndex: rowIdx, sheetName: "PEMBELIAN KREDIT",
+          fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted };
   },
@@ -674,15 +704,22 @@ export const bridgeInventoryToStockInternal = internalMutation({
       if (!prior || v.valuationDate > prior.valuationDate) latest.set(v.itemName, v);
     }
     let upserted = 0;
+    let rowIdx = 0;
     for (const v of latest.values()) {
       const existing = await ctx.db.query("stockItems").withIndex("by_branch", (q) => q.eq("branchId", report.branchId)).filter((q: any) => q.eq(q.field("name"), v.itemName)).first();
       const status = v.qty <= 0 ? "Critical" : v.qty < 5 ? "Low" : "Stable";
+      const etlSource = {
+        reportId, stagingTable: "inventoryValuation", tabLabel: "Inventory",
+        rowIndex: rowIdx, sheetName: "WEEKLY FC",
+        fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+      };
       if (existing) {
-        await ctx.db.patch(existing._id, { currentQty: v.qty, unit: v.unit, status });
+        await ctx.db.patch(existing._id, { currentQty: v.qty, unit: v.unit, status, etlSource });
       } else {
-        await ctx.db.insert("stockItems", { name: v.itemName, currentQty: v.qty, unit: v.unit, minQty: 0, status, branchId: report.branchId });
+        await ctx.db.insert("stockItems", { name: v.itemName, currentQty: v.qty, unit: v.unit, minQty: 0, status, branchId: report.branchId, etlSource });
       }
       upserted++;
+      rowIdx++;
     }
     return { upserted };
   },
@@ -705,6 +742,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
       }
     }
     let inserted = 0;
+    let rowIdx = 0;
     for (const f of flows) {
       const totalOut = f.expenseOutflow + f.otherOutflow;
       if (totalOut <= 0) continue;
@@ -712,8 +750,14 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         expenseDate: f.businessDate, categoryId: cat._id, categoryName: cat.name,
         amount: totalOut, description: `${tag}: pengeluaran harian dari LAP. CF`,
         paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
+        etlSource: {
+          reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
+          rowIndex: rowIdx, sheetName: "LAP. CF",
+          fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
+        },
       });
       inserted++;
+      rowIdx++;
     }
     return { inserted };
   },

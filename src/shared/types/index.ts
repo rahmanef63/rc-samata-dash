@@ -50,6 +50,21 @@ export interface ExpenseCategory {
   type: ExpenseCategoryType;
 }
 
+/**
+ * ETL provenance — stamped on CRUD rows that were bridged from
+ * weekly report staging tables. Drives the RowSourceDialog deep-link.
+ */
+export interface EtlSource {
+  reportId: string;
+  stagingTable: string;
+  tabLabel: string;
+  rowIndex: number;
+  sheetName?: string;
+  fileName?: string;
+  periodStart?: string;
+  periodEnd?: string;
+}
+
 // ─── Income / Sales ──────────────────────────────────────
 export interface DailySale {
   id: string;
@@ -64,6 +79,7 @@ export interface DailySale {
   settlementDate: string | null;
   referenceNo: string;
   status: "recorded" | "settled" | "pending_settlement";
+  etlSource?: EtlSource;
 }
 
 // ─── Expenses ────────────────────────────────────────────
@@ -79,6 +95,7 @@ export interface Expense {
   paymentSource: PaymentSource;
   status: ExpenseStatus;
   hasAttachment: boolean;
+  etlSource?: EtlSource;
 }
 
 export interface ExpenseLineItem {
@@ -111,6 +128,7 @@ export interface Payable {
   reportId?: string;
   sourceFile?: string;
   reportPeriod?: string;
+  etlSource?: EtlSource;
 }
 
 export interface PayablePayment {
@@ -150,6 +168,7 @@ export interface DailyClosing {
   status: ClosingStatus;
   submittedBy: string;
   submittedAt: string;
+  etlSource?: EtlSource;
 }
 
 export interface OwnerTransfer {
@@ -174,6 +193,7 @@ export interface StockItem {
   unit: string;
   minQty: number;
   status: "Stable" | "Low" | "Critical";
+  etlSource?: EtlSource;
 }
 
 export interface StockMovement {

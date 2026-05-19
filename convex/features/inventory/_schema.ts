@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { etlSourceValidator } from "../../shared/validators";
 
 export const inventoryTables = {
   stockItems: defineTable({
@@ -13,6 +14,7 @@ export const inventoryTables = {
       v.literal("Critical")
     ),
     branchId: v.id("branches"),
+    etlSource: etlSourceValidator,
   }).index("by_branch", ["branchId"]),
 
   stockMovements: defineTable({
