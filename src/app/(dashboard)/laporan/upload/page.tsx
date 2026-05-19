@@ -26,7 +26,7 @@ import { UploadDropzone } from "@/features/report-upload/components/UploadDropzo
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { validateParsedData, type ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { formatRpFull } from "@/shared/lib";
-import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert, ClipboardList } from "lucide-react";
+import { CheckCircle, Loader2, Upload, AlertCircle, Trash2, AlertTriangle, Info, Brain, ShieldCheck, ShieldAlert, ClipboardList, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -467,11 +467,22 @@ export default function LaporanUploadPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 lg:p-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Upload Laporan Mingguan</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Upload file Excel &quot;NEW LAP&quot; — otomatis parse 15 sheet ke database.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Upload Laporan Mingguan</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Upload file Excel &quot;NEW LAP&quot; — otomatis parse 15 sheet ke database.
+          </p>
+        </div>
+        <a
+          href="/templates/panduan-upload-laporan-mingguan.md"
+          download
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold transition-colors shadow-sm"
+          title="Download panduan AI untuk dikirim ke ChatGPT/Claude sebelum upload"
+        >
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          Panduan AI (untuk rapikan file dulu)
+        </a>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">

@@ -2,6 +2,24 @@
 
 ## 2026-05-19
 
+### Added — AI guide templates for 3 upload pages
+
+3 markdown panduan di `public/templates/` yang owner bisa download
++ kirim ke ChatGPT/Claude/AI lain sebelum upload. AI rapikan file
+mentah dulu sesuai spec project, baru owner upload ke dashboard.
+
+- `panduan-upload-laporan-mingguan.md` — 17 sheet weekly, daftar
+  kategori COGS/Utility/Other + BPJS/Salary/Maintenance/Marketing/Fee,
+  inference rule keyword (AYAM/MINYAK/ES/BERAS/dst), checklist.
+- `panduan-upload-pergantian-produk.md` — schema row 9 header,
+  unit standar list, contoh data bersih.
+- `panduan-upload-tunjangan-karyawan.md` — 14-kolom schema row 8+,
+  daftar jabatan + tipe rotasi + tipe reimburse standar.
+
+Tombol "Panduan AI" muncul di pojok kanan atas tiap halaman upload
+(`/laporan/upload`, `/laporan/upload-pergantian`, `/laporan/upload-tunjangan`).
+Klik = download file .md.
+
 ### Fixed — ETL tag prefix leaking into user-visible columns
 
 Owner saw expense descriptions like

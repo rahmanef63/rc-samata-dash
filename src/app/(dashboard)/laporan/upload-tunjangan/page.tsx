@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Trash2,
   Users,
+  FileText,
 } from "lucide-react";
 
 type ImportStep = "idle" | "parsing" | "preview" | "importing" | "done" | "error";
@@ -112,11 +113,22 @@ export default function UploadTunjanganPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 lg:p-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Upload Form Tunjangan Khusus</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Upload file Excel &quot;Form Pengajuan Tunjangan Khusus&quot; — tunjangan luar kota, kost, dan subsidi transport.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Upload Form Tunjangan Khusus</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Upload file Excel &quot;Form Pengajuan Tunjangan Khusus&quot; — tunjangan luar kota, kost, dan subsidi transport.
+          </p>
+        </div>
+        <a
+          href="/templates/panduan-upload-tunjangan-karyawan.md"
+          download
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold transition-colors shadow-sm"
+          title="Download panduan AI untuk dikirim ke ChatGPT/Claude sebelum upload"
+        >
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          Panduan AI (untuk rapikan file dulu)
+        </a>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
