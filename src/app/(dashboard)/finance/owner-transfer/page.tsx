@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
@@ -959,24 +959,103 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
   const candidates = useQuery(api.features.closing.queries.listValidationCandidates, { branchId });
   const batches = useQuery(api.features.closing.queries.listValidationBatches, { branchId, limit: 20 });
   const applyBatch = useMutation(api.features.closing.mutations.applyValidationBatch);
-  const autoMatch = useMutation(api.features.closing.mutations.autoMatchPayables);
+  const commitMatches = useMutation(api.features.closing.mutations.commitAutoMatchSuggestions);
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
 
-  const [uploading, setUploading] = useState(false);
-  const [autoMatching, setAutoMatching] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"idle" | "auto" | "csv">("idle");
+  const [approved, setApproved] = useState<Set<string>>(new Set());
+  const [pendingCsv, setPendingCsv] = useState<{ updates: CsvUpdate[]; fileName: string; file: File } | null>(null);
+  const [committing, setCommitting] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [openBatchLogId, setOpenBatchLogId] = useState<Id<"validationBatches"> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const runAutoMatch = async () => {
-    setAutoMatching(true);
+  // Only fetch preview when user opens it
+  const preview = useQuery(
+    api.features.closing.queries.previewAutoMatch,
+    previewMode === "auto" ? { branchId } : "skip",
+  );
+
+  // Init approved set when preview loads
+  useEffect(() => {
+    if (previewMode === "auto" && preview) {
+      setApproved(new Set(preview.suggestions.map((s) => s.payableId)));
+    }
+    if (previewMode === "csv" && pendingCsv) {
+      setApproved(new Set(pendingCsv.updates.map((u) => `${u.entryType}:${u.entryId}`)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewMode, preview, pendingCsv]);
+
+  const toggle = (id: string) => {
+    setApproved((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = (ids: string[], on: boolean) => {
+    setApproved((prev) => {
+      const next = new Set(prev);
+      if (on) ids.forEach((i) => next.add(i));
+      else ids.forEach((i) => next.delete(i));
+      return next;
+    });
+  };
+
+  const commitAuto = async () => {
+    if (!preview) return;
+    const filtered = preview.suggestions.filter((s) => approved.has(s.payableId));
+    if (filtered.length === 0) {
+      toast.error("Tidak ada match yang di-accept");
+      return;
+    }
+    setCommitting(true);
     try {
-      const res = await autoMatch({ branchId });
-      toast.success(`Auto-match: ${res.applied} perubahan · ${res.vendorsTouched} vendor · ${res.orphanBanks} bank tanpa vendor`);
+      const res = await commitMatches({
+        branchId,
+        matches: filtered.map((s) => ({
+          payableId: s.payableId as Id<"payables">,
+          bankEntryIds: s.bankEntryIds as Id<"bankStatementEntries">[],
+        })),
+      });
+      toast.success(`Tersimpan: ${res.applied} cell di ${filtered.length} payable`);
+      setPreviewMode("idle");
+      setApproved(new Set());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Auto-match gagal");
+      toast.error(e instanceof Error ? e.message : "Commit gagal");
     } finally {
-      setAutoMatching(false);
+      setCommitting(false);
+    }
+  };
+
+  const commitCsv = async () => {
+    if (!pendingCsv) return;
+    const filtered = pendingCsv.updates.filter((u) => approved.has(`${u.entryType}:${u.entryId}`));
+    if (filtered.length === 0) {
+      toast.error("Tidak ada perubahan yang di-accept");
+      return;
+    }
+    setCommitting(true);
+    try {
+      const uploadUrl = await generateUrl();
+      const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": pendingCsv.file.type || "text/csv" }, body: pendingCsv.file });
+      const { storageId } = await r.json() as { storageId: Id<"_storage"> };
+      const res = await applyBatch({
+        branchId,
+        fileName: pendingCsv.fileName,
+        fileStorageId: storageId,
+        updates: filtered,
+      });
+      toast.success(`Validasi: ${res.applied} applied · ${res.rejected} rejected · dari ${filtered.length} row yg di-accept`);
+      setPendingCsv(null);
+      setPreviewMode("idle");
+      setApproved(new Set());
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Apply gagal");
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -1011,32 +1090,26 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
     } catch { /* ignore */ }
   };
 
-  const handleUpload = async (file: File) => {
-    setUploading(true);
+  const handleCsvPick = async (file: File) => {
     try {
       const text = await file.text();
       const updates = parseValidationCsv(text);
-      if (updates.length === 0) {
-        toast.error("CSV kosong / format salah");
+      // Only show "interesting" updates — kalau row gak ada perubahan yg
+      // mau dipush (semua kosong), skip dari preview.
+      const interesting = updates.filter((u) =>
+        u.paymentReference !== undefined ||
+        u.matchedPayableId !== undefined ||
+        u.isValidated === true
+      );
+      if (interesting.length === 0) {
+        toast.error("CSV gak ada perubahan untuk di-apply");
         return;
       }
-      // Upload file to storage for audit trail
-      const uploadUrl = await generateUrl();
-      const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type || "text/csv" }, body: file });
-      const { storageId } = await r.json() as { storageId: Id<"_storage"> };
-
-      const res = await applyBatch({
-        branchId,
-        fileName: file.name,
-        fileStorageId: storageId,
-        updates,
-      });
-      toast.success(`Validasi tersimpan: ${res.applied} applied, ${res.rejected} rejected`);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setPendingCsv({ updates: interesting, fileName: file.name, file });
+      setPreviewMode("csv");
+      toast.success(`Parse ${interesting.length} perubahan — review dulu sebelum apply`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal apply validasi");
-    } finally {
-      setUploading(false);
+      toast.error(e instanceof Error ? e.message : "Gagal parse CSV");
     }
   };
 
@@ -1067,80 +1140,103 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
         )}
 
         {/* Auto-match (rule-based, no AI needed) */}
-        <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/20 p-4 space-y-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-200">
-            <GitCompare className="h-4 w-4" />
-            Auto-match (sebelum kirim ke AI)
-          </div>
-          <p className="text-xs text-purple-800/80 dark:text-purple-300/80 leading-relaxed">
-            Coba match otomatis pakai aturan: <b>vendor alias</b> + <b>nominal cocok</b> (exact atau split 2-3 row).
-            Tanggal di-skip. Vendor alias auto-learned dari counterparty bank statement.
-          </p>
-          <button
-            onClick={runAutoMatch}
-            disabled={autoMatching}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-50"
-          >
-            {autoMatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitCompare className="h-3.5 w-3.5" />}
-            {autoMatching ? "Memproses..." : "Jalankan Auto-match"}
-          </button>
-        </div>
-
-        {/* Download + Upload */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Download className="h-4 w-4 text-primary" />
-              Download File Validasi
+        {previewMode === "idle" && (
+          <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/20 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-200">
+              <GitCompare className="h-4 w-4" />
+              Auto-match (sebelum kirim ke AI)
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              CSV berisi {candidates?.payables.length ?? 0} payables + {candidates?.bank.length ?? 0} bank entries + AI prompt di header.
+            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 leading-relaxed">
+              Rule-based: <b>vendor alias</b> + <b>nominal cocok</b> (exact atau split 2-3 row).
+              Tanggal di-skip. Preview dulu, terus accept/deny per row sebelum commit.
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={copyPrompt}
-                className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold inline-flex items-center gap-1.5"
-              >
-                {promptCopied ? <CheckCircle className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
-                {promptCopied ? "Disalin" : "Salin Prompt"}
-              </button>
-              <button
-                onClick={downloadCsv}
-                disabled={!candidates}
-                className="flex-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <Download className="h-3 w-3" />
-                Download CSV
-              </button>
-            </div>
+            <button
+              onClick={() => setPreviewMode("auto")}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold"
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              Preview Auto-match
+            </button>
           </div>
+        )}
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Upload className="h-4 w-4 text-primary" />
-              Upload File Tervalidasi
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Upload CSV hasil AI. Sistem update <code className="bg-muted px-1 rounded">payment_reference</code> + <code className="bg-muted px-1 rounded">matched_payable_id</code> per row + log perubahan.
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleUpload(f);
-              }}
-              className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-primary-foreground file:font-semibold hover:file:bg-primary/90 disabled:opacity-50"
-            />
-            {uploading && (
-              <p className="text-xs text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" /> Memproses...
+        {/* Preview: auto-match suggestions */}
+        {previewMode === "auto" && (
+          <AutoMatchPreview
+            preview={preview}
+            approved={approved}
+            onToggle={toggle}
+            onToggleAll={(ids, on) => toggleAll(ids, on)}
+            onCancel={() => { setPreviewMode("idle"); setApproved(new Set()); }}
+            onCommit={commitAuto}
+            committing={committing}
+          />
+        )}
+
+        {/* Preview: CSV uploaded */}
+        {previewMode === "csv" && pendingCsv && (
+          <CsvPreview
+            pending={pendingCsv}
+            approved={approved}
+            onToggle={toggle}
+            onToggleAll={(ids, on) => toggleAll(ids, on)}
+            onCancel={() => { setPreviewMode("idle"); setApproved(new Set()); setPendingCsv(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+            onCommit={commitCsv}
+            committing={committing}
+          />
+        )}
+
+        {/* Download + Upload (hidden during preview) */}
+        {previewMode === "idle" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Download className="h-4 w-4 text-primary" />
+                Download File Validasi
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                CSV berisi {candidates?.payables.length ?? 0} payables + {candidates?.bank.length ?? 0} bank entries + AI prompt di header.
               </p>
-            )}
+              <div className="flex gap-2">
+                <button
+                  onClick={copyPrompt}
+                  className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold inline-flex items-center gap-1.5"
+                >
+                  {promptCopied ? <CheckCircle className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                  {promptCopied ? "Disalin" : "Salin Prompt"}
+                </button>
+                <button
+                  onClick={downloadCsv}
+                  disabled={!candidates}
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Download className="h-3 w-3" />
+                  Download CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Upload className="h-4 w-4 text-primary" />
+                Upload File Tervalidasi
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Upload CSV hasil AI. Sistem parse → tampilkan preview → kamu accept/deny per row → commit.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleCsvPick(f);
+                }}
+                className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-primary-foreground file:font-semibold hover:file:bg-primary/90"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Riwayat batch validator */}
@@ -1258,5 +1354,269 @@ function ValidationLogSheet({ batchId, branchId, onClose }: { batchId: Id<"valid
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ─── Preview components ────────────────────────────────────
+
+type AutoMatchPreviewData = {
+  suggestions: Array<{
+    payableId: string;
+    bankEntryIds: string[];
+    vendor: string;
+    payableAmount: number;
+    payableRemaining: number;
+    bankSum: number;
+    diff: number;
+    confidence: "exact" | "split2" | "split3";
+    bankRows: { id: string; txDate: string; debit: number; counterparty: string; description: string }[];
+    payableRow: { id: string; invoiceDate: string; amount: number; paidAmount: number; description: string };
+  }>;
+  orphans: { id: string; txDate: string; debit: number; counterparty: string; description: string }[];
+  stats: { payableTotal: number; bankTotal: number; suggestedPayables: number; suggestedBankRows: number; orphanBanks: number };
+};
+
+function AutoMatchPreview({
+  preview, approved, onToggle, onToggleAll, onCancel, onCommit, committing,
+}: {
+  preview: AutoMatchPreviewData | undefined;
+  approved: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: (ids: string[], on: boolean) => void;
+  onCancel: () => void;
+  onCommit: () => void;
+  committing: boolean;
+}) {
+  if (!preview) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Menghitung kandidat match...
+      </div>
+    );
+  }
+  const allIds = preview.suggestions.map((s) => s.payableId);
+  const allOn = allIds.every((i) => approved.has(i));
+  const approvedCount = preview.suggestions.filter((s) => approved.has(s.payableId)).length;
+  const confLabel: Record<string, string> = { exact: "1:1 exact", split2: "split 2-row", split3: "split 3-row" };
+  const confColor: Record<string, string> = {
+    exact: "bg-green-100 text-green-700",
+    split2: "bg-blue-100 text-blue-700",
+    split3: "bg-purple-100 text-purple-700",
+  };
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap bg-muted/20">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <span className="text-sm font-semibold">Preview Auto-match</span>
+          <span className="text-xs text-muted-foreground">
+            {preview.stats.suggestedPayables} payable ke-match · {preview.stats.suggestedBankRows} bank rows · {preview.stats.orphanBanks} orphan
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onToggleAll(allIds, !allOn)}
+            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted font-semibold"
+          >
+            {allOn ? "Deny Semua" : "Accept Semua"}
+          </button>
+          <span className="text-xs font-mono text-muted-foreground">{approvedCount}/{preview.suggestions.length}</span>
+        </div>
+      </div>
+
+      <div className="max-h-[60vh] overflow-auto">
+        {preview.suggestions.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            Tidak ada match yang ke-detect. Coba kirim ke AI atau upload manual.
+          </div>
+        ) : (
+          <table className="w-full text-[11px]">
+            <thead className="bg-muted/40 sticky top-0 z-10">
+              <tr className="text-left">
+                <th className="px-3 py-1.5 w-8"></th>
+                <th className="px-3 py-1.5 font-semibold">Vendor</th>
+                <th className="px-3 py-1.5 font-semibold">Payable (Invoice)</th>
+                <th className="px-3 py-1.5 font-semibold text-right">Sisa Bayar</th>
+                <th className="px-3 py-1.5 font-semibold text-right">Sum Bank</th>
+                <th className="px-3 py-1.5 font-semibold text-right">Diff</th>
+                <th className="px-3 py-1.5 font-semibold">Bank Rows</th>
+                <th className="px-3 py-1.5 font-semibold">Kategori</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.suggestions.map((s) => {
+                const isApproved = approved.has(s.payableId);
+                return (
+                  <tr key={s.payableId} className={`border-t border-border/40 ${isApproved ? "" : "opacity-50"}`}>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={isApproved}
+                        onChange={() => onToggle(s.payableId)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 font-medium truncate max-w-[140px]" title={s.vendor}>{s.vendor}</td>
+                    <td className="px-3 py-1.5 font-mono text-muted-foreground">{s.payableRow.invoiceDate}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{formatRpFull(s.payableRemaining)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{formatRpFull(s.bankSum)}</td>
+                    <td className={`px-3 py-1.5 text-right font-mono ${Math.abs(s.diff) > 100 ? "text-yellow-600" : "text-green-600"}`}>
+                      {s.diff === 0 ? "0" : (s.diff > 0 ? `+${formatRpFull(s.diff)}` : `-${formatRpFull(-s.diff)}`)}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {s.bankRows.map((b) => (
+                        <div key={b.id} className="text-[10px] text-muted-foreground">
+                          <span className="font-mono">{b.txDate.slice(5)}</span> · {formatRpFull(b.debit)} · {b.counterparty}
+                        </div>
+                      ))}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${confColor[s.confidence]}`}>
+                        {confLabel[s.confidence]}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {preview.orphans.length > 0 && (
+                <>
+                  <tr><td colSpan={8} className="px-3 py-2 bg-amber-50 dark:bg-amber-950/20 text-[10px] font-semibold text-amber-800 dark:text-amber-300">
+                    {preview.orphans.length} bank rows TIDAK ke-detect vendor — kirim ke AI atau cek manual
+                  </td></tr>
+                  {preview.orphans.slice(0, 20).map((o) => (
+                    <tr key={o.id} className="border-t border-border/40 opacity-60">
+                      <td className="px-3 py-1.5">—</td>
+                      <td className="px-3 py-1.5 text-muted-foreground italic" colSpan={2}>(orphan)</td>
+                      <td className="px-3 py-1.5 text-right font-mono">—</td>
+                      <td className="px-3 py-1.5 text-right font-mono">{formatRpFull(o.debit)}</td>
+                      <td className="px-3 py-1.5">—</td>
+                      <td className="px-3 py-1.5">
+                        <div className="text-[10px]"><span className="font-mono">{o.txDate.slice(5)}</span> · {o.counterparty}</div>
+                      </td>
+                      <td className="px-3 py-1.5"><span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-700">orphan</span></td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-border flex items-center gap-2 bg-muted/10">
+        <button
+          onClick={onCancel}
+          disabled={committing}
+          className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold disabled:opacity-50"
+        >
+          Batal
+        </button>
+        <button
+          onClick={onCommit}
+          disabled={committing || approvedCount === 0}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold disabled:opacity-50"
+        >
+          {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+          {committing ? "Memproses..." : `Apply ${approvedCount} Match`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CsvPreview({
+  pending, approved, onToggle, onToggleAll, onCancel, onCommit, committing,
+}: {
+  pending: { updates: CsvUpdate[]; fileName: string };
+  approved: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: (ids: string[], on: boolean) => void;
+  onCancel: () => void;
+  onCommit: () => void;
+  committing: boolean;
+}) {
+  const allIds = pending.updates.map((u) => `${u.entryType}:${u.entryId}`);
+  const allOn = allIds.every((i) => approved.has(i));
+  const approvedCount = pending.updates.filter((u) => approved.has(`${u.entryType}:${u.entryId}`)).length;
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap bg-muted/20">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">Preview CSV Tervalidasi</span>
+          <span className="text-xs text-muted-foreground truncate max-w-xs" title={pending.fileName}>{pending.fileName}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onToggleAll(allIds, !allOn)}
+            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted font-semibold"
+          >
+            {allOn ? "Deny Semua" : "Accept Semua"}
+          </button>
+          <span className="text-xs font-mono text-muted-foreground">{approvedCount}/{pending.updates.length}</span>
+        </div>
+      </div>
+
+      <div className="max-h-[60vh] overflow-auto">
+        <table className="w-full text-[11px]">
+          <thead className="bg-muted/40 sticky top-0 z-10">
+            <tr className="text-left">
+              <th className="px-3 py-1.5 w-8"></th>
+              <th className="px-3 py-1.5 font-semibold">Type</th>
+              <th className="px-3 py-1.5 font-semibold">Entry</th>
+              <th className="px-3 py-1.5 font-semibold">Payment Ref</th>
+              <th className="px-3 py-1.5 font-semibold">Matched Payable</th>
+              <th className="px-3 py-1.5 font-semibold">Validated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pending.updates.map((u) => {
+              const key = `${u.entryType}:${u.entryId}`;
+              const isApproved = approved.has(key);
+              return (
+                <tr key={key} className={`border-t border-border/40 ${isApproved ? "" : "opacity-50"}`}>
+                  <td className="px-3 py-1.5">
+                    <input
+                      type="checkbox"
+                      checked={isApproved}
+                      onChange={() => onToggle(key)}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${u.entryType === "bank_entry" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                      {u.entryType}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-muted-foreground" title={u.entryId}>{u.entryId.slice(-8)}</td>
+                  <td className="px-3 py-1.5 font-mono">{u.paymentReference ?? "—"}</td>
+                  <td className="px-3 py-1.5 font-mono text-muted-foreground" title={u.matchedPayableId ?? ""}>{u.matchedPayableId ? u.matchedPayableId.slice(-8) : "—"}</td>
+                  <td className="px-3 py-1.5">{u.isValidated === true ? <CheckCircle className="h-3.5 w-3.5 text-green-600" /> : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-4 py-3 border-t border-border flex items-center gap-2 bg-muted/10">
+        <button
+          onClick={onCancel}
+          disabled={committing}
+          className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold disabled:opacity-50"
+        >
+          Batal
+        </button>
+        <button
+          onClick={onCommit}
+          disabled={committing || approvedCount === 0}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold disabled:opacity-50"
+        >
+          {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+          {committing ? "Memproses..." : `Apply ${approvedCount} Perubahan`}
+        </button>
+      </div>
+    </div>
   );
 }

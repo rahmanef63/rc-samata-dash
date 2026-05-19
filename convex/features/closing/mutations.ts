@@ -694,3 +694,129 @@ export const learnVendorAlias = mutation({
     return { ok: true };
   },
 });
+
+// ─── Commit selected auto-match suggestions ─────────────────
+// User approves subset of preview from previewAutoMatch query.
+
+export const commitAutoMatchSuggestions = mutation({
+  args: {
+    branchId: v.id("branches"),
+    matches: v.array(v.object({
+      payableId: v.id("payables"),
+      bankEntryIds: v.array(v.id("bankStatementEntries")),
+    })),
+    fileName: v.optional(v.string()),
+  },
+  handler: async (ctx, { branchId, matches, fileName }) => {
+    const userId = await requireAuth(ctx);
+
+    const batchId = await ctx.db.insert("validationBatches", {
+      fileName: fileName ?? `auto-match-${new Date().toISOString().slice(0, 16)}`,
+      rowsApplied: 0, rowsRejected: 0,
+      summary: `${matches.length} payables · accepted via preview`,
+      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+    });
+
+    const now = Date.now();
+    let applied = 0;
+    let rejected = 0;
+    let refSeq = 1;
+
+    for (const m of matches) {
+      try {
+        const payable = await ctx.db.get(m.payableId) as { paymentReference?: string; isValidated?: boolean; vendorId?: Id<"vendors"> } | null;
+        if (!payable) { rejected++; continue; }
+
+        // Get first bank to derive YYYYMM
+        const firstBank = await ctx.db.get(m.bankEntryIds[0]) as { txDate?: string; counterparty?: string } | null;
+        const ym = (firstBank?.txDate ?? new Date().toISOString().slice(0, 10)).slice(0, 7).replace("-", "");
+        const ref = `PMT-${ym}-${String(refSeq++).padStart(4, "0")}`;
+
+        // Patch each bank entry
+        for (const bid of m.bankEntryIds) {
+          const cur = await ctx.db.get(bid) as { paymentReference?: string; payableId?: Id<"payables">; isValidated?: boolean; counterparty?: string } | null;
+          if (!cur) { rejected++; continue; }
+
+          await ctx.db.insert("validationLogs", {
+            entryType: "bank_entry", entryId: bid, batchId,
+            field: "paymentReference",
+            beforeValue: cur.paymentReference, afterValue: ref,
+            branchId, changedAt: now,
+          });
+          await ctx.db.insert("validationLogs", {
+            entryType: "bank_entry", entryId: bid, batchId,
+            field: "payableId",
+            beforeValue: cur.payableId as string | undefined, afterValue: m.payableId,
+            branchId, changedAt: now,
+          });
+          await ctx.db.insert("validationLogs", {
+            entryType: "bank_entry", entryId: bid, batchId,
+            field: "isValidated",
+            beforeValue: String(!!cur.isValidated), afterValue: "true",
+            branchId, changedAt: now,
+          });
+          await ctx.db.patch(bid, {
+            payableId: m.payableId,
+            paymentReference: ref,
+            isValidated: true,
+          });
+
+          // Learn vendor alias for future auto-match
+          if (cur.counterparty && payable.vendorId) {
+            const aliasNorm = cur.counterparty.toUpperCase().trim();
+            if (aliasNorm) {
+              const existingAlias = await ctx.db.query("vendorBankAliases")
+                .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", aliasNorm))
+                .first();
+              if (existingAlias) {
+                await ctx.db.patch(existingAlias._id, {
+                  vendorId: payable.vendorId,
+                  lastSeenAt: now,
+                  seenCount: existingAlias.seenCount + 1,
+                });
+              } else {
+                await ctx.db.insert("vendorBankAliases", {
+                  vendorId: payable.vendorId,
+                  alias: aliasNorm,
+                  source: "validation" as const,
+                  branchId, lastSeenAt: now, seenCount: 1,
+                });
+              }
+            }
+          }
+          applied++;
+        }
+
+        // Patch payable
+        if (payable.paymentReference !== ref) {
+          await ctx.db.insert("validationLogs", {
+            entryType: "payable", entryId: m.payableId, batchId,
+            field: "paymentReference",
+            beforeValue: payable.paymentReference, afterValue: ref,
+            branchId, changedAt: now,
+          });
+        }
+        if (!payable.isValidated) {
+          await ctx.db.insert("validationLogs", {
+            entryType: "payable", entryId: m.payableId, batchId,
+            field: "isValidated",
+            beforeValue: "false", afterValue: "true",
+            branchId, changedAt: now,
+          });
+        }
+        await ctx.db.patch(m.payableId, { paymentReference: ref, isValidated: true });
+        applied++;
+      } catch {
+        rejected++;
+      }
+    }
+
+    await ctx.db.patch(batchId, { rowsApplied: applied, rowsRejected: rejected });
+    await insertAuditLog(ctx, {
+      entityType: "validationBatches", entityId: batchId, action: "create",
+      description: `Approve auto-match: ${matches.length} payables, ${applied} cells applied`,
+      actedBy: userId, branchId,
+    });
+    return { batchId, applied, rejected };
+  },
+});

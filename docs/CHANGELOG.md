@@ -2,6 +2,46 @@
 
 ## 2026-05-19
 
+### Changed — Validator: preview → accept/deny session before commit
+
+User: "seharusnya ketika upload kita perlu satu sesion seperti upload
+file laporan yang isinya memvalidasi temuan, user bisa accept atau
+deny" — sebelumnya auto-match + CSV apply langsung commit semua.
+
+**New flow:**
+
+1. **Auto-match preview** — klik "Preview Auto-match" → query
+   `previewAutoMatch` jalan (read-only, gak nyentuh DB). Return list
+   suggestions: vendor / sisa bayar / sum bank / diff / bank rows
+   detail / confidence (exact / split2 / split3). Plus list "orphan"
+   bank entries yang gak ke-deteksi vendor.
+2. Owner lihat full table + checkbox per row, all-on default. Tombol
+   "Accept Semua" / "Deny Semua" toggle. Diff column highlight kuning
+   kalau ada selisih > Rp 100.
+3. Klik "Apply N Match" → `commitAutoMatchSuggestions` mutation jalan
+   pakai SUBSET yang di-accept saja. Generate paymentReference per
+   payable, write log per cell, set isValidated. Auto-seed vendor
+   alias dari counterparty (source=validation, future auto-match
+   makin pinter).
+
+**CSV upload preview** — pick CSV → parse client-side → filter rows
+yang punya perubahan → tampilkan preview table dgn checkbox per row
+(type, entryId tail-8, payment_ref, matched_payable, validated).
+Accept/Deny per row → "Apply N Perubahan" → `applyValidationBatch`
+dipanggil dgn subset.
+
+**Convex:**
+- `previewAutoMatch` (query) — same logic as autoMatch tapi pure read
+- `commitAutoMatchSuggestions` (mutation) — takes approved subset
+- Old `autoMatchPayables` removed (replaced by preview→commit pattern)
+
+UI:
+- State machine: `previewMode = "idle" | "auto" | "csv"`
+- Download/Upload cards hide saat preview aktif
+- Preview Sheet inline (bukan modal) — fit panjang full table
+- Confidence chip per row: green (exact), blue (split2), purple (split3)
+- Orphan banks listed di bawah dengan amber tag
+
 ### Changed — Validator: auto-match + vendor alias learning + relaxed AI prompt
 
 Feedback: 186 perubahan ke 137 row tapi cuma 12 row beneran tervalidasi.
