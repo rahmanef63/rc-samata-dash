@@ -2,6 +2,42 @@
 
 ## 2026-05-19
 
+### Added — Bank statement parser + Panduan AI (Owner / PIC)
+
+Berdasarkan contoh file PIC ("Gabungan Transaksi Feb-Mar-Apr" — sudah
+clean dengan kolom Kategori + Pihak per row), bangun parser real untuk
+both Owner + PIC bank statements.
+
+**Schema** (`convex/shared/uploadSchemas.ts`):
+- `BANK_STATEMENT_SCHEMA` — 14 kolom spec
+- `BANK_STATEMENT_CATEGORY_MAP` — mapping kategori xlsx → internal union
+  (`sales_inflow / expense_outflow / topup_pic / payable_payment /
+  transfer_internal / other`). Pihak-hints handle override (DZIKRULLAH →
+  topup_pic, SALDI/AL DANNY → cash sales setor, AIRPAY → shopeefood).
+- `BANK_STATEMENT_CHANNEL_HINTS` — regex inference channel (shopeefood /
+  gofood / grabfood / ovo / dana / qris / cash / bank_fee).
+
+**Parser** (`src/features/report-upload/parsers/parseBankStatement.ts`):
+- Scan sheets cari header detail (No, Bulan, Tanggal, Kategori, Debit, Kredit).
+- Tanggal `DD/MM` + Bulan column → `YYYY-MM-DD` pakai yearHint dari periodStart.
+- Skip Saldo Awal rows.
+- Output: typed BankStatementRow[] siap diserap mutation.
+
+**Mutation** `importBankStatementEntries` — idempotent (wipe-by-batch),
+auto-compute closing balance, status batch → "parsed".
+
+**PanduanAiDialog** sekarang support `kind="bankStatement"` — dynamic
+schema + category map + pihak hints + channel inference + workflow note
+("PIC terima cash + GoFood only, owner terima OVO/Grab/Shopee").
+
+**Upload UX** `/finance/owner-transfer`:
+- File picked → parse client-side → preview dengan:
+  - Summary 4-card (Saldo Awal / Total Kredit / Total Debit / Saldo Akhir)
+  - Breakdown per kategori (count + kredit + debit)
+  - Preview 15 transaksi pertama
+- "Import N Transaksi" → upload file ke storage + create batch + insert entries
+- Tombol "Panduan AI" jalan beneran sekarang (kind=bankStatement)
+
 ### Fixed — Dialog scroll (both axes)
 
 shadcn `<ScrollArea>` di sini cuma render vertical ScrollBar — long CSV/JSON

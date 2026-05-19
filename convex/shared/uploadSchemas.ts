@@ -341,6 +341,93 @@ export const PERGANTIAN_SCHEMA: SheetSpec = {
   ],
 };
 
+// ─── Bank Statement (Owner / PIC) ──────────────────────────
+//
+// Format curated dari raw BCA export, sudah dilabeli Kategori + Pihak
+// per row sehingga parser tinggal map. Lihat sample file PIC: header
+// detail dimulai di row "No | Bulan | Tanggal | Sumber | ...".
+
+export const BANK_STATEMENT_SCHEMA: SheetSpec = {
+  key: "bank_statement",
+  keyword: "*",
+  label: "Detail Transaksi Gabungan (PIC / Owner)",
+  description:
+    "Mutasi rekening yang sudah di-clean + dilabeli per baris. Header section di-skip otomatis (Ringkasan Bulanan / Ringkasan Kategori). Detail header berisi 14 kolom. Tanggal format DD/MM — tahun diisi dari periodStart yang dipilih di UI.",
+  headerRow: 0,
+  dataStartRow: 1,
+  stopOnEmpty: [],
+  columns: [
+    { index: 0,  name: "No",                type: "qty",      required: false, notes: "nomor urut, parser pakai sebagai data-row signal" },
+    { index: 1,  name: "Bulan",             type: "enum",     required: true,  enumValues: ["JAN","FEB","MAR","APR","MEI","JUN","JUL","AGU","SEP","OKT","NOV","DES"] },
+    { index: 2,  name: "Tanggal",           type: "string",   required: true,  example: "13/02", notes: "format DD/MM (tanpa tahun)" },
+    { index: 3,  name: "Sumber",            type: "string",   required: false, example: "feb", notes: "label sumber file (boleh kosong)" },
+    { index: 4,  name: "Baris",             type: "qty",      required: false, notes: "row index dari sumber asli (boleh kosong)" },
+    { index: 5,  name: "Jenis Transaksi",   type: "enum",     required: true,
+      enumValues: ["Saldo Awal","BI-FAST CR","BI-FAST DB","TRSF E-BANKING CR","TRSF E-BANKING DB","SWITCHING CR","BIAYA KARTU ATM","BIAYA ADM"] },
+    { index: 6,  name: "Kategori",          type: "enum",     required: true,
+      enumValues: [
+        "Saldo Awal",
+        "Setoran/Transfer Masuk",
+        "Penjualan/Settlement",
+        "Petty Cash/Operasional",
+        "Supplier - Ayam/JAPFA",
+        "Supplier - Rocket Chicken",
+        "Supplier - Bumbu/Saus",
+        "Supplier - Bahan/Minuman",
+        "Gaji/THR",
+        "Transfer Keluar - Personal",
+        "Biaya Bank/Admin",
+      ],
+      notes: "wajib pakai daftar ini — parser map ke kategori internal (sales_inflow/payable_payment/expense_outflow/topup_pic/transfer_internal)" },
+    { index: 7,  name: "Pihak",             type: "string",   required: false, example: "DZIKRULLAH / JAPFA FOOD / AIRPAY INTERNATIONAL / SALDI / AL DANNY IRVAN NUG" },
+    { index: 8,  name: "Keterangan Detail", type: "string",   required: false, example: "1502/FTSCY/WS95271 | 4018710.00 | Piutang rc samata, ayam ciamos | JAPFA FOOD INDONES" },
+    { index: 9,  name: "Debit",             type: "currency", required: true,  example: "4018710", notes: "keluar / out (Rp). 0 jika row credit." },
+    { index: 10, name: "Kredit",            type: "currency", required: true,  example: "0",       notes: "masuk / in (Rp). 0 jika row debit." },
+    { index: 11, name: "Net",               type: "currency", required: false, notes: "kredit - debit (auto-derived kalau kosong)" },
+    { index: 12, name: "Saldo Setelah",     type: "currency", required: false, notes: "saldo running setelah tx (boleh kosong, parser ignore)" },
+    { index: 13, name: "Catatan",           type: "string",   required: false, notes: "catatan extra (parser simpan ke description)" },
+  ],
+};
+
+/**
+ * Mapping Kategori xlsx → kategori internal bankStatementEntries.
+ * AI guide harus pakai label kiri persis; parser map ke union kanan.
+ */
+export const BANK_STATEMENT_CATEGORY_MAP: Record<string, { category: string; pihakHints?: Record<string, string> }> = {
+  "Saldo Awal":                  { category: "other" },
+  "Setoran/Transfer Masuk":      {
+    category: "transfer_internal",
+    pihakHints: {
+      DZIKRULLAH: "topup_pic",        // owner topup ke PIC
+      SALDI: "sales_inflow",          // cashier setor cash
+      "AL DANNY IRVAN NUG": "sales_inflow",
+    },
+  },
+  "Penjualan/Settlement":        { category: "sales_inflow" },   // AIRPAY = ShopeeFood / GoFood / Grab settlement
+  "Petty Cash/Operasional":      { category: "expense_outflow" },
+  "Supplier - Ayam/JAPFA":       { category: "payable_payment" },
+  "Supplier - Rocket Chicken":   { category: "payable_payment" },
+  "Supplier - Bumbu/Saus":       { category: "payable_payment" },
+  "Supplier - Bahan/Minuman":    { category: "payable_payment" },
+  "Gaji/THR":                    { category: "expense_outflow" },
+  "Transfer Keluar - Personal":  { category: "expense_outflow" },
+  "Biaya Bank/Admin":            { category: "expense_outflow" },
+};
+
+/**
+ * Channel inference dari Pihak / Kategori.
+ */
+export const BANK_STATEMENT_CHANNEL_HINTS: { match: RegExp; channel: string }[] = [
+  { match: /AIRPAY|SHOPEE/i,                  channel: "shopeefood" },
+  { match: /GOFOOD|GO ?FOOD/i,                channel: "gofood" },
+  { match: /GRAB ?FOOD/i,                     channel: "grabfood" },
+  { match: /OVO/i,                            channel: "ovo" },
+  { match: /DANA/i,                           channel: "dana" },
+  { match: /QRIS/i,                           channel: "qris" },
+  { match: /SALDI|AL DANNY|CASH SETOR/i,      channel: "cash" },
+  { match: /BIAYA|ADMIN/i,                    channel: "bank_fee" },
+];
+
 // ─── Tunjangan Karyawan ────────────────────────────────────
 
 export const TUNJANGAN_SCHEMA: SheetSpec = {

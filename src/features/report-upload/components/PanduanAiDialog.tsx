@@ -10,12 +10,14 @@ import {
   WEEKLY_SHEETS,
   PERGANTIAN_SCHEMA,
   TUNJANGAN_SCHEMA,
+  BANK_STATEMENT_SCHEMA,
+  BANK_STATEMENT_CATEGORY_MAP,
   type SheetSpec,
   type ColumnSpec,
 } from "../../../../convex/shared/uploadSchemas";
 import { INFERENCE_RULES } from "../../../../convex/shared/categoryInference";
 
-export type PanduanKind = "weekly" | "pergantian" | "tunjangan";
+export type PanduanKind = "weekly" | "pergantian" | "tunjangan" | "bankStatement";
 
 type Props = {
   open: boolean;
@@ -39,6 +41,11 @@ const KIND_META: Record<PanduanKind, { title: string; subtitle: string; baseName
     subtitle: "Form 14-kolom tunjangan luar kota / kost / transport.",
     baseName: "panduan-upload-tunjangan-karyawan",
   },
+  bankStatement: {
+    title: "Panduan AI — Bank Statement (Owner / PIC)",
+    subtitle: "Convert raw BCA / bank export jadi Detail Transaksi Gabungan dengan kolom Kategori + Pihak siap-upload.",
+    baseName: "panduan-bank-statement",
+  },
 };
 
 export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
@@ -50,7 +57,9 @@ export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
       ? WEEKLY_SHEETS
       : kind === "pergantian"
         ? [PERGANTIAN_SCHEMA]
-        : [TUNJANGAN_SCHEMA],
+        : kind === "tunjangan"
+          ? [TUNJANGAN_SCHEMA]
+          : [BANK_STATEMENT_SCHEMA],
     [kind],
   );
 
@@ -232,7 +241,9 @@ function buildJson(kind: PanduanKind, schemas: SheetSpec[], cats: { name: string
       ? "<BRANCH> NEW LAP <D1>-<D2> <MMM> <YYYY>.xlsx"
       : kind === "pergantian"
         ? "Pergantian Produk <D1>-<D2> <BULAN> <YYYY>.xlsx"
-        : "Form Tunjangan Khusus <YYYY>.xlsx",
+        : kind === "tunjangan"
+          ? "Form Tunjangan Khusus <YYYY>.xlsx"
+          : "Statement <Owner|PIC> <MMM>-<MMM> <YYYY>.xlsx",
     dateFormat: "YYYY-MM-DD",
     currencyFormat: "raw integer (no Rp, no thousands separator)",
     qtyFormat: "decimal with dot",
@@ -248,6 +259,25 @@ function buildJson(kind: PanduanKind, schemas: SheetSpec[], cats: { name: string
       stopOnEmpty: s.stopOnEmpty,
       columns: s.columns,
     })),
+    ...(kind === "bankStatement" && {
+      bankCategoryMap: BANK_STATEMENT_CATEGORY_MAP,
+      pihakHints: {
+        DZIKRULLAH: "Owner — transfer dari owner ke PIC = topup_pic",
+        SALDI: "Cashier setor cash dari toko = sales_inflow (cash)",
+        "AL DANNY IRVAN NUG": "Cashier / pengelola setor dana = sales_inflow",
+        "AIRPAY INTERNATIONAL": "Aggregator pembayaran (Shopee/Grab/Go) = sales_inflow",
+        "JAPFA FOOD INDONES": "Vendor ayam = payable_payment",
+        "ROCKET CHICKEN": "Marinade/royalty = payable_payment",
+        "SUKSES BERSAMA CV": "Vendor saus/bumbu = payable_payment",
+        "MITRA ABADIJAYA": "Vendor tepung = payable_payment",
+        "SINAR GOWA SUKSES": "Vendor minyak/teh = payable_payment",
+        "RISKA ANGGRIANI / MURDIONO": "Transfer keluar personal (owner family) = expense_outflow",
+      },
+      channelInference:
+        "AIRPAY/SHOPEE→shopeefood; GOFOOD→gofood; GRAB→grabfood; OVO→ovo; SALDI/AL DANNY→cash; BIAYA/ADMIN→bank_fee",
+      workflowNotes:
+        "PIC terima: cash setor + GoFood saja. Owner terima: OVO/Grab/Shopee/transfer direct. PIC saldo kurang → owner top-up via BI-FAST CR atau SWITCHING CR dari DZIKRULLAH.",
+    }),
     ...(kind === "weekly" && {
       expenseCategories: cats.length
         ? cats.map((c) => ({ name: c.name, type: c.type }))

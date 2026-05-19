@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
 import {
   Landmark, Upload, Receipt as ReceiptIcon, FileSpreadsheet,
-  Trash2, ExternalLink, Loader2, CheckCircle, Info, FileText,
+  Trash2, ExternalLink, Loader2, Info, FileText, CheckCircle, AlertTriangle,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatRpFull } from "@/shared/lib";
+import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
+import { parseBankStatement, type BankStatementRow } from "@/features/report-upload/parsers/parseBankStatement";
+import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type AccountKind = "owner" | "pic";
@@ -266,43 +268,79 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
   const createBatch = useMutation(api.features.closing.mutations.createBankStatementBatch);
   const removeBatch = useMutation(api.features.closing.mutations.removeBankStatementBatch);
+  const importEntries = useMutation(api.features.closing.mutations.importBankStatementEntries);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [periodStart, setPeriodStart] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
   const [uploading, setUploading] = useState(false);
+  const [parsed, setParsed] = useState<{ rows: BankStatementRow[]; file: File } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
-  const upload = async (file: File) => {
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const wb = await parseExcelFile(file);
+      const yearHint = parseInt(periodStart.slice(0, 4), 10) || new Date().getFullYear();
+      const rows = parseBankStatement(wb, yearHint);
+      if (rows.length === 0) {
+        toast.error("Tidak ada baris transaksi terdeteksi. Pastikan file pakai format 'Detail Transaksi Gabungan' — buka Panduan AI.");
+        return;
+      }
+      setParsed({ rows, file });
+      toast.success(`Berhasil parse ${rows.length} transaksi — review dulu sebelum import`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal baca file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!parsed) return;
     setUploading(true);
     try {
       const uploadUrl = await generateUrl();
-      const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
-      if (!r.ok) throw new Error("Upload gagal");
+      const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": parsed.file.type }, body: parsed.file });
+      if (!r.ok) throw new Error("Upload file ke storage gagal");
       const { storageId } = await r.json() as { storageId: Id<"_storage"> };
-      await createBatch({
+      const batchId = await createBatch({
         accountKind, periodStart, periodEnd,
-        fileName: file.name, fileStorageId: storageId, branchId,
+        fileName: parsed.file.name, fileStorageId: storageId, branchId,
       });
-      toast.success(`Statement ${accountKind.toUpperCase()} tersimpan — parser belum aktif, file di-arsipkan`);
+      const res = await importEntries({
+        batchId,
+        rows: parsed.rows.map((row) => ({
+          txDate: row.txDate,
+          description: row.description,
+          debit: row.debit,
+          credit: row.kredit,
+          balance: row.balance,
+          channel: row.channel,
+          category: row.category,
+        })),
+      });
+      toast.success(`${res.inserted} transaksi tersimpan · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`);
+      setParsed(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal upload");
+      toast.error(e instanceof Error ? e.message : "Gagal import");
     } finally {
       setUploading(false);
     }
   };
 
   const label = accountKind === "owner" ? "Owner" : "PIC";
+  const summary = useStatementSummary(parsed?.rows);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       <div className="lg:col-span-2 space-y-4">
-        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4 flex items-start gap-3">
-          <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-            <p className="font-semibold">Parser belum aktif untuk Statement {label}.</p>
-            <p className="mt-1">File akan di-upload + di-arsipkan dulu. Setelah kamu kirim contoh file estatemen ke developer, parser akan dibuat sesuai struktur asli rekening + Panduan AI akan auto-generate di tombol di bawah.</p>
+        <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4 flex items-start gap-3">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+            <p className="font-semibold">Parser aktif — format &quot;Detail Transaksi Gabungan&quot;.</p>
+            <p className="mt-1">Upload xlsx hasil clean-up AI (kolom No, Bulan, Tanggal, Jenis Transaksi, Kategori, Pihak, Debit, Kredit, Saldo). Tahun ambil dari periode mulai. Klik Panduan AI di kanan kalau file kamu masih raw export bank.</p>
           </div>
         </div>
 
@@ -330,23 +368,38 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
             </Field>
           </div>
 
-          <Field label="File statement (.xlsx / .csv / .pdf)">
+          <Field label="File statement (.xlsx / .xls / .csv)">
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls,.csv,.pdf"
+              accept=".xlsx,.xls,.csv"
               disabled={uploading}
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) upload(f);
+                if (f) handleFile(f);
               }}
               className="text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-primary-foreground file:font-semibold hover:file:bg-primary/90 disabled:opacity-50"
             />
           </Field>
-          {uploading && (
+
+          {uploading && !parsed && (
             <p className="text-xs text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Mengunggah...
+              <Loader2 className="h-3 w-3 animate-spin" /> Memproses...
             </p>
+          )}
+
+          {parsed && summary && (
+            <StatementPreview
+              rows={parsed.rows}
+              summary={summary}
+              fileName={parsed.file.name}
+              uploading={uploading}
+              onConfirm={confirmImport}
+              onCancel={() => {
+                setParsed(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+            />
           )}
         </div>
       </div>
@@ -400,34 +453,162 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
         </div>
       </div>
 
-      <StatementGuidePlaceholderDialog open={showGuide} onOpenChange={setShowGuide} accountKind={accountKind} />
+      <PanduanAiDialog open={showGuide} onOpenChange={setShowGuide} kind="bankStatement" />
     </div>
   );
 }
 
-function StatementGuidePlaceholderDialog({ open, onOpenChange, accountKind }: { open: boolean; onOpenChange: (o: boolean) => void; accountKind: AccountKind }) {
+// ─── Statement preview + summary ───────────────────────────
+
+function useStatementSummary(rows?: BankStatementRow[]) {
+  return useMemo(() => {
+    if (!rows || rows.length === 0) return null;
+    const by: Record<string, { count: number; debit: number; credit: number }> = {};
+    let totalDebit = 0;
+    let totalCredit = 0;
+    let openingSeen = false;
+    let openingBalance = 0;
+    let closingBalance = 0;
+    for (const r of rows) {
+      const k = r.category;
+      by[k] = by[k] ?? { count: 0, debit: 0, credit: 0 };
+      by[k].count++;
+      by[k].debit += r.debit;
+      by[k].credit += r.kredit;
+      totalDebit += r.debit;
+      totalCredit += r.kredit;
+      if (r.balance > 0) {
+        if (!openingSeen) { openingBalance = r.balance + r.debit - r.kredit; openingSeen = true; }
+        closingBalance = r.balance;
+      }
+    }
+    return { by, totalDebit, totalCredit, openingBalance, closingBalance, net: totalCredit - totalDebit };
+  }, [rows]);
+}
+
+function StatementPreview({
+  rows, summary, fileName, uploading, onConfirm, onCancel,
+}: {
+  rows: BankStatementRow[];
+  summary: NonNullable<ReturnType<typeof useStatementSummary>>;
+  fileName: string;
+  uploading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg w-full p-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b border-border">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" />
-            Panduan AI — Statement {accountKind === "owner" ? "Owner" : "PIC"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="p-6 space-y-3 text-sm">
-          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
-            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-            <p>
-              Panduan otomatis belum tersedia. Kirim contoh file estatemen kamu ke developer dulu — sistem akan generate panduan CSV / JSON / Markdown sesuai struktur asli rekeningmu.
-            </p>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Untuk sementara, pastikan file punya kolom: <code className="bg-muted px-1 rounded">tanggal · keterangan · debit · kredit · saldo</code>. Tanggal format <code className="bg-muted px-1 rounded">YYYY-MM-DD</code>, angka tanpa simbol Rp / titik / koma.
-          </p>
+    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          {rows.length} transaksi siap import
         </div>
-      </DialogContent>
-    </Dialog>
+        <span className="text-[10px] text-muted-foreground truncate max-w-xs" title={fileName}>{fileName}</span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <SummaryCard label="Saldo Awal"  value={summary.openingBalance} />
+        <SummaryCard label="Total Kredit (Masuk)"  value={summary.totalCredit} positive />
+        <SummaryCard label="Total Debit (Keluar)"  value={summary.totalDebit} negative />
+        <SummaryCard label="Saldo Akhir" value={summary.closingBalance} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
+          Breakdown per Kategori
+        </div>
+        <div className="max-h-48 overflow-auto">
+          <table className="w-full text-[11px]">
+            <thead className="bg-muted/30 sticky top-0 z-10">
+              <tr className="text-left">
+                <th className="px-3 py-1 font-semibold">Kategori</th>
+                <th className="px-3 py-1 text-right font-semibold">Jml</th>
+                <th className="px-3 py-1 text-right font-semibold text-green-600">Kredit</th>
+                <th className="px-3 py-1 text-right font-semibold text-destructive">Debit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(summary.by).map(([cat, v]) => (
+                <tr key={cat} className="border-t border-border/50">
+                  <td className="px-3 py-1 font-medium">{CATEGORY_LABELS[cat] ?? cat}</td>
+                  <td className="px-3 py-1 text-right">{v.count}</td>
+                  <td className="px-3 py-1 text-right font-mono text-green-600">{v.credit > 0 ? formatRpFull(v.credit) : "—"}</td>
+                  <td className="px-3 py-1 text-right font-mono text-destructive">{v.debit > 0 ? formatRpFull(v.debit) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30 flex items-center justify-between">
+          <span>Preview Transaksi (15 pertama)</span>
+          <span className="text-muted-foreground/70">{rows.length} total</span>
+        </div>
+        <div className="overflow-auto max-h-64">
+          <table className="w-full text-[10px]">
+            <thead className="bg-muted/30 sticky top-0 z-10">
+              <tr className="text-left">
+                <th className="px-2 py-1">Tgl</th>
+                <th className="px-2 py-1">Kategori</th>
+                <th className="px-2 py-1">Pihak</th>
+                <th className="px-2 py-1 text-right">Debit</th>
+                <th className="px-2 py-1 text-right">Kredit</th>
+                <th className="px-2 py-1 text-right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 15).map((r, i) => (
+                <tr key={i} className="border-t border-border/50">
+                  <td className="px-2 py-1 font-mono">{r.txDate.slice(5)}</td>
+                  <td className="px-2 py-1"><span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary font-semibold">{CATEGORY_LABELS[r.category] ?? r.category}</span></td>
+                  <td className="px-2 py-1 truncate max-w-[140px]" title={r.pihak}>{r.pihak}</td>
+                  <td className="px-2 py-1 text-right font-mono text-destructive">{r.debit > 0 ? formatRpFull(r.debit) : "—"}</td>
+                  <td className="px-2 py-1 text-right font-mono text-green-600">{r.kredit > 0 ? formatRpFull(r.kredit) : "—"}</td>
+                  <td className="px-2 py-1 text-right font-mono text-muted-foreground">{r.balance > 0 ? formatRpFull(r.balance) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={onCancel} disabled={uploading} className="px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold disabled:opacity-50">
+          Batal
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={uploading}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {uploading ? "Mengimport..." : `Import ${rows.length} Transaksi`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  sales_inflow: "Penjualan",
+  expense_outflow: "Pengeluaran",
+  payable_payment: "Bayar Vendor",
+  topup_pic: "Topup PIC",
+  owner_capital: "Modal Owner",
+  transfer_internal: "Transfer",
+  other: "Lainnya",
+};
+
+function SummaryCard({ label, value, positive, negative }: { label: string; value: number; positive?: boolean; negative?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-2 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`text-xs font-bold mt-0.5 ${positive ? "text-green-600" : negative ? "text-destructive" : "text-foreground"}`}>
+        {formatRpFull(value)}
+      </p>
+    </div>
   );
 }
 

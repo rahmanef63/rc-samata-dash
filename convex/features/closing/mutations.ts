@@ -208,3 +208,74 @@ export const removeBankStatementBatch = mutation({
     return { entriesDeleted: entries.length };
   },
 });
+
+// ─── Import bank statement entries (parsed rows) ─────────
+
+const bankStatementCategoryUnion = v.union(
+  v.literal("sales_inflow"),
+  v.literal("expense_outflow"),
+  v.literal("topup_pic"),
+  v.literal("payable_payment"),
+  v.literal("owner_capital"),
+  v.literal("transfer_internal"),
+  v.literal("other"),
+);
+
+const bankStatementRowValidator = v.object({
+  txDate: v.string(),
+  description: v.string(),
+  debit: v.number(),
+  credit: v.number(),
+  balance: v.number(),
+  channel: v.optional(v.string()),
+  category: v.optional(bankStatementCategoryUnion),
+});
+
+export const importBankStatementEntries = mutation({
+  args: {
+    batchId: v.id("bankStatementBatches"),
+    rows: v.array(bankStatementRowValidator),
+  },
+  handler: async (ctx, { batchId, rows }) => {
+    const userId = await requireAuth(ctx);
+    const batch = await ctx.db.get(batchId);
+    if (!batch) throw new Error("Batch not found");
+
+    // Idempotent: wipe prior entries for this batch first
+    const existing = await ctx.db.query("bankStatementEntries")
+      .withIndex("by_batch", (q) => q.eq("batchId", batchId)).collect();
+    for (const e of existing) await ctx.db.delete(e._id);
+
+    const opening = batch.openingBalance ?? 0;
+    let closing = opening;
+    for (const r of rows) {
+      await ctx.db.insert("bankStatementEntries", {
+        accountKind: batch.accountKind,
+        txDate: r.txDate,
+        description: r.description,
+        debit: r.debit,
+        credit: r.credit,
+        balance: r.balance,
+        channel: r.channel,
+        category: r.category,
+        batchId,
+        branchId: batch.branchId,
+      });
+      closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
+    }
+
+    await ctx.db.patch(batchId, {
+      rowCount: rows.length,
+      status: "parsed",
+      closingBalance: closing,
+    });
+
+    await insertAuditLog(ctx, {
+      entityType: "bankStatementBatches", entityId: batchId, action: "update",
+      description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}`,
+      actedBy: userId, branchId: batch.branchId,
+    });
+
+    return { inserted: rows.length, closingBalance: closing };
+  },
+});
