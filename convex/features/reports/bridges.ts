@@ -1019,6 +1019,62 @@ export const migrateInventoryNames = mutation({
   },
 });
 
+// Internal wipe (no auth) — for action invocation.
+export const wipeStockTablesInternal = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    const items = await ctx.db.query("stockItems").collect();
+    let itemsDeleted = 0;
+    for (const it of items) {
+      if (it.etlSource || /^\d+$/.test(it.name)) {
+        await ctx.db.delete(it._id);
+        itemsDeleted++;
+      }
+    }
+    const moves = await ctx.db.query("stockMovements").collect();
+    let movesDeleted = 0;
+    for (const m of moves) {
+      if (m.notes.startsWith("etl:")) {
+        await ctx.db.delete(m._id);
+        movesDeleted++;
+      }
+    }
+    return { itemsDeleted, movementsDeleted: movesDeleted };
+  },
+});
+
+// One-call action: migrate → wipe → re-run backfill. CLI-friendly.
+export const runFullRebuild = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    const migration = await ctx.runMutation(internal.features.reports.bridges.migrateInventoryNamesInternal);
+    const wipe = await ctx.runMutation(internal.features.reports.bridges.wipeStockTablesInternal);
+
+    // Inline backfill body so we don't double-call action-from-action.
+    await ctx.runMutation(internal.features.reports.bridges.seedMasterDataInternal);
+    await ctx.runMutation(internal.features.reports.bridges.deriveVendorsInternal);
+    const reports: any[] = await ctx.runQuery(internal.features.reports.bridges.listAllReportsInternal);
+    const branchesTouched = new Set<string>();
+    for (const r of reports) {
+      branchesTouched.add(r.branchId);
+      await ctx.runMutation(internal.features.reports.bridges.bridgeProductSalesToDailySalesInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeDailyCashFlowToClosingsInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeCreditPurchasesToPayablesInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryToStockInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToExpensesInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToOwnerTransfersInternal, { reportId: r._id });
+      await ctx.runMutation(internal.features.reports.bridges.bridgeIncentivesToExpensesInternal, { reportId: r._id });
+    }
+    const movementsByBranch: any[] = [];
+    for (const branchId of branchesTouched) {
+      const m = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: branchId as any });
+      movementsByBranch.push({ branchId, ...m });
+    }
+
+    return { migration, wipe, reports: reports.length, movementsByBranch };
+  },
+});
+
 // Wipe stockItems + stockMovements before rebuild (avoid stale "1".."55" entries).
 // Run BETWEEN migrateInventoryNames and backfillAllReports for clean rebuild.
 export const wipeStockTables = mutation({
