@@ -2,7 +2,23 @@
 
 ## 2026-05-19
 
-### Changed — Dashboard merge & rich KPI cards
+### Changed — Tabbed comparison charts (de-duplicate)
+Old `DashboardSalesChart` ("Tren Penjualan") + `Dashboard30DayChart` ("Tren Omzet") menampilkan data sumber sama (`productSales`). Removed.
+
+Replaced with **2 main multi-line charts**:
+
+1. **`DashboardComparisonChart`** — tabbed: `Omzet | Biaya Bahan | Profit | Pelanggan`. Tiap tab overlay 2 line:
+   - Solid (`Sekarang`) = aktual periode aktif
+   - Dashed slate (`Periode lalu`) = window same-length sebelumnya
+   - Header card menunjukkan total + delta % vs prior period
+
+2. **`DashboardKpiTrendChart`** — tabbed: `Food Cost % | Margin %`. Tiap tab plot KPI harian + 4 horizontal reference lines: Ideal (sky dashed), Target (foreground), Warning (amber), Danger (rose). Header chip shows current status SEHAT/PERHATIAN/BAHAYA.
+
+Backend: new `getFinancialTrend({branchId, startDate?, endDate?})` returns per-day aggregates `{date, revenue, cogs, profit, customers, foodCostPct, marginPct}` from joined `productSales` + `foodCostSummary` + `salesControl`.
+
+Shared component: new `MultiLineChart` (recharts LineChart, N series, optional reference horizontal lines).
+
+
 `/laporan/analisis` (Analytics page) merged into Dashboard `/`. Old route now redirects. Sidebar item removed. ReportHub + ReportOverview tiles updated.
 
 New `DashboardKpiRichGrid` replaces `DashboardKpiCards` + `DashboardKpiTargets` — 10 cards each carrying:

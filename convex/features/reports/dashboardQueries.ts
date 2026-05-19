@@ -611,3 +611,94 @@ export const getCashRunway = query({
     };
   },
 });
+
+// ─── Financial Trend (multi-metric daily) ───────────────────
+//
+// Returns per-day aggregates so a single chart can compare:
+// revenue / cogs / netProfit / customers / foodCostPct / marginPct.
+// Accepts optional startDate / endDate (ms) to follow DateScope.
+
+export const getFinancialTrend = query({
+  args: {
+    branchId: v.id("branches"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { branchId, startDate, endDate }) => {
+    await requireAuth(ctx);
+
+    const inRange = (dateStr: string): boolean => {
+      if (startDate == null || endDate == null) return true;
+      const t = Date.parse(dateStr);
+      if (!Number.isFinite(t)) return false;
+      return t >= startDate && t < endDate;
+    };
+
+    const [sales, fcSummary, salesCtrl] = await Promise.all([
+      ctx.db
+        .query("productSales")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+        .collect(),
+      ctx.db
+        .query("foodCostSummary")
+        .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
+        .collect(),
+      ctx.db
+        .query("salesControl")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+        .collect(),
+    ]);
+
+    // Aggregate revenue per day
+    const revenueByDate: Record<string, number> = {};
+    for (const s of sales) {
+      if (!inRange(s.businessDate)) continue;
+      if (s.channel && s.channel !== "all") continue;
+      revenueByDate[s.businessDate] = (revenueByDate[s.businessDate] ?? 0) + s.amount;
+    }
+
+    // Aggregate COGS per day — foodCostSummary uses periodStart so split evenly
+    // across the days within each period. For accuracy without per-day cost
+    // data this is an approximation; week-level still useful for trend shape.
+    const cogsByDate: Record<string, number> = {};
+    for (const f of fcSummary) {
+      if (!f.periodStart || !inRange(f.periodStart)) continue;
+      // Attribute to periodStart day (week starts) — chart will show step pattern.
+      cogsByDate[f.periodStart] = (cogsByDate[f.periodStart] ?? 0) + f.usageValue;
+    }
+
+    // Customers per day
+    const custByDate: Record<string, number> = {};
+    for (const c of salesCtrl) {
+      if (!inRange(c.businessDate)) continue;
+      custByDate[c.businessDate] = (custByDate[c.businessDate] ?? 0) + c.customerCount;
+    }
+
+    // Union of dates
+    const dates = new Set<string>([
+      ...Object.keys(revenueByDate),
+      ...Object.keys(cogsByDate),
+      ...Object.keys(custByDate),
+    ]);
+    const sorted = Array.from(dates).sort();
+
+    return sorted.map((date) => {
+      const revenue = revenueByDate[date] ?? 0;
+      const cogs = cogsByDate[date] ?? 0;
+      const profit = revenue - cogs;
+      const customers = custByDate[date] ?? 0;
+      const foodCostPct = revenue > 0 ? Math.round((cogs / revenue) * 1000) / 10 : 0;
+      const marginPct = revenue > 0 ? Math.round(((revenue - cogs) / revenue) * 1000) / 10 : 0;
+      return {
+        date,
+        label: date.slice(5), // MM-DD
+        revenue,
+        cogs,
+        profit,
+        customers,
+        foodCostPct,
+        marginPct,
+      };
+    });
+  },
+});

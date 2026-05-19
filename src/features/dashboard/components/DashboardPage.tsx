@@ -20,16 +20,16 @@ const DashboardCashRunway = dynamic(
   () => import("./DashboardCashRunway").then((m) => m.DashboardCashRunway),
   { loading: () => CARD_FALLBACK, ssr: false },
 );
-const DashboardSalesChart = dynamic(
-  () => import("./DashboardSalesChart").then((m) => m.DashboardSalesChart),
+const DashboardComparisonChart = dynamic(
+  () => import("./DashboardComparisonChart").then((m) => m.DashboardComparisonChart),
+  { loading: () => TALL_FALLBACK, ssr: false },
+);
+const DashboardKpiTrendChart = dynamic(
+  () => import("./DashboardKpiTrendChart").then((m) => m.DashboardKpiTrendChart),
   { loading: () => TALL_FALLBACK, ssr: false },
 );
 const DashboardPettyCashRequests = dynamic(
   () => import("./DashboardPettyCashRequests").then((m) => m.DashboardPettyCashRequests),
-  { loading: () => TALL_FALLBACK, ssr: false },
-);
-const Dashboard30DayChart = dynamic(
-  () => import("./Dashboard30DayChart").then((m) => m.Dashboard30DayChart),
   { loading: () => TALL_FALLBACK, ssr: false },
 );
 const DashboardExpenseChart = dynamic(
@@ -86,14 +86,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="lg:col-span-8">
-          <DashboardSalesChart />
+          <DashboardComparisonChart />
         </div>
         <div className="lg:col-span-4">
           <DashboardPettyCashRequests />
         </div>
 
         <div className="lg:col-span-8">
-          <Dashboard30DayChart />
+          <DashboardKpiTrendChart />
         </div>
         <div className="lg:col-span-4">
           <DashboardExpenseChart />
