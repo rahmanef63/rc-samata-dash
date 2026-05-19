@@ -2,6 +2,29 @@
 
 ## 2026-05-19
 
+### Fixed — parseWeeklyFC col 0 bug + retro-migration
+
+Discovered during audit: parser was reading col 0 (NO column) as itemName,
+causing all inventoryValuation rows to have itemName="1","2",..."55" with
+real names ("DADA", "EKOR", "TOMAT") leaked into the `unit` field.
+
+Parser fix: skip col 0 if purely numeric, use col 1 as itemName; unit
+search shifted past nameCol.
+
+**Retro-migration** added so existing 17 reports don't need re-upload:
+- `migrateInventoryNamesInternal` — swaps `itemName ↔ unit` where the
+  former is purely numeric and the latter is a real string.
+- `wipeStockTablesInternal` — clears ETL-tagged stockItems +
+  stockMovements before rebuild.
+- `runFullRebuild` action — chains migrate → wipe → re-seed →
+  bridge-all-reports → cross-report delta movements. One-shot.
+
+Result: **2502/2695 inventoryValuation rows fixed** (~93%, rest had
+empty or numeric unit field — unrecoverable without re-upload).
+stockItems now show real bahan names (BERAS, TELUR, MILO, BAYGON,
+HARPIC, BAYAM, SERAI, SELADA, …). stockMovements populated with
+~2000 cross-report deltas (`stock_in` / `usage`).
+
 ### Added — ETL fidelity round 2 (bridges, deltas, dynamic prep)
 
 **3 new bridges** (extend `convex/features/reports/bridges.ts`):
