@@ -83,9 +83,16 @@ export function parseWeeklyFC(wb: XLSX.WorkBook): InventoryValuationItem[] {
     // Cek apakah ini baris data
     if (!isDataRow(row)) continue;
 
-    // Nama item: kolom 0 atau 1
-    const itemName = String(row[0] ?? row[1] ?? "").trim();
+    // Nama item: kolom 0 atau 1. Skip kolom 0 kalau itu cuma nomor urut
+    // (sheet WEEKLY FC sering punya col 0 = NO, col 1 = nama item).
+    const col0 = String(row[0] ?? "").trim();
+    const col1 = String(row[1] ?? "").trim();
+    const itemName = (col0 && !/^\d+(\.\d+)?$/.test(col0))
+      ? col0
+      : col1;
     if (!itemName) continue;
+    // Track which column the name was in, so unit search starts after it.
+    const nameCol = itemName === col0 ? 0 : 1;
 
     // Cari kolom QTY, UNIT, HARGA, TOTAL
     // Biasanya: col 1=item, col 2=qty, col 3=unit, col 4=harga, col 5=total
@@ -99,9 +106,9 @@ export function parseWeeklyFC(wb: XLSX.WorkBook): InventoryValuationItem[] {
 
     if (nums.length < 2) continue;
 
-    // Unit: cari string pendek setelah item name
+    // Unit: cari string pendek setelah kolom nama
     let unit = "unit";
-    for (let c = 1; c < Math.min(row.length, 5); c++) {
+    for (let c = nameCol + 1; c < Math.min(row.length, 6); c++) {
       const v = String(row[c] ?? "").trim();
       if (v && v.length <= 6 && isNaN(Number(v)) && !/^\d/.test(v)) {
         unit = v;
