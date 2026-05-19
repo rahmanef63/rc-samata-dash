@@ -47,4 +47,75 @@ export const closingTables = {
   })
     .index("by_branch", ["branchId"])
     .index("by_report", ["reportId"]),
+
+  // ─── Bukti bayar piutang (proof of payable payment) ─────
+  // Owner / PIC upload struk / transfer screenshot. Linked to a payable
+  // when known, else stays unmatched until reconciliation.
+  paymentReceipts: defineTable({
+    payableId: v.optional(v.id("payables")),
+    amount: v.number(),
+    paidDate: v.string(),
+    paidBy: v.union(v.literal("owner"), v.literal("pic")),
+    channel: v.optional(v.string()),    // bank, cash, ewallet, transfer
+    reference: v.optional(v.string()),  // no transaksi / nota
+    notes: v.optional(v.string()),
+    proofStorageId: v.optional(v.id("_storage")),
+    proofFileName: v.optional(v.string()),
+    proofMimeType: v.optional(v.string()),
+    branchId: v.id("branches"),
+    uploadedAt: v.number(),
+    uploadedBy: v.string(),
+  })
+    .index("by_branch_date", ["branchId", "paidDate"])
+    .index("by_payable", ["payableId"]),
+
+  // ─── Bank/account statement entries (kredit / debit / saldo) ──
+  // Per-row line from owner or PIC bank/account statement xlsx.
+  // Used to reconcile sales channels (gofood/grab/ovo/shopee/cash) +
+  // payable payments + topup transfers between owner ↔ PIC.
+  bankStatementEntries: defineTable({
+    accountKind: v.union(v.literal("owner"), v.literal("pic")),
+    txDate: v.string(),
+    description: v.string(),
+    debit: v.number(),          // out / pengeluaran
+    credit: v.number(),         // in / penerimaan
+    balance: v.number(),        // saldo setelah tx
+    channel: v.optional(v.string()), // cash | transfer | gofood | grabfood | shopeefood | ovo | dana | qris | other
+    category: v.optional(v.union(
+      v.literal("sales_inflow"),
+      v.literal("expense_outflow"),
+      v.literal("topup_pic"),
+      v.literal("payable_payment"),
+      v.literal("owner_capital"),
+      v.literal("transfer_internal"),
+      v.literal("other")
+    )),
+    payableId: v.optional(v.id("payables")),
+    reportId: v.optional(v.id("weeklyReports")),
+    batchId: v.id("bankStatementBatches"),
+    branchId: v.id("branches"),
+  })
+    .index("by_branch_date", ["branchId", "txDate"])
+    .index("by_batch", ["batchId"])
+    .index("by_account_date", ["accountKind", "txDate"]),
+
+  // Each statement file upload = one batch (so we can re-import).
+  bankStatementBatches: defineTable({
+    accountKind: v.union(v.literal("owner"), v.literal("pic")),
+    periodStart: v.string(),
+    periodEnd: v.string(),
+    fileName: v.string(),
+    fileStorageId: v.optional(v.id("_storage")),
+    openingBalance: v.optional(v.number()),
+    closingBalance: v.optional(v.number()),
+    rowCount: v.number(),
+    status: v.union(
+      v.literal("uploaded"),  // file saved, not parsed yet
+      v.literal("parsed"),    // entries inserted
+      v.literal("reconciled") // matched against payables / reports
+    ),
+    branchId: v.id("branches"),
+    uploadedAt: v.number(),
+    uploadedBy: v.string(),
+  }).index("by_branch_account", ["branchId", "accountKind"]),
 };

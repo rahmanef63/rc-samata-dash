@@ -2,6 +2,44 @@
 
 ## 2026-05-19
 
+### Fixed — Dialog scroll (both axes)
+
+shadcn `<ScrollArea>` di sini cuma render vertical ScrollBar — long CSV/JSON
+lines kebawa wrap atau ilang. Swap ke native `<div className="flex-1 overflow-auto">`
++ `<pre className="whitespace-pre min-w-max inline-block">` → browser handle
+both axes mulus.
+
+### Added — Owner Transfer: bukti bayar piutang + statement rekening
+
+Halaman baru `/finance/owner-transfer` (menu KEUANGAN → "Bukti Bayar & Statement")
+dengan 3 tab:
+
+1. **Bukti Bayar Piutang** — upload foto/PDF struk transfer. Form:
+   tanggal, jumlah, paidBy (owner/PIC), channel (transfer/cash/ewallet/other),
+   link ke payable yang masih open/partial/overdue, no referensi, catatan.
+   Auto-update `payables.paidAmount` + `payables.status` (open → partial →
+   paid). Bukti di-store via Convex `_storage`.
+2. **Statement Owner** — upload xlsx/csv/pdf statement rekening owner.
+   Arsip file dulu, parser pending sampe owner kasih contoh struktur.
+3. **Statement PIC** — sama untuk rekening PIC (terima kasir + GoFood
+   doang, channel lain langsung ke owner).
+
+Schema baru di `convex/features/closing/_schema.ts`:
+- `paymentReceipts` — bukti bayar (link ke payable, proof Storage Id)
+- `bankStatementEntries` — per-row kredit/debit/saldo entry (parser akan
+  populate setelah Panduan AI disetup)
+- `bankStatementBatches` — satu file upload = satu batch (arsip + status
+  uploaded/parsed/reconciled)
+
+Mutations: `generateProofUploadUrl`, `createPaymentReceipt`,
+`removePaymentReceipt`, `createBankStatementBatch`, `removeBankStatementBatch`.
+Queries: `listPaymentReceipts`, `getReceiptProofUrl`, `listOpenPayables`,
+`listBankStatementBatches`, `listBankStatementEntries`.
+
+Panduan AI dialog placeholder untuk statement — flag "Parser belum aktif,
+file di-arsipkan dulu". Auto-generate guide jalan setelah developer
+dapat contoh estatement.
+
 ### Changed — AI guide jadi dialog 3-tab dynamic (replaces static md)
 
 Button "Panduan AI" sekarang buka dialog dengan 3 tab:

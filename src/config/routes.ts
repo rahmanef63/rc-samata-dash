@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -62,6 +62,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
+      { title: "Bukti Bayar & Statement", url: "/finance/owner-transfer", icon: Landmark },
     ],
   },
   {

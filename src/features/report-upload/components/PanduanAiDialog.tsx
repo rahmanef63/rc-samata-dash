@@ -5,7 +5,6 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, Download, Check, FileText, BookOpen, Braces, Table } from "lucide-react";
 import {
   WEEKLY_SHEETS,
@@ -91,7 +90,7 @@ export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
             </TabsList>
           </div>
 
-          <TabsContent value="md" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <TabsContent value="md" className="flex-1 overflow-hidden mt-0 flex flex-col data-[state=inactive]:hidden">
             <ContentPanel
               text={md}
               filename={`${meta.baseName}.md`}
@@ -101,7 +100,7 @@ export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
             />
           </TabsContent>
 
-          <TabsContent value="json" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <TabsContent value="json" className="flex-1 overflow-hidden mt-0 flex flex-col data-[state=inactive]:hidden">
             <ContentPanel
               text={json}
               filename={`${meta.baseName}.json`}
@@ -111,7 +110,7 @@ export function PanduanAiDialog({ open, onOpenChange, kind }: Props) {
             />
           </TabsContent>
 
-          <TabsContent value="csv" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <TabsContent value="csv" className="flex-1 overflow-hidden mt-0 flex flex-col data-[state=inactive]:hidden">
             <ContentPanel
               text={csv}
               filename={`${meta.baseName}.csv`}
@@ -180,11 +179,11 @@ function ContentPanel({
           </button>
         </div>
       </div>
-      <ScrollArea className="flex-1 max-h-full">
-        <pre className="px-6 py-4 text-[11px] leading-relaxed font-mono whitespace-pre text-foreground/90 min-w-max">
+      <div className="flex-1 overflow-auto bg-muted/10">
+        <pre className="px-6 py-4 text-[11px] leading-relaxed font-mono whitespace-pre text-foreground/90 min-w-max inline-block">
           <code className={`language-${language}`}>{text}</code>
         </pre>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
