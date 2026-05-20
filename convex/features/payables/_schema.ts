@@ -23,6 +23,10 @@ export const payablesTables = {
     // collectively pay this payable (split-payment / wrong-transfer retry).
     paymentReference: v.optional(v.string()),
     isValidated: v.optional(v.boolean()),
+    // Source PDF/file that this invoice came from (e.g.
+    // "00000945-Update piutang 8-14 April 2026 18.05.pdf"). Lets the
+    // Riwayat table deep-link back to the original chat artifact.
+    refPdfFile: v.optional(v.string()),
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
   })

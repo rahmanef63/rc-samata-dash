@@ -56,18 +56,29 @@ export const closingTables = {
     amount: v.number(),
     paidDate: v.string(),
     paidBy: v.union(v.literal("owner"), v.literal("pic")),
-    channel: v.optional(v.string()),    // bank, cash, ewallet, transfer
-    reference: v.optional(v.string()),  // no transaksi / nota
+    channel: v.optional(v.string()),    // bank, cash, ewallet, transfer, atm
+    reference: v.optional(v.string()),  // no transaksi / nota / VA
+    bankAccount: v.optional(v.string()), // e.g. "BCA 5425105687"
     notes: v.optional(v.string()),
     proofStorageId: v.optional(v.id("_storage")),
     proofFileName: v.optional(v.string()),
     proofMimeType: v.optional(v.string()),
+    // Anomaly flag captured by laporan-pic import (CSV 2 has rows for
+    // mislabel screenshots, duplicates, "not actually a transfer" etc).
+    anomalyFlag: v.optional(v.union(
+      v.literal("ok"),
+      v.literal("mislabel"),
+      v.literal("duplicate"),
+      v.literal("not_transfer"),
+      v.literal("partial"),
+    )),
     branchId: v.id("branches"),
     uploadedAt: v.number(),
     uploadedBy: v.string(),
   })
     .index("by_branch_date", ["branchId", "paidDate"])
-    .index("by_payable", ["payableId"]),
+    .index("by_payable", ["payableId"])
+    .index("by_anomaly", ["branchId", "anomalyFlag"]),
 
   // ─── Bank/account statement entries (kredit / debit / saldo) ──
   // Per-row line from owner or PIC bank/account statement xlsx.

@@ -41,6 +41,8 @@ import type * as features_expenses_queries from "../features/expenses/queries.js
 import type * as features_inventory__schema from "../features/inventory/_schema.js";
 import type * as features_inventory_mutations from "../features/inventory/mutations.js";
 import type * as features_inventory_queries from "../features/inventory/queries.js";
+import type * as features_laporanPic_mutations from "../features/laporanPic/mutations.js";
+import type * as features_laporanPic_queries from "../features/laporanPic/queries.js";
 import type * as features_masterData__schema from "../features/masterData/_schema.js";
 import type * as features_masterData_mutations from "../features/masterData/mutations.js";
 import type * as features_masterData_queries from "../features/masterData/queries.js";
@@ -109,6 +111,8 @@ declare const fullApi: ApiFromModules<{
   "features/inventory/_schema": typeof features_inventory__schema;
   "features/inventory/mutations": typeof features_inventory_mutations;
   "features/inventory/queries": typeof features_inventory_queries;
+  "features/laporanPic/mutations": typeof features_laporanPic_mutations;
+  "features/laporanPic/queries": typeof features_laporanPic_queries;
   "features/masterData/_schema": typeof features_masterData__schema;
   "features/masterData/mutations": typeof features_masterData_mutations;
   "features/masterData/queries": typeof features_masterData_queries;

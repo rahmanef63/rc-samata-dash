@@ -1,0 +1,292 @@
+import { mutation } from "../../_generated/server";
+import { v } from "convex/values";
+import { requireAuth } from "../../shared/auth";
+import { insertAuditLog } from "../../shared/helpers";
+import type { Id } from "../../_generated/dataModel";
+
+const classifyValidator = v.union(
+  v.literal("payable"),
+  v.literal("receipt"),
+  v.literal("owner_transfer_to"),
+  v.literal("owner_transfer_from"),
+  v.literal("anomaly"),
+);
+
+const anomalyFlagValidator = v.union(
+  v.literal("ok"),
+  v.literal("mislabel"),
+  v.literal("duplicate"),
+  v.literal("not_transfer"),
+  v.literal("partial"),
+);
+
+// ─── Import laporan-pic LONG CSV (TRANSAKSI format) ─────────
+// Caller classifies each row client-side (UI shows preview) and we
+// trust that classification here. UI is also free to override before
+// commit if user manually re-categorizes anomalies.
+export const importLaporanPicLong = mutation({
+  args: {
+    branchId: v.id("branches"),
+    rows: v.array(v.object({
+      paidDate: v.string(),
+      amount: v.number(),
+      paidBy: v.union(v.literal("pic"), v.literal("pic2"), v.literal("vendor"), v.literal("other")),
+      vendorName: v.string(),
+      channel: v.optional(v.string()),
+      reference: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      fileName: v.optional(v.string()),
+      classification: classifyValidator,
+      anomalyFlag: v.optional(anomalyFlagValidator),
+    })),
+  },
+  handler: async (ctx, { branchId, rows }) => {
+    const userId = await requireAuth(ctx);
+    const now = Date.now();
+
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
+    const resolveVendor = (name: string) => {
+      const up = name.toUpperCase().trim();
+      if (byName.has(up)) return byName.get(up)!;
+      for (const [nm, vnd] of byName) {
+        if (up.includes(nm) || nm.includes(up)) return vnd;
+      }
+      return null;
+    };
+
+    const openPayables = (await ctx.db.query("payables")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .take(5000))
+      .filter((p) => p.status === "open" || p.status === "partial" || p.status === "overdue");
+
+    let payablesCreated = 0;
+    let receiptsCreated = 0;
+    let receiptsLinked = 0;
+    let transfersCreated = 0;
+    let anomaliesCreated = 0;
+    let unresolved = 0;
+    const unresolvedVendors = new Set<string>();
+
+    for (const r of rows) {
+      try {
+        if (r.classification === "payable") {
+          const vendor = resolveVendor(r.vendorName);
+          if (!vendor) {
+            unresolvedVendors.add(r.vendorName);
+            unresolved++;
+            continue;
+          }
+          await ctx.db.insert("payables", {
+            vendorId: vendor._id,
+            vendorName: vendor.name,
+            invoiceDate: r.paidDate,
+            dueDate: r.paidDate, // long CSV doesn't carry separate due — caller may correct later
+            amount: r.amount,
+            paidAmount: 0,
+            status: "open" as const,
+            description: [r.notes, r.reference ? `ref: ${r.reference}` : null].filter(Boolean).join(" · "),
+            refPdfFile: r.fileName,
+            branchId,
+          });
+          payablesCreated++;
+        } else if (r.classification === "receipt") {
+          const vendor = resolveVendor(r.vendorName);
+          let payableId: Id<"payables"> | undefined;
+          if (vendor) {
+            const candidate = openPayables
+              .filter((p) => p.vendorId === vendor._id && (p.amount - p.paidAmount) > 0)
+              .sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate))[0];
+            if (candidate) payableId = candidate._id;
+          }
+          await ctx.db.insert("paymentReceipts", {
+            payableId,
+            amount: r.amount,
+            paidDate: r.paidDate,
+            paidBy: r.paidBy === "pic2" ? "pic" : "pic",
+            channel: r.channel,
+            reference: r.reference,
+            bankAccount: r.reference,
+            notes: r.notes,
+            proofFileName: r.fileName,
+            anomalyFlag: r.anomalyFlag ?? "ok",
+            branchId,
+            uploadedAt: now,
+            uploadedBy: userId,
+          });
+          receiptsCreated++;
+          if (payableId) {
+            const p = await ctx.db.get(payableId);
+            if (p) {
+              const newPaid = Math.min(p.amount, p.paidAmount + r.amount);
+              const newStatus: "open" | "partial" | "paid" | "overdue" =
+                newPaid >= p.amount && p.amount > 0 ? "paid"
+                : newPaid > 0 ? "partial"
+                : p.status;
+              await ctx.db.patch(payableId, { paidAmount: newPaid, status: newStatus });
+              const refIdx = openPayables.findIndex((x) => x._id === payableId);
+              if (refIdx >= 0) openPayables[refIdx] = { ...openPayables[refIdx], paidAmount: newPaid, status: newStatus };
+            }
+            receiptsLinked++;
+          }
+        } else if (r.classification === "owner_transfer_to" || r.classification === "owner_transfer_from") {
+          await ctx.db.insert("ownerTransfers", {
+            transferDate: r.paidDate,
+            direction: r.classification === "owner_transfer_to" ? "branch_to_owner" as const : "owner_to_branch" as const,
+            purpose: "night_transfer" as const,
+            amount: r.amount,
+            referenceNo: r.reference ?? "",
+            status: "completed" as const,
+            branchId,
+          });
+          transfersCreated++;
+        } else {
+          // anomaly — store as receipt with anomalyFlag set, no payable link
+          await ctx.db.insert("paymentReceipts", {
+            amount: r.amount,
+            paidDate: r.paidDate,
+            paidBy: "pic" as const,
+            channel: r.channel,
+            reference: r.reference,
+            bankAccount: r.reference,
+            notes: r.notes ?? `${r.vendorName} (anomali)`,
+            proofFileName: r.fileName,
+            anomalyFlag: r.anomalyFlag ?? "not_transfer",
+            branchId,
+            uploadedAt: now,
+            uploadedBy: userId,
+          });
+          anomaliesCreated++;
+        }
+      } catch {
+        // best-effort — keep importing
+      }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "paymentReceipts",
+      entityId: "" as Id<"paymentReceipts">,
+      action: "create",
+      description: `Import laporan PIC (long) — ${payablesCreated} payable, ${receiptsCreated} bayar (${receiptsLinked} linked), ${transfersCreated} transfer owner, ${anomaliesCreated} anomali, ${unresolved} vendor unresolved`,
+      actedBy: userId, branchId,
+    });
+
+    return {
+      payablesCreated, receiptsCreated, receiptsLinked,
+      transfersCreated, anomaliesCreated, unresolved,
+      unresolvedVendors: [...unresolvedVendors],
+    };
+  },
+});
+
+// ─── Import laporan-pic PIVOT CSV (MATCH_PIUTANG format) ────
+export const importLaporanPicPivot = mutation({
+  args: {
+    branchId: v.id("branches"),
+    rows: v.array(v.object({
+      invoiceDate: v.string(),
+      vendor: v.string(),
+      amount: v.number(),
+      refPdfFile: v.optional(v.string()),
+      statusRekap: v.optional(v.string()),
+      matchStatus: v.string(),
+      paymentDate: v.optional(v.string()),
+      paymentAmount: v.optional(v.number()),
+      paymentVendor: v.optional(v.string()),
+      paymentFile: v.optional(v.string()),
+      keterangan: v.optional(v.string()),
+      splitTotal: v.optional(v.number()),
+      splitNo: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { branchId, rows }) => {
+    const userId = await requireAuth(ctx);
+    const now = Date.now();
+
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
+    const resolveVendor = (name: string) => {
+      const up = name.toUpperCase().trim();
+      if (byName.has(up)) return byName.get(up)!;
+      for (const [nm, vnd] of byName) {
+        if (up.includes(nm) || nm.includes(up)) return vnd;
+      }
+      return null;
+    };
+
+    let payablesCreated = 0;
+    let receiptsCreated = 0;
+    let unresolved = 0;
+    const unresolvedVendors = new Set<string>();
+
+    for (const r of rows) {
+      try {
+        const vendor = resolveVendor(r.vendor);
+        if (!vendor) {
+          unresolvedVendors.add(r.vendor);
+          unresolved++;
+          continue;
+        }
+
+        const isMatched = r.matchStatus === "MATCH_EXACT";
+        const paidAmount = isMatched && r.paymentAmount ? r.paymentAmount : 0;
+        const status: "open" | "partial" | "paid" | "overdue" =
+          paidAmount >= r.amount && r.amount > 0 ? "paid"
+          : paidAmount > 0 ? "partial"
+          : "open";
+
+        const payableId = await ctx.db.insert("payables", {
+          vendorId: vendor._id,
+          vendorName: vendor.name,
+          invoiceDate: r.invoiceDate,
+          dueDate: r.invoiceDate,
+          amount: r.amount,
+          paidAmount,
+          status,
+          description: [
+            r.keterangan,
+            r.splitNo ? `split ${r.splitNo}` : null,
+            r.splitTotal ? `dari total Rp ${r.splitTotal.toLocaleString("id-ID")}` : null,
+            r.statusRekap && r.statusRekap !== "OK" ? `[${r.statusRekap}]` : null,
+          ].filter(Boolean).join(" · "),
+          refPdfFile: r.refPdfFile,
+          branchId,
+        });
+
+        if (isMatched && r.paymentDate && r.paymentAmount) {
+          await ctx.db.insert("paymentReceipts", {
+            payableId,
+            amount: r.paymentAmount,
+            paidDate: r.paymentDate,
+            paidBy: "pic" as const,
+            channel: "transfer",
+            reference: r.paymentVendor,
+            notes: r.keterangan,
+            proofFileName: r.paymentFile,
+            anomalyFlag: r.statusRekap && r.statusRekap !== "OK" ? "partial" as const : "ok" as const,
+            branchId,
+            uploadedAt: now,
+            uploadedBy: userId,
+          });
+          receiptsCreated++;
+        }
+        payablesCreated++;
+      } catch {
+        // skip row
+      }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "payables",
+      entityId: "" as Id<"payables">,
+      action: "create",
+      description: `Import laporan PIC (pivot) — ${payablesCreated} payable + ${receiptsCreated} bayar, ${unresolved} vendor unresolved`,
+      actedBy: userId, branchId,
+    });
+
+    return {
+      payablesCreated, receiptsCreated, unresolved,
+      unresolvedVendors: [...unresolvedVendors],
+    };
+  },
+});
