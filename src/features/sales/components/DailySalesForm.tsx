@@ -10,6 +10,7 @@ import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
 import type { DailySale } from "@/shared/types";
 import { salesChannels, subTabs, formatRpFull } from "../lib";
+import { labelChannel } from "../constants/channels";
 import { toast } from "sonner";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
@@ -58,7 +59,7 @@ export function DailySalesForm() {
     id: s._id,
     _id: s._id,
     businessDate: s.businessDate ?? "",
-    channelName: s.channel === "grabfood" ? "GrabFood" : s.channel === "gofood" ? "GoFood" : s.channel === "shopeefood" ? "ShopeeFood" : s.channel === "tambahan" ? "Tambahan" : "Dine-in",
+    channelName: labelChannel(s.channel ?? "dine_in"),
     grossAmount: s.amount ?? 0,
     platformFee: 0,
     promoCost: 0,

@@ -15,7 +15,7 @@ export type ClosingStatus = "open" | "submitted" | "verified";
 export type TransferDirection = "branch_to_owner" | "owner_to_branch";
 export type TransferPurpose = "night_transfer" | "petty_cash_topup" | "payable_payment_fund" | "adjustment";
 export type VendorType = "food_supplier" | "utility" | "service" | "payroll" | "misc";
-export type ChannelType = "cash" | "transfer" | "gofood" | "grabfood" | "shopeefood" | "dine_in" | "take_away" | "other";
+export type ChannelType = "cash" | "transfer" | "gofood" | "grabfood" | "shopeefood" | "ovo" | "dana" | "qris" | "dine_in" | "take_away" | "other";
 export type ExpenseCategoryType = "cogs" | "utility" | "salary_support" | "bpjs" | "maintenance" | "marketing" | "fee" | "other";
 export type StockMovementType = "stock_in" | "usage" | "adjustment" | "waste";
 

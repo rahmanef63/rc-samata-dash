@@ -49,7 +49,12 @@ export const reportsTables = {
   /**
    * Penjualan harian per produk — dari sheet LAP. PENJUALAN,
    * LAP. PENJUALAN GRAB FOOD, GO FOOD, SHOPEE FOOD.
-   * channel: "all" | "grabfood" | "gofood" | "shopeefood" | "tambahan"
+   * channel: "all" | "grabfood" | "gofood" | "shopeefood" | "ovo" |
+   *          "dana" | "qris" | "tambahan"
+   * Stored as optional string (no enum guard) so new platforms can
+   * be added without schema migration; production code should refer
+   * to convex/shared/validators.ts:incomeChannelTypeValidator for
+   * the canonical list.
    */
   productSales: defineTable({
     reportId: v.id("weeklyReports"),

@@ -40,6 +40,9 @@ export const incomeChannelTypeValidator = v.union(
   v.literal("gofood"),
   v.literal("grabfood"),
   v.literal("shopeefood"),
+  v.literal("ovo"),
+  v.literal("dana"),
+  v.literal("qris"),
   v.literal("dine_in"),
   v.literal("take_away"),
   v.literal("other")
