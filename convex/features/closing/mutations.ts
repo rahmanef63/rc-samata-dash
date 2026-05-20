@@ -31,6 +31,86 @@ export const createClosing = mutation({
   },
 });
 
+// ─── Bulk closing import from CSV ────────────────────────────
+// Upsert by (branchId, businessDate). If existing row for the date is
+// already "verified" it is skipped (errors reported back to caller).
+export const importDailyClosings = mutation({
+  args: {
+    branchId: v.id("branches"),
+    submittedBy: v.string(),
+    rows: v.array(v.object({
+      businessDate: v.string(),
+      openingCash: v.number(),
+      cashSales: v.number(),
+      nonCashSales: v.number(),
+      expensesPaidCash: v.number(),
+      actualCash: v.number(),
+      expectedCash: v.number(),
+      difference: v.number(),
+      note: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { branchId, submittedBy, rows }) => {
+    const userId = await requireAuth(ctx);
+    const now = new Date().toISOString();
+
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    const skipDetails: { businessDate: string; reason: string }[] = [];
+
+    for (const r of rows) {
+      const existing = await ctx.db.query("dailyClosings")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", r.businessDate))
+        .first();
+
+      if (existing) {
+        if (existing.status === "verified") {
+          skipped++;
+          skipDetails.push({ businessDate: r.businessDate, reason: "sudah verified, tidak ditimpa" });
+          continue;
+        }
+        await ctx.db.patch(existing._id, {
+          openingCash: r.openingCash,
+          cashSales: r.cashSales,
+          nonCashSales: r.nonCashSales,
+          expensesPaidCash: r.expensesPaidCash,
+          actualCash: r.actualCash,
+          expectedCash: r.expectedCash,
+          difference: r.difference,
+        });
+        updated++;
+      } else {
+        await ctx.db.insert("dailyClosings", {
+          businessDate: r.businessDate,
+          openingCash: r.openingCash,
+          cashSales: r.cashSales,
+          nonCashSales: r.nonCashSales,
+          expensesPaidCash: r.expensesPaidCash,
+          actualCash: r.actualCash,
+          expectedCash: r.expectedCash,
+          difference: r.difference,
+          status: "submitted" as const,
+          submittedBy,
+          submittedAt: now,
+          branchId,
+        });
+        inserted++;
+      }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "dailyClosings",
+      entityId: "" as Id<"dailyClosings">,
+      action: "create",
+      description: `Import CSV setoran — ${inserted} insert, ${updated} update, ${skipped} skip`,
+      actedBy: userId, branchId,
+    });
+
+    return { inserted, updated, skipped, skipDetails };
+  },
+});
+
 export const updateClosing = mutation({
   args: {
     id: v.id("dailyClosings"),

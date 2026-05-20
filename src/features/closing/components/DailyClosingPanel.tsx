@@ -13,6 +13,7 @@ import { formatRpFull } from "@/shared/lib";
 import { useState } from "react";
 import { TabBar } from "@/shared/components";
 import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useDeleteTransfer } from "../api";
+import { ClosingImportPreview } from "./ClosingImportPreview";
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
@@ -78,7 +79,7 @@ const transferColumns: Column<OwnerTransfer>[] = [
   { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
 ];
 
-const subTabs = ["Daily Closing", "Transfer Owner"] as const;
+const subTabs = ["Daily Closing", "Transfer Owner", "Upload CSV"] as const;
 type SubTab = typeof subTabs[number];
 
 export function DailyClosingPanel() {
@@ -299,6 +300,10 @@ export function DailyClosingPanel() {
             onDelete={transferCrud.onDelete}
           />
         </>
+      )}
+
+      {activeTab === "Upload CSV" && currentBranchId && (
+        <ClosingImportPreview branchId={currentBranchId} />
       )}
     </motion.div>
   );
