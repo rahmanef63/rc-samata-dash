@@ -27,6 +27,13 @@ export const payablesTables = {
     // "00000945-Update piutang 8-14 April 2026 18.05.pdf"). Lets the
     // Riwayat table deep-link back to the original chat artifact.
     refPdfFile: v.optional(v.string()),
+    // Source trace — mirror of transactions.sourceXxx so legacy rows
+    // can be back-filled into transactions table without losing
+    // provenance. New imports populate both.
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
+    sourceRowNumber: v.optional(v.number()),
+    transactionId: v.optional(v.id("transactions")),  // bridge FK
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
   })

@@ -21,6 +21,10 @@ export const closingTables = {
     submittedAt: v.string(),
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
+    sourceRowNumber: v.optional(v.number()),
+    transactionId: v.optional(v.id("transactions")),
   }).index("by_branch_date", ["branchId", "businessDate"]),
 
   ownerTransfers: defineTable({
@@ -44,6 +48,11 @@ export const closingTables = {
     // LAP. CF "Penerimaan lain-lain" section.
     reportId: v.optional(v.id("weeklyReports")),
     description: v.optional(v.string()),
+    // Source trace + bridge FK to transactions
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
+    sourceRowNumber: v.optional(v.number()),
+    transactionId: v.optional(v.id("transactions")),
   })
     .index("by_branch", ["branchId"])
     .index("by_report", ["reportId"]),
@@ -63,6 +72,11 @@ export const closingTables = {
     proofStorageId: v.optional(v.id("_storage")),
     proofFileName: v.optional(v.string()),
     proofMimeType: v.optional(v.string()),
+    // Source trace + bridge FK to transactions
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
+    sourceRowNumber: v.optional(v.number()),
+    transactionId: v.optional(v.id("transactions")),
     // Anomaly flag captured by laporan-pic import (CSV 2 has rows for
     // mislabel screenshots, duplicates, "not actually a transfer" etc).
     anomalyFlag: v.optional(v.union(
