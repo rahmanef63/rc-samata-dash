@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
 export const createClosing = mutation({
@@ -549,7 +550,9 @@ export const importBankStatementEntries = mutation({
     };
     const inserted: InsertedRow[] = [];
 
-    for (const r of rows) {
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const rowNum = i + 2; // header on line 1, data starts row 2
       const entryId = await ctx.db.insert("bankStatementEntries", {
         accountKind: batch.accountKind,
         txDate: r.txDate,
@@ -567,6 +570,41 @@ export const importBankStatementEntries = mutation({
       });
       inserted.push({ entryId, r });
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
+
+      // ── Mirror to transactions SSOT ──────────────────────
+      const txKind: "invoice" | "payment" | "receipt" | "transfer" | "expense" | "anomaly" =
+        r.category === "sales_inflow" ? "receipt"
+        : r.category === "expense_outflow" ? "expense"
+        : r.category === "payable_payment" ? "payment"
+        : r.category === "topup_pic" ? "transfer"
+        : r.category === "owner_capital" ? "transfer"
+        : r.category === "transfer_internal" ? "transfer"
+        : r.category === "other" ? "anomaly"
+        : r.debit > 0 ? "expense" : "receipt";
+      const txDirection: "in" | "out" | "transfer" =
+        r.category === "topup_pic" || r.category === "transfer_internal" ? "transfer"
+        : r.credit > 0 ? "in" : "out";
+      const amount = r.debit > 0 ? r.debit : r.credit;
+      const txId = await mirrorTx(ctx, {
+        branchId: batch.branchId,
+        kind: txKind, direction: txDirection,
+        date: r.txDate, amount,
+        status: r.payableId ? "linked" : "unlinked",
+        payableId: r.payableId,
+        counterparty: r.counterparty,
+        description: r.description,
+        channelName: r.channel,
+        method: r.channel,
+        bankAccount: batch.accountKind,
+        paidBy: batch.accountKind === "owner" ? "owner" : "pic",
+        sourceKind: "statement_bank",
+        sourceFileName: batch.fileName,
+        sourceFileStorageId: batch.fileStorageId,
+        sourceSheetName: batch.accountKind,
+        sourceRowNumber: rowNum,
+        userId,
+      });
+      await ctx.db.patch(entryId, { transactionId: txId });
 
       // Inline link: write validationLogs so the undo path can reverse it.
       if (r.payableId) {

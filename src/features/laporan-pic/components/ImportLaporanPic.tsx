@@ -93,7 +93,12 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
     setCommitting(true);
     try {
       if (parsed.kind === "long") {
-        const res = await importLong({ branchId, rows: parsed.rows });
+        const rowsWithIdx = parsed.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 2 }));
+        const res = await importLong({
+          branchId, rows: rowsWithIdx,
+          sourceFileName: fileName || undefined,
+          sourceSheetName: "TRANSAKSI",
+        });
         let msg = `Selesai — ${res.payablesCreated} tagihan, ${res.receiptsCreated} bayar (${res.receiptsLinked} linked), ${res.transfersCreated} transfer, ${res.anomaliesCreated} anomali`;
         if (res.unresolved > 0) msg += `, ${res.unresolved} vendor unresolved`;
         toast.success(msg);
@@ -101,7 +106,12 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
           toast.message(`Vendor belum di master: ${res.unresolvedVendors.slice(0, 5).join(", ")}${res.unresolvedVendors.length > 5 ? "..." : ""}`);
         }
       } else {
-        const res = await importPivot({ branchId, rows: parsed.rows });
+        const rowsWithIdx = parsed.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 2 }));
+        const res = await importPivot({
+          branchId, rows: rowsWithIdx,
+          sourceFileName: fileName || undefined,
+          sourceSheetName: "MATCH_PIUTANG",
+        });
         let msg = `Selesai — ${res.payablesCreated} tagihan, ${res.receiptsCreated} bayar matched`;
         if (res.unresolved > 0) msg += `, ${res.unresolved} vendor unresolved`;
         toast.success(msg);

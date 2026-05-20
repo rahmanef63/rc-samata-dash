@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
 const classifyValidator = v.union(
@@ -27,6 +28,8 @@ const anomalyFlagValidator = v.union(
 export const importLaporanPicLong = mutation({
   args: {
     branchId: v.id("branches"),
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
     rows: v.array(v.object({
       paidDate: v.string(),
       amount: v.number(),
@@ -36,11 +39,12 @@ export const importLaporanPicLong = mutation({
       reference: v.optional(v.string()),
       notes: v.optional(v.string()),
       fileName: v.optional(v.string()),
+      sourceRowNumber: v.optional(v.number()),
       classification: classifyValidator,
       anomalyFlag: v.optional(anomalyFlagValidator),
     })),
   },
-  handler: async (ctx, { branchId, rows }) => {
+  handler: async (ctx, { branchId, rows, sourceFileName, sourceSheetName }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
@@ -68,7 +72,9 @@ export const importLaporanPicLong = mutation({
     let unresolved = 0;
     const unresolvedVendors = new Set<string>();
 
-    for (const r of rows) {
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const rowNum = r.sourceRowNumber ?? (i + 2); // header is line 1, data starts row 2
       try {
         if (r.classification === "payable") {
           const vendor = resolveVendor(r.vendorName);
@@ -77,7 +83,7 @@ export const importLaporanPicLong = mutation({
             unresolved++;
             continue;
           }
-          await ctx.db.insert("payables", {
+          const payableId = await ctx.db.insert("payables", {
             vendorId: vendor._id,
             vendorName: vendor.name,
             invoiceDate: r.paidDate,
@@ -87,8 +93,23 @@ export const importLaporanPicLong = mutation({
             status: "open" as const,
             description: [r.notes, r.reference ? `ref: ${r.reference}` : null].filter(Boolean).join(" · "),
             refPdfFile: r.fileName,
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName,
+            sourceRowNumber: rowNum,
             branchId,
           });
+          const txId = await mirrorTx(ctx, {
+            branchId, kind: "invoice", direction: "in",
+            date: r.paidDate, amount: r.amount, paidAmount: 0, status: "open",
+            vendorId: vendor._id, payableId,
+            counterparty: vendor.name, description: r.notes, reference: r.reference,
+            proofFileName: r.fileName,
+            sourceKind: "laporan_pic_csv",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName, sourceRowNumber: rowNum,
+            userId,
+          });
+          await ctx.db.patch(payableId, { transactionId: txId });
           payablesCreated++;
         } else if (r.classification === "receipt") {
           const vendor = resolveVendor(r.vendorName);
@@ -99,7 +120,7 @@ export const importLaporanPicLong = mutation({
               .sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate))[0];
             if (candidate) payableId = candidate._id;
           }
-          await ctx.db.insert("paymentReceipts", {
+          const receiptId = await ctx.db.insert("paymentReceipts", {
             payableId,
             amount: r.amount,
             paidDate: r.paidDate,
@@ -110,10 +131,26 @@ export const importLaporanPicLong = mutation({
             notes: r.notes,
             proofFileName: r.fileName,
             anomalyFlag: r.anomalyFlag ?? "ok",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName,
+            sourceRowNumber: rowNum,
             branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
+          const txId = await mirrorTx(ctx, {
+            branchId, kind: "payment", direction: "out",
+            date: r.paidDate, amount: r.amount, status: payableId ? "linked" : "unlinked",
+            payableId, receiptId,
+            reference: r.reference, bankAccount: r.reference,
+            paidBy: "pic", method: r.channel, notes: r.notes,
+            anomalyFlag: r.anomalyFlag ?? "ok", proofFileName: r.fileName,
+            sourceKind: "laporan_pic_csv",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName, sourceRowNumber: rowNum,
+            userId,
+          });
+          await ctx.db.patch(receiptId, { transactionId: txId });
           receiptsCreated++;
           if (payableId) {
             const p = await ctx.db.get(payableId);
@@ -130,19 +167,34 @@ export const importLaporanPicLong = mutation({
             receiptsLinked++;
           }
         } else if (r.classification === "owner_transfer_to" || r.classification === "owner_transfer_from") {
-          await ctx.db.insert("ownerTransfers", {
+          const direction = r.classification === "owner_transfer_to" ? "branch_to_owner" as const : "owner_to_branch" as const;
+          const transferId = await ctx.db.insert("ownerTransfers", {
             transferDate: r.paidDate,
-            direction: r.classification === "owner_transfer_to" ? "branch_to_owner" as const : "owner_to_branch" as const,
+            direction,
             purpose: "night_transfer" as const,
             amount: r.amount,
             referenceNo: r.reference ?? "",
             status: "completed" as const,
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName,
+            sourceRowNumber: rowNum,
             branchId,
           });
+          const txId = await mirrorTx(ctx, {
+            branchId, kind: "transfer", direction: "transfer",
+            date: r.paidDate, amount: r.amount, status: "completed",
+            counterparty: direction === "branch_to_owner" ? "OWNER" : "OWNER (incoming)",
+            description: r.notes, reference: r.reference, method: direction,
+            sourceKind: "laporan_pic_csv",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName, sourceRowNumber: rowNum,
+            userId,
+          });
+          await ctx.db.patch(transferId, { transactionId: txId });
           transfersCreated++;
         } else {
           // anomaly — store as receipt with anomalyFlag set, no payable link
-          await ctx.db.insert("paymentReceipts", {
+          const receiptId = await ctx.db.insert("paymentReceipts", {
             amount: r.amount,
             paidDate: r.paidDate,
             paidBy: "pic" as const,
@@ -152,10 +204,27 @@ export const importLaporanPicLong = mutation({
             notes: r.notes ?? `${r.vendorName} (anomali)`,
             proofFileName: r.fileName,
             anomalyFlag: r.anomalyFlag ?? "not_transfer",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName,
+            sourceRowNumber: rowNum,
             branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
+          const txId = await mirrorTx(ctx, {
+            branchId, kind: "anomaly", direction: "out",
+            date: r.paidDate, amount: r.amount, status: "unlinked",
+            receiptId,
+            counterparty: r.vendorName,
+            reference: r.reference, bankAccount: r.reference,
+            paidBy: "pic", method: r.channel, notes: r.notes,
+            anomalyFlag: r.anomalyFlag ?? "not_transfer", proofFileName: r.fileName,
+            sourceKind: "laporan_pic_csv",
+            sourceFileName: sourceFileName ?? r.fileName,
+            sourceSheetName, sourceRowNumber: rowNum,
+            userId,
+          });
+          await ctx.db.patch(receiptId, { transactionId: txId });
           anomaliesCreated++;
         }
       } catch {
@@ -183,6 +252,8 @@ export const importLaporanPicLong = mutation({
 export const importLaporanPicPivot = mutation({
   args: {
     branchId: v.id("branches"),
+    sourceFileName: v.optional(v.string()),
+    sourceSheetName: v.optional(v.string()),
     rows: v.array(v.object({
       invoiceDate: v.string(),
       vendor: v.string(),
@@ -197,9 +268,10 @@ export const importLaporanPicPivot = mutation({
       keterangan: v.optional(v.string()),
       splitTotal: v.optional(v.number()),
       splitNo: v.optional(v.string()),
+      sourceRowNumber: v.optional(v.number()),
     })),
   },
-  handler: async (ctx, { branchId, rows }) => {
+  handler: async (ctx, { branchId, rows, sourceFileName, sourceSheetName }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
@@ -219,7 +291,9 @@ export const importLaporanPicPivot = mutation({
     let unresolved = 0;
     const unresolvedVendors = new Set<string>();
 
-    for (const r of rows) {
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const rowNum = r.sourceRowNumber ?? (i + 2);
       try {
         const vendor = resolveVendor(r.vendor);
         if (!vendor) {
@@ -235,6 +309,13 @@ export const importLaporanPicPivot = mutation({
           : paidAmount > 0 ? "partial"
           : "open";
 
+        const description = [
+          r.keterangan,
+          r.splitNo ? `split ${r.splitNo}` : null,
+          r.splitTotal ? `dari total Rp ${r.splitTotal.toLocaleString("id-ID")}` : null,
+          r.statusRekap && r.statusRekap !== "OK" ? `[${r.statusRekap}]` : null,
+        ].filter(Boolean).join(" · ");
+
         const payableId = await ctx.db.insert("payables", {
           vendorId: vendor._id,
           vendorName: vendor.name,
@@ -243,18 +324,28 @@ export const importLaporanPicPivot = mutation({
           amount: r.amount,
           paidAmount,
           status,
-          description: [
-            r.keterangan,
-            r.splitNo ? `split ${r.splitNo}` : null,
-            r.splitTotal ? `dari total Rp ${r.splitTotal.toLocaleString("id-ID")}` : null,
-            r.statusRekap && r.statusRekap !== "OK" ? `[${r.statusRekap}]` : null,
-          ].filter(Boolean).join(" · "),
+          description,
           refPdfFile: r.refPdfFile,
+          sourceFileName: sourceFileName ?? r.refPdfFile,
+          sourceSheetName,
+          sourceRowNumber: rowNum,
           branchId,
         });
+        const txInvId = await mirrorTx(ctx, {
+          branchId, kind: "invoice", direction: "in",
+          date: r.invoiceDate, amount: r.amount, paidAmount, status,
+          vendorId: vendor._id, payableId,
+          counterparty: vendor.name, description,
+          proofFileName: r.refPdfFile,
+          sourceKind: "laporan_pic_csv",
+          sourceFileName: sourceFileName ?? r.refPdfFile,
+          sourceSheetName, sourceRowNumber: rowNum,
+          userId,
+        });
+        await ctx.db.patch(payableId, { transactionId: txInvId });
 
         if (isMatched && r.paymentDate && r.paymentAmount) {
-          await ctx.db.insert("paymentReceipts", {
+          const receiptId = await ctx.db.insert("paymentReceipts", {
             payableId,
             amount: r.paymentAmount,
             paidDate: r.paymentDate,
@@ -264,10 +355,29 @@ export const importLaporanPicPivot = mutation({
             notes: r.keterangan,
             proofFileName: r.paymentFile,
             anomalyFlag: r.statusRekap && r.statusRekap !== "OK" ? "partial" as const : "ok" as const,
+            sourceFileName: sourceFileName ?? r.refPdfFile,
+            sourceSheetName: sourceSheetName ? `${sourceSheetName}/payment` : "payment",
+            sourceRowNumber: rowNum,
             branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
+          const txPayId = await mirrorTx(ctx, {
+            branchId, kind: "payment", direction: "out",
+            date: r.paymentDate, amount: r.paymentAmount, status: "linked",
+            payableId, receiptId, linkedTxId: txInvId,
+            counterparty: vendor.name,
+            reference: r.paymentVendor, notes: r.keterangan,
+            paidBy: "pic", method: "transfer",
+            anomalyFlag: r.statusRekap && r.statusRekap !== "OK" ? "partial" : "ok",
+            proofFileName: r.paymentFile,
+            sourceKind: "laporan_pic_csv",
+            sourceFileName: sourceFileName ?? r.refPdfFile,
+            sourceSheetName: sourceSheetName ? `${sourceSheetName}/payment` : "payment",
+            sourceRowNumber: rowNum,
+            userId,
+          });
+          await ctx.db.patch(receiptId, { transactionId: txPayId });
           receiptsCreated++;
         }
         payablesCreated++;

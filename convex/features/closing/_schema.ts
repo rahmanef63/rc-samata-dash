@@ -124,6 +124,9 @@ export const closingTables = {
     isValidated: v.optional(v.boolean()),
     batchId: v.id("bankStatementBatches"),
     branchId: v.id("branches"),
+    // Bridge FK to transactions (set by importBankStatementEntries
+    // mirrorTx step). Stays null for pre-bridge entries until backfill.
+    transactionId: v.optional(v.id("transactions")),
   })
     .index("by_branch_date", ["branchId", "txDate"])
     .index("by_batch", ["batchId"])

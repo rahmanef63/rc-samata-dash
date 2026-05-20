@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { toast } from "sonner";
-import { Download, Upload, Trash2, Loader2 } from "lucide-react";
+import { Download, Upload, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { NotionDatabase } from "@/features/notion-shell/components/NotionDatabase";
@@ -22,6 +22,7 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
   }) as TxRow[] | undefined;
   const bulkPatch = useMutation(api.features.transactions.mutations.bulkPatchTransactions);
   const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactions);
+  const backfill = useMutation(api.features.transactions.mutations.backfillTransactions);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -150,6 +151,19 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
     }
   };
 
+  const handleBackfill = async () => {
+    if (!confirm("Backfill mirror legacy payables/receipts/transfers/closings ke transactions SSOT. Idempotent (aman re-run). Lanjut?")) return;
+    setBusy(true);
+    try {
+      const res = await backfill({ branchId });
+      toast.success(`Backfill selesai · ${res.inserted} row di-mirror ke transactions`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backfill gagal");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (selectedRows.length === 0) return;
     if (!confirm(`Hapus ${selectedRows.length} row?`)) return;
@@ -214,6 +228,17 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           Bulk Hapus
         </button>
+        <div className="ml-auto">
+          <button
+            onClick={handleBackfill}
+            disabled={busy}
+            title="Mirror legacy tables ke transactions SSOT — idempotent"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
+            Backfill Legacy
+          </button>
+        </div>
       </div>
 
       <NotionDatabase

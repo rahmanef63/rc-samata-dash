@@ -20,6 +20,7 @@ import { mutation, action, internalMutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../../_generated/api";
 import { requireAuth } from "../../shared/auth";
+import { mirrorTx } from "../transactions/_helpers";
 
 // ─── Master-data seeds ──────────────────────────────────────
 
@@ -244,7 +245,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
       const expectedCash = f.openingBalance + f.salesInflow + f.otherInflow - expensesPaidCash;
       const difference = f.closingBalance - expectedCash;
 
-      await ctx.db.insert("dailyClosings", {
+      const closingId = await ctx.db.insert("dailyClosings", {
         businessDate: f.businessDate,
         openingCash: f.openingBalance,
         cashSales: f.salesInflow,
@@ -256,8 +257,27 @@ export const bridgeDailyCashFlowToClosings = mutation({
         status: "submitted" as const,
         submittedBy: userId,
         submittedAt: new Date().toISOString(),
+        sourceFileName: report.fileName,
+        sourceSheetName: "LAP. CF",
+        sourceRowNumber: inserted + 2,
         branchId: report.branchId,
       });
+      const txId = await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "transfer", direction: "transfer",
+        date: f.businessDate,
+        amount: f.salesInflow,
+        status: "submitted",
+        counterparty: "(setoran kasir)",
+        description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: "LAP. CF",
+        sourceRowNumber: inserted + 2,
+        sourceReportId: reportId,
+        userId,
+      });
+      await ctx.db.patch(closingId, { transactionId: txId });
       inserted++;
     }
     return { inserted };
@@ -269,7 +289,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
 export const bridgeCreditPurchasesToPayables = mutation({
   args: { reportId: v.id("weeklyReports") },
   handler: async (ctx, { reportId }) => {
-    await requireAuth(ctx);
+    const userId = await requireAuth(ctx);
     const report: any = await ctx.db.get(reportId);
     if (!report) return { inserted: 0, reason: "report not found" };
 
@@ -317,7 +337,8 @@ export const bridgeCreditPurchasesToPayables = mutation({
         : paidAmount > 0 ? "partial" as const
         : (g.dueDate && Date.parse(g.dueDate) < Date.now() ? "overdue" as const : "open" as const);
 
-      await ctx.db.insert("payables", {
+      const description = `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`;
+      const payableId = await ctx.db.insert("payables", {
         vendorId,
         vendorName: g.supplier,
         invoiceDate: g.invoiceDate,
@@ -325,7 +346,10 @@ export const bridgeCreditPurchasesToPayables = mutation({
         amount: g.amount,
         paidAmount,
         status,
-        description: `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
+        description,
+        sourceFileName: report.fileName,
+        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
@@ -333,6 +357,20 @@ export const bridgeCreditPurchasesToPayables = mutation({
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
+      const txId = await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "invoice", direction: "in",
+        date: g.invoiceDate, amount: g.amount, paidAmount, status,
+        vendorId, payableId,
+        counterparty: g.supplier, description,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceRowNumber: rowIdx + 2,
+        sourceReportId: reportId,
+        userId,
+      });
+      await ctx.db.patch(payableId, { transactionId: txId });
       inserted++;
       rowIdx++;
     }
@@ -665,16 +703,33 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
       const expensesPaidCash = f.expenseOutflow + f.otherOutflow;
       const expectedCash = f.openingBalance + f.salesInflow + f.otherInflow - expensesPaidCash;
       const difference = f.closingBalance - expectedCash;
-      await ctx.db.insert("dailyClosings", {
+      const closingId = await ctx.db.insert("dailyClosings", {
         businessDate: f.businessDate, openingCash: f.openingBalance, cashSales: f.salesInflow,
         nonCashSales: 0, expensesPaidCash, expectedCash, actualCash: f.closingBalance, difference,
         status: "submitted", submittedBy: "system", submittedAt: new Date().toISOString(), branchId: report.branchId,
+        sourceFileName: report.fileName,
+        sourceSheetName: "LAP. CF",
+        sourceRowNumber: rowIdx + 2,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
           rowIndex: rowIdx, sheetName: "LAP. CF",
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
+      const txId = await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "transfer", direction: "transfer",
+        date: f.businessDate, amount: f.salesInflow, status: "submitted",
+        counterparty: "(setoran kasir)",
+        description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: "LAP. CF",
+        sourceRowNumber: rowIdx + 2,
+        sourceReportId: reportId,
+        userId: "system",
+      });
+      await ctx.db.patch(closingId, { transactionId: txId });
       inserted++;
       rowIdx++;
     }
@@ -712,10 +767,14 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         paidAmount >= g.amount ? "paid"
         : paidAmount > 0 ? "partial"
         : (g.dueDate && Date.parse(g.dueDate) < Date.now() ? "overdue" : "open");
-      await ctx.db.insert("payables", {
+      const description = `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`;
+      const payableId = await ctx.db.insert("payables", {
         vendorId, vendorName: g.supplier, invoiceDate: g.invoiceDate, dueDate: g.dueDate,
         amount: g.amount, paidAmount, status,
-        description: `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`,
+        description,
+        sourceFileName: report.fileName,
+        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
@@ -723,6 +782,21 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
+      const txId = await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "invoice", direction: "in",
+        date: g.invoiceDate, amount: g.amount, paidAmount,
+        status: status as "open" | "partial" | "paid" | "overdue",
+        vendorId, payableId,
+        counterparty: g.supplier, description,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceRowNumber: rowIdx + 2,
+        sourceReportId: reportId,
+        userId: "system",
+      });
+      await ctx.db.patch(payableId, { transactionId: txId });
       inserted++;
       rowIdx++;
     }
@@ -904,17 +978,36 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
     for (const f of flows) {
       // Penerimaan lain-lain (otherInflow) → owner_to_branch
       if (f.otherInflow > 0) {
-        await ctx.db.insert("ownerTransfers", {
+        const description = `Penerimaan lain-lain ${f.businessDate} dari LAP. CF`;
+        const transferId = await ctx.db.insert("ownerTransfers", {
           transferDate: f.businessDate,
           direction: "owner_to_branch" as const,
           purpose: "adjustment" as const,
           amount: f.otherInflow,
           referenceNo: `IN-${f.businessDate}`,
           status: "completed" as const,
+          sourceFileName: report.fileName,
+          sourceSheetName: "LAP. CF",
+          sourceRowNumber: rowIdx + 2,
           branchId: report.branchId,
           reportId,
-          description: `Penerimaan lain-lain ${f.businessDate} dari LAP. CF`,
+          description,
         });
+        const txId = await mirrorTx(ctx, {
+          branchId: report.branchId,
+          kind: "transfer", direction: "transfer",
+          date: f.businessDate, amount: f.otherInflow, status: "completed",
+          counterparty: "OWNER (incoming)",
+          description, reference: `IN-${f.businessDate}`,
+          method: "owner_to_branch",
+          sourceKind: "weekly_upload",
+          sourceFileName: report.fileName,
+          sourceSheetName: "LAP. CF",
+          sourceRowNumber: rowIdx + 2,
+          sourceReportId: reportId,
+          userId: "system",
+        });
+        await ctx.db.patch(transferId, { transactionId: txId });
         inserted++;
         rowIdx++;
       }
