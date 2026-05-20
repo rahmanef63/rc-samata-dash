@@ -1,4 +1,5 @@
 import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText } from "lucide-react";
+// Note: ClipboardList re-used for "Laporan PIC" route entry below.
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -63,6 +64,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
       { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
       { title: "Vendor", url: "/finance/vendors", icon: Users },
+      { title: "Laporan PIC", url: "/finance/laporan-pic", icon: ClipboardList },
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
