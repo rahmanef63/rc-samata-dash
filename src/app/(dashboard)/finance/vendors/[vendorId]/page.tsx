@@ -6,21 +6,17 @@ import { useQuery, useMutation } from "convex/react";
 import { toast } from "sonner";
 import {
   ArrowLeft, Users, Phone, Calendar, Receipt, Banknote, Link2,
-  Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Search,
+  Trash2, Search,
 } from "lucide-react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useTableState } from "@/shared/hooks/useTableState";
+import { SortableTh } from "@/shared/components";
 import { formatRpFull } from "@/shared/lib";
 import { cn } from "@/lib/utils";
-
-const STATUS_COLOR: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  partial: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
-  paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  overdue: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-};
+import { describePayable } from "@/features/payables/lib/describePayable";
+import { VENDOR_TYPE_LABELS, type VendorType } from "@/features/vendors/constants/types";
 
 export default function VendorDetailPage({
   params,
@@ -72,7 +68,7 @@ export default function VendorDetailPage({
             </h1>
             <div className="mt-2 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted font-semibold uppercase tracking-wider">
-                {vendor.type.replace("_", " ")}
+                {VENDOR_TYPE_LABELS[vendor.type as VendorType] ?? vendor.type}
               </span>
               {vendor.phone && (
                 <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {vendor.phone}</span>
@@ -105,7 +101,7 @@ export default function VendorDetailPage({
         </TabsList>
 
         <TabsContent value="payables">
-          <PayablesTab payables={payables} />
+          <PayablesTab payables={payables} payments={payments} linkedBankEntries={linkedBankEntries} />
         </TabsContent>
         <TabsContent value="payments">
           <PaymentsTab payments={payments} linkedBankEntries={linkedBankEntries} payables={payables} />
@@ -140,12 +136,43 @@ type Payable = {
   etlSource?: { tabLabel?: string; fileName?: string } | undefined;
 };
 
-function PayablesTab({ payables }: { payables: Payable[] }) {
+function PayablesTab({
+  payables,
+  payments,
+  linkedBankEntries,
+}: {
+  payables: Payable[];
+  payments: Array<{ payableId: string; paymentDate: string; amount: number; method: string; referenceNo?: string; source: string }>;
+  linkedBankEntries: Array<{ payableId: string; txDate: string; debit: number; counterparty?: string; description: string; accountKind: string; paymentReference?: string }>;
+}) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const filtered = useMemo(() => {
     if (statusFilter === "all") return payables;
     return payables.filter((p) => p.status === statusFilter);
   }, [payables, statusFilter]);
+
+  // Group payments (manual + statement) per payable for inline subtext.
+  const paymentsByPayable = useMemo(() => {
+    const map = new Map<string, Array<{ paymentDate: string; amount: number; method: string; referenceNo?: string; source: "manual" | "statement"; paidBy?: "owner" | "pic" }>>();
+    for (const m of payments) {
+      const arr = map.get(m.payableId) ?? [];
+      arr.push({ paymentDate: m.paymentDate, amount: m.amount, method: m.method, referenceNo: m.referenceNo, source: "manual" as const });
+      map.set(m.payableId, arr);
+    }
+    for (const b of linkedBankEntries) {
+      const arr = map.get(b.payableId) ?? [];
+      arr.push({
+        paymentDate: b.txDate,
+        amount: b.debit,
+        method: b.accountKind, // "owner" | "pic"
+        referenceNo: b.paymentReference,
+        source: "statement" as const,
+        paidBy: b.accountKind as "owner" | "pic",
+      });
+      map.set(b.payableId, arr);
+    }
+    return map;
+  }, [payments, linkedBankEntries]);
 
   const { search, setSearch, sort, toggleSort, sortedItems } = useTableState(
     filtered,
@@ -170,10 +197,10 @@ function PayablesTab({ payables }: { payables: Payable[] }) {
           className="text-xs px-2 py-1.5 rounded-lg border border-border bg-card"
         >
           <option value="all">Semua status</option>
-          <option value="open">Open</option>
-          <option value="partial">Partial</option>
-          <option value="paid">Paid</option>
-          <option value="overdue">Overdue</option>
+          <option value="open">Belum dibayar</option>
+          <option value="partial">Sebagian</option>
+          <option value="paid">Lunas</option>
+          <option value="overdue">Telat</option>
         </select>
         <span className="text-[10px] text-muted-foreground font-mono ml-auto">{sortedItems.length} row</span>
       </div>
@@ -184,13 +211,13 @@ function PayablesTab({ payables }: { payables: Payable[] }) {
           <table className="w-full text-xs">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <SortTh label="Invoice" sortKey="invoiceDate" sort={sort} onSort={toggleSort} />
-                <SortTh label="Jatuh Tempo" sortKey="dueDate" sort={sort} onSort={toggleSort} />
-                <SortTh label="Deskripsi" sortKey="description" sort={sort} onSort={toggleSort} />
-                <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} className="text-right" />
-                <SortTh label="Dibayar" sortKey="paidAmount" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortableTh label="Invoice" sortKey="invoiceDate" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Jatuh Tempo" sortKey="dueDate" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Deskripsi" sortKey="description" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} align="right" />
+                <SortableTh label="Dibayar" sortKey="paidAmount" sort={sort} onSort={toggleSort} align="right" />
                 <th className="px-3 py-2 font-semibold text-muted-foreground text-right">Sisa</th>
-                <SortTh label="Status" sortKey="status" sort={sort} onSort={toggleSort} className="text-center" />
+                <SortableTh label="Status" sortKey="status" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2 font-semibold text-muted-foreground">Sumber</th>
               </tr>
             </thead>
@@ -198,8 +225,9 @@ function PayablesTab({ payables }: { payables: Payable[] }) {
               {sortedItems.map((p) => {
                 const remaining = p.amount - p.paidAmount;
                 const sourceLabel = p.etlSource?.tabLabel ?? p.etlSource?.fileName ?? (p.etlSource ? "ETL" : "manual");
+                const desc = describePayable(p, paymentsByPayable.get(p._id) ?? []);
                 return (
-                  <tr key={p._id} className="border-t border-border/40 hover:bg-muted/20">
+                  <tr key={p._id} className="border-t border-border/40 hover:bg-muted/20 align-top">
                     <td className="px-3 py-1.5 font-mono text-[11px]">{p.invoiceDate}</td>
                     <td className="px-3 py-1.5 font-mono text-[11px]">{p.dueDate}</td>
                     <td className="px-3 py-1.5 truncate max-w-[280px]" title={p.description}>{p.description}</td>
@@ -208,10 +236,15 @@ function PayablesTab({ payables }: { payables: Payable[] }) {
                     <td className={cn("px-3 py-1.5 text-right font-mono font-semibold", remaining > 0 ? "text-destructive" : "text-green-600")}>
                       {formatRpFull(remaining)}
                     </td>
-                    <td className="px-3 py-1.5 text-center">
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded font-semibold uppercase", STATUS_COLOR[p.status] ?? "bg-muted")}>
-                        {p.status}
-                      </span>
+                    <td className="px-3 py-1.5">
+                      <div className="space-y-0.5">
+                        <span className={cn("inline-block text-[10px] px-2 py-0.5 rounded font-semibold uppercase", desc.badgeCls)}>
+                          {desc.badgeLabel}
+                        </span>
+                        {desc.subText && (
+                          <p className="text-[10px] text-muted-foreground leading-tight">{desc.subText}</p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-1.5 text-[10px] text-muted-foreground truncate max-w-[160px]" title={sourceLabel}>{sourceLabel}</td>
                   </tr>
@@ -285,12 +318,12 @@ function PaymentsTab({
           <table className="w-full text-xs">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <SortTh label="Tanggal" sortKey="date" sort={sort} onSort={toggleSort} />
-                <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} className="text-right" />
-                <SortTh label="Method" sortKey="method" sort={sort} onSort={toggleSort} />
-                <SortTh label="Reference" sortKey="reference" sort={sort} onSort={toggleSort} />
-                <SortTh label="Sumber" sortKey="source" sort={sort} onSort={toggleSort} />
-                <SortTh label="Untuk Payable" sortKey="payableLabel" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Tanggal" sortKey="date" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Amount" sortKey="amount" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortableTh label="Method" sortKey="method" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Reference" sortKey="reference" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Sumber" sortKey="source" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Untuk Payable" sortKey="payableLabel" sort={sort} onSort={toggleSort} />
               </tr>
             </thead>
             <tbody>
@@ -376,11 +409,11 @@ function AliasesTab({ aliases }: { aliases: Alias[] }) {
           <table className="w-full text-xs">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <SortTh label="Alias (normalized)" sortKey="alias" sort={sort} onSort={toggleSort} />
-                <SortTh label="Account No" sortKey="accountNo" sort={sort} onSort={toggleSort} />
-                <SortTh label="Sumber" sortKey="source" sort={sort} onSort={toggleSort} />
-                <SortTh label="Pakai Terakhir" sortKey="lastSeenAt" sort={sort} onSort={toggleSort} />
-                <SortTh label="Pakai" sortKey="seenCount" sort={sort} onSort={toggleSort} className="text-center" />
+                <SortableTh label="Alias (normalized)" sortKey="alias" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Account No" sortKey="accountNo" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Sumber" sortKey="source" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Pakai Terakhir" sortKey="lastSeenAt" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Pakai" sortKey="seenCount" sort={sort} onSort={toggleSort} className="text-center" />
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -416,23 +449,3 @@ function AliasesTab({ aliases }: { aliases: Alias[] }) {
   );
 }
 
-function SortTh({
-  label, sortKey, sort, onSort, className,
-}: {
-  label: string;
-  sortKey: string;
-  sort: { key: string; dir: "asc" | "desc" | null };
-  onSort: (key: string) => void;
-  className?: string;
-}) {
-  const active = sort.key === sortKey && sort.dir !== null;
-  const Icon = active ? (sort.dir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
-  return (
-    <th className={cn("px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap", className)}>
-      <button onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1 hover:text-foreground">
-        {label}
-        <Icon className={cn("h-3 w-3", active ? "text-primary" : "text-muted-foreground/50")} />
-      </button>
-    </th>
-  );
-}

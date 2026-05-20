@@ -2,32 +2,25 @@
 
 import { useState, useMemo } from "react";
 import { useTableState } from "@/shared/hooks/useTableState";
-import { AlertTriangle, Info, Loader2, Upload, Search, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import { TagSelect, type TagOption } from "@/components/ui/tag-select";
+import { SortableTh } from "@/shared/components";
+import { AlertTriangle, Info, Loader2, Upload, Search } from "lucide-react";
+import { TagSelect } from "@/components/ui/tag-select";
 import { formatRpFull } from "@/shared/lib";
 import { PayableLinkCombo } from "./PayableLinkCombo";
 import type { BankStatementRow } from "@/features/report-upload/parsers/parseBankStatement";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
+import {
+  BANK_CATEGORIES, BANK_CATEGORY_LABELS, BANK_CATEGORY_DOT_CLS,
+  BANK_CATEGORY_TAG_OPTIONS, type BankCategory,
+} from "../constants/categories";
 
 export type EditableBankRow = BankStatementRow & {
   payableId?: Id<"payables">;
   learnAlias?: boolean;
 };
 
-const CATEGORIES = [
-  { key: "sales_inflow",      label: "Sales Inflow",      cls: "text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300",       dot: "bg-green-500" },
-  { key: "expense_outflow",   label: "Expense Outflow",   cls: "text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300",                 dot: "bg-red-500" },
-  { key: "payable_payment",   label: "Payable Payment",   cls: "text-orange-700 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-300",     dot: "bg-orange-500" },
-  { key: "topup_pic",         label: "Topup PIC",         cls: "text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300",             dot: "bg-blue-500" },
-  { key: "owner_capital",     label: "Owner Capital",     cls: "text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300",     dot: "bg-purple-500" },
-  { key: "transfer_internal", label: "Transfer Internal", cls: "text-cyan-700 bg-cyan-100 dark:bg-cyan-900/30 dark:text-cyan-300",             dot: "bg-cyan-500" },
-  { key: "other",             label: "Other",             cls: "text-gray-700 bg-gray-100 dark:bg-gray-800/60 dark:text-gray-300",             dot: "bg-gray-500" },
-] as const;
-
-type CategoryKey = (typeof CATEGORIES)[number]["key"];
-
-const CATEGORY_OPTIONS: TagOption[] = CATEGORIES.map((c) => ({ value: c.key, label: c.label }));
+type CategoryKey = BankCategory;
 
 export function StatementImportPreview({
   rows,
@@ -51,7 +44,7 @@ export function StatementImportPreview({
 
   const totals = useMemo(() => {
     const counts: Record<string, { count: number; debit: number; credit: number }> = {};
-    for (const c of CATEGORIES) counts[c.key] = { count: 0, debit: 0, credit: 0 };
+    for (const c of BANK_CATEGORIES) counts[c] = { count: 0, debit: 0, credit: 0 };
     for (const r of rows) {
       const k = (r.category ?? "other") as CategoryKey;
       const bucket = counts[k] ?? counts.other;
@@ -105,13 +98,14 @@ export function StatementImportPreview({
 
       {/* Counter cards per category */}
       <div className="px-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {CATEGORIES.map((c) => {
-          const t = totals[c.key];
+        {BANK_CATEGORIES.map((key) => {
+          const label = BANK_CATEGORY_LABELS[key];
+          const t = totals[key];
           return (
-            <div key={c.key} className={cn("rounded-lg border border-border/60 bg-background p-2", t.count === 0 && "opacity-50")}>
+            <div key={key} className={cn("rounded-lg border border-border/60 bg-background p-2", t.count === 0 && "opacity-50")}>
               <div className="flex items-center gap-1.5">
-                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", c.dot)} />
-                <p className="text-[10px] font-semibold uppercase tracking-wide truncate" title={c.label}>{c.label}</p>
+                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", BANK_CATEGORY_DOT_CLS[key])} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide truncate" title={label}>{label}</p>
               </div>
               <p className="text-lg font-bold mt-0.5">{t.count}</p>
               <p className="text-[10px] text-muted-foreground font-mono">
@@ -129,13 +123,13 @@ export function StatementImportPreview({
       <div className="px-4 overflow-x-auto">
         <div className="flex gap-1 rounded-xl bg-muted p-1 min-w-max">
           <TabBtn label="Semua" count={rows.length} active={activeTab === "all"} onClick={() => setActiveTab("all")} />
-          {CATEGORIES.map((c) => (
+          {BANK_CATEGORIES.map((key) => (
             <TabBtn
-              key={c.key}
-              label={c.label}
-              count={totals[c.key].count}
-              active={activeTab === c.key}
-              onClick={() => setActiveTab(c.key as CategoryKey)}
+              key={key}
+              label={BANK_CATEGORY_LABELS[key]}
+              count={totals[key].count}
+              active={activeTab === key}
+              onClick={() => setActiveTab(key)}
             />
           ))}
         </div>
@@ -258,12 +252,12 @@ function PreviewTable({
         <table className="w-full text-[11px]">
           <thead className="bg-muted/40 sticky top-0 z-10">
             <tr className="text-left">
-              <SortTh label="Tanggal" sortKey="txDate" sort={sort} onSort={toggleSort} />
-              <SortTh label="Pihak" sortKey="pihak" sort={sort} onSort={toggleSort} className="min-w-[120px]" />
-              <SortTh label="Deskripsi" sortKey="description" sort={sort} onSort={toggleSort} className="min-w-[160px]" />
-              <SortTh label="Debit" sortKey="debit" sort={sort} onSort={toggleSort} className="text-right" />
-              <SortTh label="Credit" sortKey="kredit" sort={sort} onSort={toggleSort} className="text-right" />
-              <SortTh label="Saldo" sortKey="balance" sort={sort} onSort={toggleSort} className="text-right" />
+              <SortableTh label="Tanggal" sortKey="txDate" sort={sort} onSort={toggleSort} />
+              <SortableTh label="Pihak" sortKey="pihak" sort={sort} onSort={toggleSort} className="min-w-[120px]" />
+              <SortableTh label="Deskripsi" sortKey="description" sort={sort} onSort={toggleSort} className="min-w-[160px]" />
+              <SortableTh label="Debit" sortKey="debit" sort={sort} onSort={toggleSort} className="text-right" />
+              <SortableTh label="Credit" sortKey="kredit" sort={sort} onSort={toggleSort} className="text-right" />
+              <SortableTh label="Saldo" sortKey="balance" sort={sort} onSort={toggleSort} className="text-right" />
               <th className="px-2 py-1.5 font-semibold text-muted-foreground">Kategori</th>
               <th className="px-2 py-1.5 font-semibold text-muted-foreground">Link Payable</th>
               <th className="px-2 py-1.5 font-semibold text-muted-foreground text-center">Learn</th>
@@ -275,7 +269,7 @@ function PreviewTable({
             ) : (
               sortedItems.map((r, i) => {
                 const cat = (r.category ?? "other") as CategoryKey;
-                const catCfg = CATEGORIES.find((c) => c.key === cat)!;
+                const catLabel = BANK_CATEGORY_LABELS[cat];
                 return (
                   <tr key={i} className="border-t border-border/40 hover:bg-muted/10">
                     <td className="px-2 py-1 font-mono text-[10px]">{r.txDate}</td>
@@ -294,7 +288,7 @@ function PreviewTable({
                     <td className="px-1 py-0.5">
                       <TagSelect
                         value={cat}
-                        options={CATEGORY_OPTIONS}
+                        options={BANK_CATEGORY_TAG_OPTIONS}
                         onChange={(v) => v && onRowChange(r, { category: v as BankStatementRow["category"] })}
                         className="min-w-[110px]"
                       />
@@ -309,7 +303,7 @@ function PreviewTable({
                           onChange={(id) => onRowChange(r, { payableId: id ?? undefined })}
                         />
                       ) : (
-                        <span className="text-[10px] text-muted-foreground italic px-1">N/A · {catCfg.label}</span>
+                        <span className="text-[10px] text-muted-foreground italic px-1">N/A · {catLabel}</span>
                       )}
                     </td>
                     <td className="px-1 py-0.5 text-center">
@@ -336,23 +330,3 @@ function PreviewTable({
   );
 }
 
-function SortTh<T extends string>({
-  label, sortKey, sort, onSort, className,
-}: {
-  label: string;
-  sortKey: T;
-  sort: { key: string; dir: "asc" | "desc" | null };
-  onSort: (key: T) => void;
-  className?: string;
-}) {
-  const active = sort.key === sortKey && sort.dir !== null;
-  const Icon = active ? (sort.dir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
-  return (
-    <th className={cn("px-2 py-1.5 font-semibold text-muted-foreground whitespace-nowrap", className)}>
-      <button onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1 hover:text-foreground">
-        {label}
-        <Icon className={cn("h-3 w-3", active ? "text-primary" : "text-muted-foreground/50")} />
-      </button>
-    </th>
-  );
-}

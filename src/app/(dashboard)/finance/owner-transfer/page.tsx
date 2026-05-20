@@ -17,6 +17,7 @@ import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
 import { parseBankStatement, type BankStatementRow } from "@/features/report-upload/parsers/parseBankStatement";
 import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
 import { StatementImportPreview, type EditableBankRow } from "@/features/bank-statement/components/StatementImportPreview";
+import { BANK_CATEGORY_LABELS } from "@/features/bank-statement/constants/categories";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type AccountKind = "owner" | "pic";
@@ -709,7 +710,7 @@ function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"ban
                 </FilterChip>
                 {Object.entries(summary.by).map(([cat, v]) => (
                   <FilterChip key={cat} active={catFilter === cat} onClick={() => setCatFilter(cat)}>
-                    {CATEGORY_LABELS[cat] ?? cat} ({v.count})
+                    {BANK_CATEGORY_LABELS[cat as keyof typeof BANK_CATEGORY_LABELS] ?? cat} ({v.count})
                   </FilterChip>
                 ))}
               </div>
@@ -755,7 +756,7 @@ function BatchDetailSheet({ batchId, onClose, accountLabel }: { batchId: Id<"ban
                       <td className="px-3 py-1 font-mono">{e.txDate}</td>
                       <td className="px-3 py-1">
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold">
-                          {CATEGORY_LABELS[e.category ?? "other"]}
+                          {BANK_CATEGORY_LABELS[(e.category ?? "other") as keyof typeof BANK_CATEGORY_LABELS]}
                         </span>
                       </td>
                       <td className="px-3 py-1 truncate max-w-[140px]" title={e.counterparty ?? e.description}>{e.counterparty ?? "-"}</td>
@@ -789,16 +790,6 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
     </button>
   );
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  sales_inflow: "Penjualan",
-  expense_outflow: "Pengeluaran",
-  payable_payment: "Bayar Vendor",
-  topup_pic: "Topup PIC",
-  owner_capital: "Modal Owner",
-  transfer_internal: "Transfer",
-  other: "Lainnya",
-};
 
 // ─── Tiny field helper ─────────────────────────────────────
 

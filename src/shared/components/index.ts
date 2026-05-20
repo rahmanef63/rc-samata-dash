@@ -18,3 +18,6 @@ export type { LineSeries, ReferenceMark } from "./MultiLineChart";
 export type { FieldConfig } from "./CrudDialog";
 export type { RowField, RowSource } from "./RowSourceDialog";
 export type { Column } from "./DataTable";
+export { SortableTh } from "./SortableTableHeader";
+export { ListPanelToolbar } from "./ListPanelToolbar";
+export type { FilterChip } from "./ListPanelToolbar";

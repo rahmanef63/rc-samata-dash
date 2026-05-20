@@ -3,28 +3,16 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
-import { Users, Search, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Users, Search, ChevronRight, AlertTriangle } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import { useTableState } from "@/shared/hooks/useTableState";
+import { SortableTh } from "@/shared/components";
 import { formatRpFull } from "@/shared/lib";
 import { cn } from "@/lib/utils";
-
-const VENDOR_TYPES = [
-  { key: "all", label: "Semua tipe" },
-  { key: "food_supplier", label: "Food Supplier" },
-  { key: "utility", label: "Utility" },
-  { key: "service", label: "Service" },
-  { key: "payroll", label: "Payroll" },
-  { key: "misc", label: "Lain-lain" },
-] as const;
-
-const TYPE_COLOR: Record<string, string> = {
-  food_supplier: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  utility: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  service: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  payroll: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  misc: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
-};
+import {
+  VENDOR_TYPE_LABELS, VENDOR_TYPE_BADGE_CLS, VENDOR_TYPE_FILTER_OPTIONS,
+  type VendorType,
+} from "@/features/vendors/constants/types";
 
 export default function VendorsListPage() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -98,7 +86,7 @@ export default function VendorsListPage() {
             onChange={(e) => setTypeFilter(e.target.value)}
             className="text-xs px-2 py-1.5 rounded-lg border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary"
           >
-            {VENDOR_TYPES.map((t) => (
+            {VENDOR_TYPE_FILTER_OPTIONS.map((t) => (
               <option key={t.key} value={t.key}>{t.label}</option>
             ))}
           </select>
@@ -123,14 +111,14 @@ export default function VendorsListPage() {
             <table className="w-full text-xs">
               <thead className="bg-muted/40">
                 <tr className="text-left">
-                  <SortTh label="Nama Vendor" sortKey="name" sort={sort} onSort={toggleSort} />
-                  <SortTh label="Tipe" sortKey="type" sort={sort} onSort={toggleSort} />
-                  <SortTh label="Telp" sortKey="phone" sort={sort} onSort={toggleSort} />
-                  <SortTh label="Piutang Open" sortKey="openTotal" sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortTh label="Open" sortKey="openCount" sort={sort} onSort={toggleSort} className="text-center" />
-                  <SortTh label="Overdue" sortKey="overdueCount" sort={sort} onSort={toggleSort} className="text-center" />
-                  <SortTh label="Last Invoice" sortKey="lastInvoice" sort={sort} onSort={toggleSort} />
-                  <SortTh label="Alias" sortKey="aliasCount" sort={sort} onSort={toggleSort} className="text-center" />
+                  <SortableTh label="Nama Vendor" sortKey="name" sort={sort} onSort={toggleSort} />
+                  <SortableTh label="Tipe" sortKey="type" sort={sort} onSort={toggleSort} />
+                  <SortableTh label="Telp" sortKey="phone" sort={sort} onSort={toggleSort} />
+                  <SortableTh label="Piutang Open" sortKey="openTotal" sort={sort} onSort={toggleSort} className="text-right" />
+                  <SortableTh label="Open" sortKey="openCount" sort={sort} onSort={toggleSort} className="text-center" />
+                  <SortableTh label="Overdue" sortKey="overdueCount" sort={sort} onSort={toggleSort} className="text-center" />
+                  <SortableTh label="Last Invoice" sortKey="lastInvoice" sort={sort} onSort={toggleSort} />
+                  <SortableTh label="Alias" sortKey="aliasCount" sort={sort} onSort={toggleSort} className="text-center" />
                   <th className="px-3 py-2 font-semibold text-muted-foreground" />
                 </tr>
               </thead>
@@ -143,8 +131,8 @@ export default function VendorsListPage() {
                       </Link>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded font-semibold", TYPE_COLOR[v.type] ?? TYPE_COLOR.misc)}>
-                        {v.type.replace("_", " ")}
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded font-semibold", VENDOR_TYPE_BADGE_CLS[v.type as VendorType] ?? VENDOR_TYPE_BADGE_CLS.misc)}>
+                        {VENDOR_TYPE_LABELS[v.type as VendorType] ?? v.type}
                       </span>
                     </td>
                     <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{v.phone || "—"}</td>
@@ -195,23 +183,3 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function SortTh({
-  label, sortKey, sort, onSort, className,
-}: {
-  label: string;
-  sortKey: string;
-  sort: { key: string; dir: "asc" | "desc" | null };
-  onSort: (key: string) => void;
-  className?: string;
-}) {
-  const active = sort.key === sortKey && sort.dir !== null;
-  const Icon = active ? (sort.dir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
-  return (
-    <th className={cn("px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap", className)}>
-      <button onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1 hover:text-foreground">
-        {label}
-        <Icon className={cn("h-3 w-3", active ? "text-primary" : "text-muted-foreground/50")} />
-      </button>
-    </th>
-  );
-}
