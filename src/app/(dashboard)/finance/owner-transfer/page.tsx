@@ -1025,6 +1025,7 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
   const batches = useQuery(api.features.closing.queries.listValidationBatches, { branchId, limit: 20 });
   const applyBatch = useMutation(api.features.closing.mutations.applyValidationBatch);
   const commitMatches = useMutation(api.features.closing.mutations.commitAutoMatchSuggestions);
+  const deleteBatch = useMutation(api.features.closing.mutations.deleteValidationBatch);
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
 
   const [previewMode, setPreviewMode] = useState<"idle" | "auto" | "csv">("idle");
@@ -1033,7 +1034,27 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
   const [committing, setCommitting] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [openBatchLogId, setOpenBatchLogId] = useState<Id<"validationBatches"> | null>(null);
+  const [deletingBatchId, setDeletingBatchId] = useState<Id<"validationBatches"> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeleteBatch = async (batchId: Id<"validationBatches">, fileName: string, rowsApplied: number) => {
+    if (!confirm(
+      `Hapus batch validasi "${fileName}"?\n\n` +
+      `${rowsApplied} perubahan akan di-UNDO — payment reference, link payable, status validasi, ` +
+      `paidAmount + status payable akan dikembalikan ke kondisi sebelum batch ini di-apply.\n\n` +
+      `Aksi ini tidak bisa di-ulang. Lanjutkan?`
+    )) return;
+    setDeletingBatchId(batchId);
+    try {
+      const res = await deleteBatch({ batchId });
+      toast.success(`Batch dihapus — ${res.reverted} entry direvert, ${res.payablesRecomputed} payable direkomputasi`);
+      if (openBatchLogId === batchId) setOpenBatchLogId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal hapus batch");
+    } finally {
+      setDeletingBatchId(null);
+    }
+  };
 
   // Only fetch preview when user opens it
   const preview = useQuery(
@@ -1321,13 +1342,13 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
           ) : (
             <div className="space-y-1">
               {batches.map((b) => (
-                <button
+                <div
                   key={b._id}
+                  className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer"
                   onClick={() => setOpenBatchLogId(b._id)}
-                  className="w-full text-left flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate" title={b.fileName}>{b.fileName}</p>
+                    <p className="text-xs font-medium truncate group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {new Date(b.uploadedAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </p>
@@ -1342,16 +1363,40 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
                       )}
                     </div>
                   </div>
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDeleteBatch(b._id, b.fileName, b.rowsApplied);
+                    }}
+                    disabled={deletingBatchId === b._id}
+                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 disabled:opacity-100 disabled:cursor-wait shrink-0"
+                    title="Hapus batch & undo semua perubahan"
+                  >
+                    {deletingBatchId === b._id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {openBatchLogId && (
-        <ValidationLogSheet batchId={openBatchLogId} branchId={branchId} onClose={() => setOpenBatchLogId(null)} />
-      )}
+      {openBatchLogId && (() => {
+        const batch = batches?.find((b) => b._id === openBatchLogId);
+        return (
+          <ValidationLogSheet
+            batchId={openBatchLogId}
+            branchId={branchId}
+            fileName={batch?.fileName}
+            rowsApplied={batch?.rowsApplied ?? 0}
+            isDeleting={deletingBatchId === openBatchLogId}
+            onDelete={batch ? () => handleDeleteBatch(batch._id, batch.fileName, batch.rowsApplied) : undefined}
+            onClose={() => setOpenBatchLogId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1365,17 +1410,52 @@ function StatCard({ label, value, color = "" }: { label: string; value: number; 
   );
 }
 
-function ValidationLogSheet({ batchId, branchId, onClose }: { batchId: Id<"validationBatches">; branchId: Id<"branches">; onClose: () => void }) {
+function ValidationLogSheet({
+  batchId, branchId, fileName, rowsApplied, isDeleting, onDelete, onClose,
+}: {
+  batchId: Id<"validationBatches">;
+  branchId: Id<"branches">;
+  fileName?: string;
+  rowsApplied?: number;
+  isDeleting?: boolean;
+  onDelete?: () => void;
+  onClose: () => void;
+}) {
   const logs = useQuery(api.features.closing.queries.listValidationLogs, { branchId, batchId });
   return (
     <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">
         <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
-          <SheetTitle className="flex items-center gap-2 text-base">
-            <History className="h-4 w-4 text-primary" />
-            Log Perubahan Validasi
-          </SheetTitle>
-          {logs && <p className="text-xs text-muted-foreground">{logs.length} perubahan ke {new Set(logs.map(l => l.entryId)).size} row</p>}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4 text-primary" />
+                Log Perubahan Validasi
+              </SheetTitle>
+              {fileName && (
+                <p className="text-xs text-muted-foreground mt-0.5 truncate" title={fileName}>{fileName}</p>
+              )}
+              {logs && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {logs.length} perubahan ke {new Set(logs.map(l => l.entryId)).size} row
+                  {rowsApplied !== undefined ? ` · ${rowsApplied} entry applied` : ""}
+                </p>
+              )}
+            </div>
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait shrink-0"
+                title="Hapus batch & undo semua perubahan dari file ini"
+              >
+                {isDeleting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Trash2 className="h-3.5 w-3.5" />}
+                {isDeleting ? "Membatalkan..." : "Hapus & Undo"}
+              </button>
+            )}
+          </div>
         </SheetHeader>
         {!logs ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">

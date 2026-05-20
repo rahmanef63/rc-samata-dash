@@ -196,17 +196,55 @@ export const removeBankStatementBatch = mutation({
     const userId = await requireAuth(ctx);
     const b = await ctx.db.get(id);
     if (!b) throw new Error("Batch not found");
-    // Delete all entries first
-    const entries = await ctx.db.query("bankStatementEntries").withIndex("by_batch", (q) => q.eq("batchId", id)).collect();
-    for (const e of entries) await ctx.db.delete(e._id);
-    if (b.fileStorageId) await ctx.storage.delete(b.fileStorageId);
+
+    const entries = await ctx.db.query("bankStatementEntries")
+      .withIndex("by_batch", (q) => q.eq("batchId", id)).collect();
+
+    // Collect linked payables BEFORE deleting entries — so we can
+    // recompute paidAmount + status after the cascade. Also nuke any
+    // validationLogs that point to these bank entries (otherwise the
+    // log table holds orphan rows pointing to deleted ids).
+    const linkedPayableIds = new Set<string>();
+    for (const e of entries) {
+      if (e.payableId) linkedPayableIds.add(e.payableId);
+      const orphanLogs = await ctx.db.query("validationLogs")
+        .withIndex("by_entry", (q) => q.eq("entryType", "bank_entry").eq("entryId", e._id))
+        .collect();
+      for (const l of orphanLogs) await ctx.db.delete(l._id);
+      await ctx.db.delete(e._id);
+    }
+
+    for (const pidStr of linkedPayableIds) {
+      const pid = pidStr as Id<"payables">;
+      const p = await ctx.db.get(pid) as {
+        amount?: number; paidAmount?: number;
+        status?: "open" | "partial" | "paid" | "overdue";
+      } | null;
+      if (!p) continue;
+      const remaining = await ctx.db.query("bankStatementEntries")
+        .withIndex("by_payable", (q) => q.eq("payableId", pid))
+        .collect();
+      const bankSum = remaining.reduce((s, x) => s + (x.debit ?? 0), 0);
+      const newPaid = Math.min(p.amount ?? 0, bankSum);
+      const newStatus: "open" | "partial" | "paid" | "overdue" =
+        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
+        : newPaid > 0 ? "partial"
+        : "open";
+      if (newPaid !== (p.paidAmount ?? 0) || newStatus !== p.status) {
+        await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
+      }
+    }
+
+    if (b.fileStorageId) {
+      try { await ctx.storage.delete(b.fileStorageId); } catch { /* file may already be gone */ }
+    }
     await ctx.db.delete(id);
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: id, action: "delete",
-      description: `Hapus batch statement ${b.accountKind} ${b.fileName}`,
+      description: `Hapus batch statement ${b.accountKind} ${b.fileName} — ${entries.length} tx, ${linkedPayableIds.size} payable direkomputasi`,
       actedBy: userId, branchId: b.branchId,
     });
-    return { entriesDeleted: entries.length };
+    return { entriesDeleted: entries.length, payablesRecomputed: linkedPayableIds.size };
   },
 });
 
@@ -904,5 +942,134 @@ export const commitAutoMatchSuggestions = mutation({
       actedBy: userId, branchId,
     });
     return { batchId, applied, rejected };
+  },
+});
+
+// ─── Delete validation batch + undo all changes ─────────────
+// Reverts each cell mutated by this batch to its pre-batch value
+// using validationLogs.beforeValue. paidAmount + status are NOT
+// reverted directly; instead recomputed from the (post-revert)
+// set of linked bank entries — so multi-batch overlaps stay
+// consistent. Vendor aliases learned by this batch are kept
+// (learned knowledge, not user-data).
+export const deleteValidationBatch = mutation({
+  args: { batchId: v.id("validationBatches") },
+  handler: async (ctx, { batchId }) => {
+    const userId = await requireAuth(ctx);
+    const batch = await ctx.db.get(batchId);
+    if (!batch) throw new Error("Batch validasi tidak ditemukan");
+
+    const logs = await ctx.db.query("validationLogs")
+      .withIndex("by_batch", (q) => q.eq("batchId", batchId))
+      .collect();
+
+    // For each (entryType, entryId, field) keep the EARLIEST log —
+    // its beforeValue is the pre-batch state. Later logs are
+    // intermediate steps within the same batch.
+    type FieldState = { beforeValue?: string; entryType: "bank_entry" | "payable" | "receipt"; entryId: string };
+    const earliestByEntry = new Map<string, Map<string, FieldState>>();
+    const sortedLogs = logs.slice().sort((a, b) => a._creationTime - b._creationTime);
+    for (const l of sortedLogs) {
+      const key = `${l.entryType}:${l.entryId}`;
+      let fields = earliestByEntry.get(key);
+      if (!fields) {
+        fields = new Map();
+        earliestByEntry.set(key, fields);
+      }
+      if (!fields.has(l.field)) {
+        fields.set(l.field, { beforeValue: l.beforeValue, entryType: l.entryType, entryId: l.entryId });
+      }
+    }
+
+    const touchedPayableIds = new Set<string>();
+    let reverted = 0;
+
+    for (const [, fields] of earliestByEntry) {
+      const firstField = fields.values().next().value as FieldState | undefined;
+      if (!firstField) continue;
+      const { entryType, entryId } = firstField;
+
+      try {
+        if (entryType === "bank_entry") {
+          const id = entryId as Id<"bankStatementEntries">;
+          const cur = await ctx.db.get(id);
+          if (!cur) continue;
+          const patch: {
+            paymentReference?: string;
+            payableId?: Id<"payables">;
+            isValidated?: boolean;
+          } = {};
+          if (fields.has("paymentReference")) {
+            patch.paymentReference = fields.get("paymentReference")!.beforeValue;
+          }
+          if (fields.has("payableId")) {
+            const before = fields.get("payableId")!.beforeValue;
+            patch.payableId = before ? (before as Id<"payables">) : undefined;
+            if (cur.payableId) touchedPayableIds.add(cur.payableId);
+            if (before) touchedPayableIds.add(before);
+          }
+          if (fields.has("isValidated")) {
+            patch.isValidated = fields.get("isValidated")!.beforeValue === "true";
+          }
+          await ctx.db.patch(id, patch);
+          reverted++;
+        } else if (entryType === "payable") {
+          const id = entryId as Id<"payables">;
+          const cur = await ctx.db.get(id);
+          if (!cur) continue;
+          const patch: { paymentReference?: string; isValidated?: boolean } = {};
+          if (fields.has("paymentReference")) {
+            patch.paymentReference = fields.get("paymentReference")!.beforeValue;
+          }
+          if (fields.has("isValidated")) {
+            patch.isValidated = fields.get("isValidated")!.beforeValue === "true";
+          }
+          if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+          touchedPayableIds.add(entryId);
+          reverted++;
+        }
+      } catch {
+        // best-effort revert; continue on individual failures
+      }
+    }
+
+    // Recompute paidAmount + status from current bank entries for
+    // every payable that was unlinked OR mutated in this batch.
+    for (const pidStr of touchedPayableIds) {
+      const pid = pidStr as Id<"payables">;
+      const p = await ctx.db.get(pid) as {
+        amount?: number; paidAmount?: number;
+        status?: "open" | "partial" | "paid" | "overdue";
+      } | null;
+      if (!p) continue;
+      const linkedBanks = await ctx.db.query("bankStatementEntries")
+        .withIndex("by_payable", (q) => q.eq("payableId", pid))
+        .collect();
+      const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
+      const newPaid = Math.min(p.amount ?? 0, bankSum);
+      const newStatus: "open" | "partial" | "paid" | "overdue" =
+        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
+        : newPaid > 0 ? "partial"
+        : "open";
+      if (newPaid !== (p.paidAmount ?? 0) || newStatus !== p.status) {
+        await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
+      }
+    }
+
+    for (const l of logs) await ctx.db.delete(l._id);
+
+    if (batch.fileStorageId) {
+      try { await ctx.storage.delete(batch.fileStorageId); } catch { /* file may already be gone */ }
+    }
+
+    await ctx.db.delete(batchId);
+
+    await insertAuditLog(ctx, {
+      entityType: "validationBatches", entityId: batchId, action: "delete",
+      description: `Undo & hapus batch validasi ${batch.fileName} — ${reverted} entry direvert (${logs.length} log)`,
+      actedBy: userId, branchId: batch.branchId,
+    });
+
+    return { reverted, logsDeleted: logs.length, payablesRecomputed: touchedPayableIds.size };
   },
 });
