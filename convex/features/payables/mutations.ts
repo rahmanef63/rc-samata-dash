@@ -35,6 +35,11 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id("payables"),
+    vendorId: v.optional(v.id("vendors")),
+    vendorName: v.optional(v.string()),
+    invoiceDate: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
+    amount: v.optional(v.number()),
     paidAmount: v.optional(v.number()),
     status: v.optional(v.union(v.literal("open"), v.literal("partial"), v.literal("paid"), v.literal("overdue"))),
     description: v.optional(v.string()),
@@ -43,14 +48,32 @@ export const update = mutation({
     const userId = await requireAuth(ctx);
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Record not found");
+
     const patch: Record<string, unknown> = {};
+    if (data.vendorId !== undefined) patch.vendorId = data.vendorId;
+    if (data.vendorName !== undefined) patch.vendorName = data.vendorName;
+    if (data.invoiceDate !== undefined) patch.invoiceDate = data.invoiceDate;
+    if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
+    if (data.amount !== undefined) patch.amount = data.amount;
     if (data.paidAmount !== undefined) patch.paidAmount = data.paidAmount;
-    if (data.status !== undefined) patch.status = data.status;
     if (data.description !== undefined) patch.description = data.description;
+
+    // Recompute status if amount or paidAmount changed (unless caller
+    // explicitly overrode status).
+    if (data.status !== undefined) {
+      patch.status = data.status;
+    } else if (data.amount !== undefined || data.paidAmount !== undefined) {
+      const newAmount = data.amount ?? existing.amount;
+      const newPaid = data.paidAmount ?? existing.paidAmount;
+      patch.status = newPaid >= newAmount && newAmount > 0 ? "paid"
+        : newPaid > 0 ? "partial"
+        : "open";
+    }
+
     await ctx.db.patch(id, patch);
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: id, action: "update",
-      description: `Updated payable ${existing.vendorName}`,
+      description: `Updated payable ${data.vendorName ?? existing.vendorName}`,
       actedBy: userId, branchId: existing.branchId,
     });
     return id;

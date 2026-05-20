@@ -20,4 +20,5 @@ export const useListTransfers = (branchId: string) =>
   useQuery(api.features.closing.queries.listTransfers, branchId ? { branchId: branchId as Id<"branches"> } : "skip");
 
 export const useCreateTransfer = () => useMutation(api.features.closing.mutations.createTransfer);
+export const useUpdateTransfer = () => useMutation(api.features.closing.mutations.updateTransfer);
 export const useDeleteTransfer = () => useMutation(api.features.closing.mutations.removeTransfer);

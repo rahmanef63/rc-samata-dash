@@ -12,7 +12,7 @@ import { purposeLabels } from "../lib";
 import { formatRpFull } from "@/shared/lib";
 import { useState } from "react";
 import { TabBar } from "@/shared/components";
-import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useDeleteTransfer } from "../api";
+import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useUpdateTransfer, useDeleteTransfer } from "../api";
 import { ClosingImportPreview } from "./ClosingImportPreview";
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
@@ -126,7 +126,7 @@ export function DailyClosingPanel() {
 
   const transferMutations = {
     createMutation: useCreateTransfer(),
-    updateMutation: async () => {},
+    updateMutation: useUpdateTransfer(),
     deleteMutation: useDeleteTransfer(),
   };
   const transferCrud = useConvexCrudState<OwnerTransfer>(transferMutations as any);

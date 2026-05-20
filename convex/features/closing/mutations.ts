@@ -160,6 +160,37 @@ export const createTransfer = mutation({
   },
 });
 
+export const updateTransfer = mutation({
+  args: {
+    id: v.id("ownerTransfers"),
+    transferDate: v.optional(v.string()),
+    direction: v.optional(v.union(v.literal("branch_to_owner"), v.literal("owner_to_branch"))),
+    purpose: v.optional(v.union(v.literal("night_transfer"), v.literal("petty_cash_topup"), v.literal("payable_payment_fund"), v.literal("adjustment"))),
+    amount: v.optional(v.number()),
+    referenceNo: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("pending"), v.literal("completed"))),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Transfer not found");
+    if (data.amount !== undefined && data.amount <= 0) {
+      throw new Error("Transfer amount must be > 0");
+    }
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined) patch[k] = v;
+    }
+    await ctx.db.patch(id, patch);
+    await insertAuditLog(ctx, {
+      entityType: "ownerTransfers", entityId: id, action: "update",
+      description: `Updated transfer ${existing.transferDate} Rp${existing.amount}`,
+      actedBy: userId, branchId: existing.branchId,
+    });
+    return id;
+  },
+});
+
 export const removeTransfer = mutation({
   args: { id: v.id("ownerTransfers") },
   handler: async (ctx, args) => {

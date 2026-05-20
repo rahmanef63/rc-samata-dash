@@ -6,11 +6,12 @@ import { useQuery, useMutation } from "convex/react";
 import { toast } from "sonner";
 import {
   ArrowLeft, Users, Phone, Calendar, Receipt, Banknote, Link2,
-  Trash2, Search,
+  Trash2, Search, Pencil, Save, X as XIcon,
 } from "lucide-react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useTableState } from "@/shared/hooks/useTableState";
 import { SortableTh } from "@/shared/components";
 import { formatRpFull } from "@/shared/lib";
@@ -127,6 +128,7 @@ function KPI({ label, value, color = "text-foreground" }: { label: string; value
 
 type Payable = {
   _id: Id<"payables">;
+  vendorName?: string;
   invoiceDate: string;
   dueDate: string;
   description: string;
@@ -145,6 +147,12 @@ function PayablesTab({
   payments: Array<{ payableId: string; paymentDate: string; amount: number; method: string; referenceNo?: string; source: string }>;
   linkedBankEntries: Array<{ payableId: string; txDate: string; debit: number; counterparty?: string; description: string; accountKind: string; paymentReference?: string }>;
 }) {
+  const updatePayable = useMutation(api.features.payables.mutations.update);
+  const [editingId, setEditingId] = useState<Id<"payables"> | null>(null);
+  const editingRow = useMemo(() => payables.find((p) => p._id === editingId) ?? null, [payables, editingId]);
+  const [editDraft, setEditDraft] = useState<{
+    invoiceDate: string; dueDate: string; amount: string; paidAmount: string; description: string;
+  } | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const filtered = useMemo(() => {
     if (statusFilter === "all") return payables;
@@ -179,8 +187,81 @@ function PayablesTab({
     ["description", "status", "invoiceDate"],
   );
 
+  const openEdit = (p: Payable) => {
+    setEditingId(p._id);
+    setEditDraft({
+      invoiceDate: p.invoiceDate,
+      dueDate: p.dueDate,
+      amount: String(p.amount),
+      paidAmount: String(p.paidAmount),
+      description: p.description,
+    });
+  };
+  const closeEdit = () => { setEditingId(null); setEditDraft(null); };
+  const saveEdit = async () => {
+    if (!editingId || !editDraft) return;
+    try {
+      const amount = Number(editDraft.amount.replace(/[^\d.-]/g, "")) || 0;
+      const paidAmount = Number(editDraft.paidAmount.replace(/[^\d.-]/g, "")) || 0;
+      await updatePayable({
+        id: editingId,
+        invoiceDate: editDraft.invoiceDate,
+        dueDate: editDraft.dueDate,
+        amount,
+        paidAmount,
+        description: editDraft.description,
+      });
+      toast.success("Piutang ter-update");
+      closeEdit();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal update");
+    }
+  };
+
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <Dialog open={!!editingId} onOpenChange={(o) => { if (!o) closeEdit(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Piutang</DialogTitle>
+          </DialogHeader>
+          {editDraft && editingRow && (
+            <div className="space-y-3 text-xs">
+              <p className="text-muted-foreground"><b>{editingRow.vendorName ?? ""}</b></p>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase text-[10px] text-muted-foreground">Tanggal Invoice</span>
+                <input type="date" value={editDraft.invoiceDate} onChange={(e) => setEditDraft({ ...editDraft, invoiceDate: e.target.value })} className="px-2 py-1.5 rounded border border-border bg-background" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase text-[10px] text-muted-foreground">Jatuh Tempo</span>
+                <input type="date" value={editDraft.dueDate} onChange={(e) => setEditDraft({ ...editDraft, dueDate: e.target.value })} className="px-2 py-1.5 rounded border border-border bg-background" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase text-[10px] text-muted-foreground">Amount (Rp)</span>
+                <input type="text" inputMode="decimal" value={editDraft.amount} onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })} className="px-2 py-1.5 rounded border border-border bg-background font-mono" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase text-[10px] text-muted-foreground">Sudah Dibayar (Rp)</span>
+                <input type="text" inputMode="decimal" value={editDraft.paidAmount} onChange={(e) => setEditDraft({ ...editDraft, paidAmount: e.target.value })} className="px-2 py-1.5 rounded border border-border bg-background font-mono" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase text-[10px] text-muted-foreground">Deskripsi</span>
+                <textarea value={editDraft.description} onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })} rows={2} className="px-2 py-1.5 rounded border border-border bg-background resize-y" />
+              </label>
+              <p className="text-[10px] text-muted-foreground italic">Status otomatis dihitung ulang dari amount + sudah dibayar.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={closeEdit} className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold inline-flex items-center gap-1.5">
+              <XIcon className="h-3 w-3" /> Batal
+            </button>
+            <button onClick={saveEdit} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold inline-flex items-center gap-1.5">
+              <Save className="h-3.5 w-3.5" /> Simpan
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -219,6 +300,7 @@ function PayablesTab({
                 <th className="px-3 py-2 font-semibold text-muted-foreground text-right">Sisa</th>
                 <SortableTh label="Status" sortKey="status" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2 font-semibold text-muted-foreground">Sumber</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -247,6 +329,15 @@ function PayablesTab({
                       </div>
                     </td>
                     <td className="px-3 py-1.5 text-[10px] text-muted-foreground truncate max-w-[160px]" title={sourceLabel}>{sourceLabel}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                        title="Edit piutang"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
