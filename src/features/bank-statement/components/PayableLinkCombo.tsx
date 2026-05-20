@@ -52,6 +52,30 @@ export function PayableLinkCombo({
 
   const selected = useMemo(() => payables?.find((p) => p._id === value) ?? null, [payables, value]);
 
+  // Auto-suggest top match on first render if (exact amount within
+  // tolerance) AND (counterparty hint substring matches a vendor name).
+  // User can still clear via the X button or pick another candidate.
+  const [autoSuggested, setAutoSuggested] = useState(false);
+  useEffect(() => {
+    if (autoSuggested) return;
+    if (value) return;
+    if (!payables || payables.length === 0) return;
+    if (!(debit > 0)) return;
+    const upHint = (counterpartyHint ?? "").toUpperCase().trim();
+    if (!upHint) return;
+    const exact = payables.find((p) => {
+      const remaining = p.amount - p.paidAmount;
+      const amountClose = Math.abs(remaining - debit) <= AMOUNT_TOL;
+      const hintHit = p.vendorName.toUpperCase().includes(upHint) || upHint.includes(p.vendorName.toUpperCase());
+      return amountClose && hintHit;
+    });
+    if (exact) {
+      onChange(exact._id);
+      setAutoSuggested(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payables, debit, counterpartyHint]);
+
   const ranked = useMemo(() => {
     if (!payables) return [];
     const upHint = (counterpartyHint ?? "").toUpperCase().trim();

@@ -379,21 +379,34 @@ export const importBankStatementEntries = mutation({
     );
     const aliasesSeeded: Record<string, number> = {};
 
-    // Create a synthetic validationBatch up-front so any link operations
-    // here are auditable + undoable via deleteValidationBatch.
-    const hasLinks = rows.some((r) => r.payableId);
-    const linkBatchId = hasLinks
-      ? await ctx.db.insert("validationBatches", {
-          fileName: `statement-import-${batch.accountKind}-${batch.fileName}`,
-          rowsApplied: 0, rowsRejected: 0,
-          summary: `links applied during statement import (${batch.accountKind})`,
-          branchId: batch.branchId,
-          uploadedAt: Date.now(), uploadedBy: userId,
-        })
-      : null;
+    // Synthetic validationBatch lazily created on first link so any
+    // link op (manual OR auto) is auditable + undoable via
+    // deleteValidationBatch. Pre-2026-05-21 this only fired for
+    // manual links; now we also run an auto-match pass after insert.
+    let linkBatchId: Id<"validationBatches"> | null = null;
+    const ensureLinkBatch = async (): Promise<Id<"validationBatches">> => {
+      if (linkBatchId) return linkBatchId;
+      linkBatchId = await ctx.db.insert("validationBatches", {
+        fileName: `statement-import-${batch.accountKind}-${batch.fileName}`,
+        rowsApplied: 0, rowsRejected: 0,
+        summary: `links applied during statement import (${batch.accountKind})`,
+        branchId: batch.branchId,
+        uploadedAt: Date.now(), uploadedBy: userId,
+      });
+      return linkBatchId;
+    };
     let linkApplied = 0;
+    let autoLinkApplied = 0;
     const touchedPayableIds = new Set<string>();
     const now = Date.now();
+
+    // Track inserted entry ids per index so the auto-match pass can
+    // patch them in-place without re-querying.
+    type InsertedRow = {
+      entryId: Id<"bankStatementEntries">;
+      r: typeof rows[number];
+    };
+    const inserted: InsertedRow[] = [];
 
     for (const r of rows) {
       const entryId = await ctx.db.insert("bankStatementEntries", {
@@ -411,18 +424,20 @@ export const importBankStatementEntries = mutation({
         batchId,
         branchId: batch.branchId,
       });
+      inserted.push({ entryId, r });
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
 
       // Inline link: write validationLogs so the undo path can reverse it.
-      if (r.payableId && linkBatchId) {
+      if (r.payableId) {
+        const lb = await ensureLinkBatch();
         await ctx.db.insert("validationLogs", {
-          entryType: "bank_entry", entryId, batchId: linkBatchId,
+          entryType: "bank_entry", entryId, batchId: lb,
           field: "payableId",
           beforeValue: undefined, afterValue: r.payableId,
           branchId: batch.branchId, changedAt: now,
         });
         await ctx.db.insert("validationLogs", {
-          entryType: "bank_entry", entryId, batchId: linkBatchId,
+          entryType: "bank_entry", entryId, batchId: lb,
           field: "isValidated",
           beforeValue: "false", afterValue: "true",
           branchId: batch.branchId, changedAt: now,
@@ -497,6 +512,86 @@ export const importBankStatementEntries = mutation({
       }
     }
 
+    // ─── Auto-link pass: for any payable_payment row that did NOT
+    // come with an explicit payableId, try to match against an open
+    // payable by amount + vendor alias. This is the fix for the bug
+    // where PIC users imported statements but their payables never
+    // moved from "open" → "paid" because nothing in the UX forced
+    // them through the per-row PayableLinkCombo or the Validator tab.
+    //
+    // Match rules (mirror previewAutoMatch / autoMatchPayables):
+    //   1. Resolve vendor from counterparty via vendorBankAliases or
+    //      vendor name substring.
+    //   2. Find open/partial/overdue payable with remaining ≈ debit
+    //      (tolerance Rp 1500).
+    //   3. Don't double-link: skip payables already linked by another
+    //      entry in this same import pass.
+    const TOL = 1500;
+    const openPayablesAll = await ctx.db.query("payables")
+      .withIndex("by_branch", (q) => q.eq("branchId", batch.branchId))
+      .take(5000);
+    const openPayables = openPayablesAll.filter((p) =>
+      (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated,
+    );
+    const aliases = await ctx.db.query("vendorBankAliases")
+      .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId))
+      .take(2000);
+    type AliasIdx = { name: string; vendorId: string };
+    const aliasIndex: AliasIdx[] = [];
+    for (const a of aliases) aliasIndex.push({ name: a.alias.toUpperCase().trim(), vendorId: a.vendorId });
+    for (const vnd of vendors) {
+      const cleaned = vnd.name.toUpperCase().replace(/\b(INDONES(IA)?|CV|PT|TBK)\b/g, "").trim();
+      aliasIndex.push({ name: cleaned, vendorId: vnd._id });
+      aliasIndex.push({ name: vnd.name.toUpperCase().trim(), vendorId: vnd._id });
+    }
+    aliasIndex.sort((a, b) => b.name.length - a.name.length);
+    const findVendorId = (text: string): string | null => {
+      const up = (text ?? "").toUpperCase().trim();
+      if (!up) return null;
+      for (const { name, vendorId } of aliasIndex) {
+        if (name.length < 3) continue;
+        if (up.includes(name) || name.includes(up)) return vendorId;
+      }
+      return null;
+    };
+
+    const usedPayableIds = new Set<string>(touchedPayableIds);
+    for (const { entryId, r } of inserted) {
+      if (r.payableId) continue;
+      if (r.category !== "payable_payment") continue;
+      if (!(r.debit > 0)) continue;
+      const vendorId = findVendorId(r.counterparty ?? "") ?? findVendorId(r.description);
+      if (!vendorId) continue;
+      const candidate = openPayables.find((p) => {
+        if (usedPayableIds.has(p._id)) return false;
+        if (p.vendorId !== vendorId) return false;
+        const remaining = p.amount - p.paidAmount;
+        return Math.abs(remaining - r.debit) <= TOL;
+      });
+      if (!candidate) continue;
+
+      const lb = await ensureLinkBatch();
+      await ctx.db.insert("validationLogs", {
+        entryType: "bank_entry", entryId, batchId: lb,
+        field: "payableId",
+        beforeValue: undefined, afterValue: candidate._id,
+        branchId: batch.branchId, changedAt: now,
+      });
+      await ctx.db.insert("validationLogs", {
+        entryType: "bank_entry", entryId, batchId: lb,
+        field: "isValidated",
+        beforeValue: "false", afterValue: "true",
+        branchId: batch.branchId, changedAt: now,
+      });
+      await ctx.db.patch(entryId, {
+        payableId: candidate._id,
+        isValidated: true,
+      });
+      touchedPayableIds.add(candidate._id);
+      usedPayableIds.add(candidate._id);
+      autoLinkApplied++;
+    }
+
     // Recompute paidAmount + status for every payable touched by inline links.
     for (const pidStr of touchedPayableIds) {
       const pid = pidStr as Id<"payables">;
@@ -537,7 +632,10 @@ export const importBankStatementEntries = mutation({
     }
 
     if (linkBatchId) {
-      await ctx.db.patch(linkBatchId, { rowsApplied: linkApplied, rowsRejected: 0 });
+      await ctx.db.patch(linkBatchId, {
+        rowsApplied: linkApplied + autoLinkApplied,
+        rowsRejected: 0,
+      });
     }
 
     await ctx.db.patch(batchId, {
@@ -546,13 +644,24 @@ export const importBankStatementEntries = mutation({
       closingBalance: closing,
     });
 
+    const linkSummary = [
+      linkApplied > 0 ? `${linkApplied} link manual` : null,
+      autoLinkApplied > 0 ? `${autoLinkApplied} link auto` : null,
+    ].filter(Boolean).join(" + ");
+
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: batchId, action: "update",
-      description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}${linkApplied > 0 ? ` · ${linkApplied} linked ke payable` : ""}`,
+      description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}${linkSummary ? ` · ${linkSummary}` : ""}`,
       actedBy: userId, branchId: batch.branchId,
     });
 
-    return { inserted: rows.length, closingBalance: closing, linkApplied, linkBatchId };
+    return {
+      inserted: rows.length,
+      closingBalance: closing,
+      linkApplied,
+      autoLinkApplied,
+      linkBatchId,
+    };
   },
 });
 

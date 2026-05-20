@@ -412,7 +412,7 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
         })),
       });
       toast.success(
-        `${res.inserted} transaksi tersimpan${res.linkApplied > 0 ? ` · ${res.linkApplied} dilink ke payable` : ""} · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`,
+        `${res.inserted} transaksi tersimpan${res.linkApplied > 0 ? ` · ${res.linkApplied} link manual` : ""}${res.autoLinkApplied > 0 ? ` · ${res.autoLinkApplied} auto-link payable` : ""} · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`,
       );
       setParsed(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
