@@ -1,5 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText } from "lucide-react";
-// Note: ClipboardList re-used for "Laporan PIC" route entry below.
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -35,23 +34,10 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     label: "MENU UTAMA",
     items: [
       { title: "Dashboard", url: "/", icon: Home },
+      { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
       { title: "Ringkasan Laporan", url: "/report", icon: BarChart3 },
       { title: "Semua Laporan", url: "/laporan", icon: Folder },
-      { title: "Validasi Harian WA", url: "/laporan/validasi-harian", icon: MessageSquareText, roles: ADMIN_ROLES },
-      {
-        title: "Upload",
-        url: "/laporan/upload",
-        icon: UploadCloud,
-        roles: ADMIN_ROLES,
-        children: [
-          { title: "Upload Laporan Mingguan", url: "/laporan/upload", icon: UploadCloud },
-          { title: "Laporan PIC (CSV)", url: "/finance/laporan-pic", icon: ClipboardList },
-          { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
-          { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
-          { title: "Statement Bank (Lanjutan)", url: "/finance/owner-transfer", icon: Landmark },
-          { title: "Bulk Import Chat (Lanjutan)", url: "/laporan/bulk-import", icon: Upload },
-        ],
-      },
+      { title: "Upload Laporan Mingguan", url: "/laporan/upload", icon: UploadCloud, roles: ADMIN_ROLES },
       { title: "Chat AI", url: "/chat", icon: Bot },
       { title: "Profil", url: "/profile", icon: User },
     ],
@@ -65,10 +51,29 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
       { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
       { title: "Vendor", url: "/finance/vendors", icon: Users },
-      { title: "Laporan PIC", url: "/finance/laporan-pic", icon: ClipboardList },
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
+    ],
+  },
+  {
+    label: "LANJUTAN",
+    roles: ADMIN_ROLES,
+    items: [
+      {
+        title: "Tools",
+        url: "/finance/owner-transfer",
+        icon: Wrench,
+        roles: ADMIN_ROLES,
+        children: [
+          { title: "Laporan PIC (CSV)", url: "/finance/laporan-pic", icon: ClipboardList },
+          { title: "Statement Bank (xlsx)", url: "/finance/owner-transfer", icon: Landmark },
+          { title: "Bulk Import Chat", url: "/laporan/bulk-import", icon: Upload },
+          { title: "Validasi Harian WA", url: "/laporan/validasi-harian", icon: MessageSquareText },
+          { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
+          { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
+        ],
+      },
     ],
   },
   {

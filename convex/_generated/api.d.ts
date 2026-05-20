@@ -29,6 +29,8 @@ import type * as features_audit_queries from "../features/audit/queries.js";
 import type * as features_auth__schema from "../features/auth/_schema.js";
 import type * as features_auth_mutations from "../features/auth/mutations.js";
 import type * as features_auth_queries from "../features/auth/queries.js";
+import type * as features_bukuBesar_mutations from "../features/bukuBesar/mutations.js";
+import type * as features_bukuBesar_queries from "../features/bukuBesar/queries.js";
 import type * as features_closing__schema from "../features/closing/_schema.js";
 import type * as features_closing_mutations from "../features/closing/mutations.js";
 import type * as features_closing_queries from "../features/closing/queries.js";
@@ -99,6 +101,8 @@ declare const fullApi: ApiFromModules<{
   "features/auth/_schema": typeof features_auth__schema;
   "features/auth/mutations": typeof features_auth_mutations;
   "features/auth/queries": typeof features_auth_queries;
+  "features/bukuBesar/mutations": typeof features_bukuBesar_mutations;
+  "features/bukuBesar/queries": typeof features_bukuBesar_queries;
   "features/closing/_schema": typeof features_closing__schema;
   "features/closing/mutations": typeof features_closing_mutations;
   "features/closing/queries": typeof features_closing_queries;
