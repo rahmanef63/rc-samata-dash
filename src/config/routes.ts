@@ -60,6 +60,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Penjualan", url: "/finance", icon: FileText },
       { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
       { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
+      { title: "Vendor", url: "/finance/vendors", icon: Users },
       { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
       { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
       { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },

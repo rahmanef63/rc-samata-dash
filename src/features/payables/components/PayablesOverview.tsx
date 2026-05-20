@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
@@ -32,7 +33,20 @@ const fields: FieldConfig[] = [
 ];
 
 const columns: Column<Payable>[] = [
-  { key: "vendorName", label: "Vendor" },
+  { key: "vendorName", label: "Vendor", render: (v, item) => {
+    const vendorId = (item as Payable & { vendorId?: string }).vendorId;
+    if (!vendorId) return <span>{v}</span>;
+    return (
+      <Link
+        href={`/finance/vendors/${vendorId}`}
+        className="inline-flex items-center gap-1 hover:text-primary hover:underline font-medium"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {v}
+        <ExternalLink className="h-2.5 w-2.5 opacity-50" />
+      </Link>
+    );
+  }},
   { key: "description", label: "Deskripsi", render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
   { key: "amount", label: "Total", className: "text-right font-mono-data", render: (v) => formatRpFull(v) },
   { key: "paidAmount", label: "Dibayar", className: "text-right font-mono-data", render: (v) => <span className="text-success">{formatRpFull(v)}</span> },
@@ -62,6 +76,12 @@ export function PayablesOverview() {
   const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
   type ReportPayable = NonNullable<typeof reportPayables>[number];
 
+  // Resolve vendorId from name for report-derived payables (no real
+  // vendorId column — they come from weekly upload's supplierName text)
+  const vendorIdByName = new Map<string, string>(
+    (rawVendors ?? []).map((v) => [v.name.trim().toLowerCase(), v._id]),
+  );
+
   const manualPayables = (rawPayables || []).map(p => ({
     ...p,
     id: p._id,
@@ -72,10 +92,12 @@ export function PayablesOverview() {
     const aging = p.dueDate && !isPaid
       ? Math.max(0, Math.floor((todayMs - new Date(p.dueDate).getTime()) / 86400000))
       : 0;
+    const supplierName = p.supplierName ?? "";
     return {
       id: p._id,
       _id: p._id,
-      vendorName: p.supplierName ?? "",
+      vendorId: vendorIdByName.get(supplierName.trim().toLowerCase()) ?? "",
+      vendorName: supplierName,
       description: p.itemName ?? "",
       amount: p.totalAmount ?? 0,
       paidAmount: isPaid ? (p.totalAmount ?? 0) : 0,
