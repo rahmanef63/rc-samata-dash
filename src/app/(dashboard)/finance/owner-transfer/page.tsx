@@ -861,39 +861,62 @@ const VALIDATOR_PROMPT = `Kamu asisten reconciliation RC Samata. File CSV ini be
 
 Tugasmu: cocokkan BANK ke PAYABLE seagresif mungkin.
 
-ATURAN INTI (cuma 2):
-1. VENDOR cocok — vendor_or_party di BANK mengandung kata kunci dari
-   vendor_or_party PAYABLE (substring match, case-insensitive,
-   abaikan suffix "INDONES"/"CV"/"PT"/"TBK"). Contoh:
-   "JAPFA FOOD INDONES" cocok dengan "JAPFA".
-2. NOMINAL cocok — boleh salah satu:
-   a) Single match: BANK.amount ≈ PAYABLE.amount (toleransi Rp 1.500), ATAU
-   b) Split match (2-3 BANK rows): sum BANK.amount ≈ PAYABLE.amount.
+KOLOM PENTING:
+- vendor_or_party : nama vendor (PAYABLE) atau nama counterparty bank (BANK).
+                    Counterparty bank = nama orang/PT yang nerima transfer.
+- amount          : nominal transaksi (BANK.debit atau PAYABLE.amount).
+- remaining       : sisa piutang PAYABLE (= amount - paidAmount).
+                    UNTUK PAYABLE INI YANG HARUS DI-MATCH, BUKAN amount!
+                    BANK kosong di kolom ini.
+- description     : note bebas dari bank. KADANG vendor real ada di sini
+                    (kalau counterparty cuma "TRANSFER" / kosong), scan juga.
 
-TANGGAL TIDAK DIPAKAI sebagai filter. Bayar bisa sebelum/sesudah
-invoice — tetap match aja.
+ATURAN INTI (cuma 2):
+1. VENDOR cocok — substring match case-insensitive antara
+   BANK.vendor_or_party (atau BANK.description) dengan PAYABLE.vendor_or_party.
+   Abaikan suffix korporat: "INDONES"/"CV"/"PT"/"TBK"/"TBK." Contoh:
+   "JAPFA FOOD INDONES" cocok dengan "JAPFA".
+   Kalau BANK.vendor_or_party kosong/garbage (cuma nomor / "TRANSFER"),
+   coba match dari BANK.description.
+2. NOMINAL cocok — toleransi Rp 1.500, salah satu:
+   a) Single match: BANK.amount ≈ PAYABLE.remaining
+   b) Split match (2-3 BANK rows ke 1 PAYABLE): sum BANK.amount ≈ PAYABLE.remaining
+
+TANGGAL TIDAK DIPAKAI sebagai filter. Bayar bisa sebelum/sesudah invoice.
 
 Multiple BANK row yang bayar SATU payable WAJIB pakai payment_reference
-SAMA. Generate "PMT-YYYYMM-NNNN" (YYYY MM dari tanggal BANK pertama).
+SAMA. Format "PMT-YYYYMM-NNNN" (YYYYMM dari tanggal BANK pertama, NNNN
+counter mulai 0001 per file).
 
-Yang harus diisi (BANK rows):
+Yang harus diisi (BANK rows ke-match):
 - matched_payable_id : id PAYABLE yang di-bayar
 - payment_reference  : PMT-YYYYMM-NNNN (group identifier)
 - is_validated       : "true"
 
-Yang harus diisi (PAYABLE rows yang ke-match):
+Yang harus diisi (PAYABLE rows ke-match):
 - payment_reference  : sama dengan grup BANK
 - is_validated       : "true"
 
-Default: kalau ragu, MATCH dulu — owner bisa review.
+Default: kalau ragu, MATCH dulu — owner bisa review/deny di UI.
 Lebih baik over-match daripada miss. Hanya kosongkan kalau BENAR-BENAR
 gak ada vendor candidate atau amount jauh berbeda.
 
-Output: CSV persis sama (header sama), 3 kolom terakhir keisi.
-Jangan ubah kolom lain. Jangan tambahin kolom lain.`;
+KALAU SEMUA SISA BANK GAK ADA VENDOR CANDIDATE di PAYABLE:
+- Cek bagian VENDOR MASTER di footer CSV (comments "# VENDOR:").
+- Kalau counterparty BANK mirip nama vendor di master tapi vendor itu
+  gak punya open payable, kosongkan saja — itu bukan piutang.
+- Jangan paksa match ke vendor random.
 
-function buildValidationCsv(payables: any[], bank: any[]): string {
-  const header = "type,id,date,vendor_or_party,amount,description,current_ref,matched_payable_id,payment_reference,is_validated";
+Output: CSV persis sama (header sama, semua baris, urut sama),
+3 kolom terakhir (matched_payable_id / payment_reference / is_validated)
+keisi untuk row yang match. Jangan ubah kolom lain. Jangan tambahin kolom lain.`;
+
+function buildValidationCsv(
+  payables: any[],
+  bank: any[],
+  vendorMaster?: { name: string; aliases: string[] }[],
+): string {
+  const header = "type,id,date,vendor_or_party,amount,remaining,description,current_ref,matched_payable_id,payment_reference,is_validated";
   const lines: string[] = [];
   lines.push(`# RC SAMATA RECONCILIATION VALIDATOR — ${new Date().toISOString().slice(0, 10)}`);
   lines.push(`#`);
@@ -905,23 +928,34 @@ function buildValidationCsv(payables: any[], bank: any[]): string {
   lines.push(`#`);
   lines.push(header);
   for (const p of payables) {
+    const remaining = Math.max(0, (p.amount ?? 0) - (p.paidAmount ?? 0));
     lines.push([
       "PAYABLE", p._id, p.invoiceDate, csv(p.vendorName), p.amount,
+      remaining,
       csv(p.description ?? ""),
       csv(p.paymentReference ?? ""),
       "", "", String(!!p.isValidated),
     ].join(","));
   }
   for (const b of bank) {
-    const party = (b.description ?? "").split("|").pop()?.trim() ?? "";
+    const counterparty = (b.counterparty ?? "").trim();
     lines.push([
-      "BANK", b._id, b.txDate, csv(party),
+      "BANK", b._id, b.txDate, csv(counterparty),
       b.debit > 0 ? b.debit : b.credit,
+      "",
       csv(b.description ?? ""),
       csv(b.paymentReference ?? ""),
       csv(b.payableId ?? ""),
       "", String(!!b.isValidated),
     ].join(","));
+  }
+  if (vendorMaster && vendorMaster.length > 0) {
+    lines.push(``);
+    lines.push(`# ─── VENDOR MASTER (untuk reference matching, JANGAN diubah/diisi) ───`);
+    for (const v of vendorMaster) {
+      const aliasStr = v.aliases.length > 0 ? ` | aliases: ${v.aliases.join(" / ")}` : "";
+      lines.push(`# VENDOR: ${v.name}${aliasStr}`);
+    }
   }
   return lines.join("\n");
 }
@@ -1103,7 +1137,7 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
 
   const downloadCsv = () => {
     if (!candidates) return;
-    const csvText = buildValidationCsv(candidates.payables, candidates.bank);
+    const csvText = buildValidationCsv(candidates.payables, candidates.bank, candidates.vendorMaster);
     const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

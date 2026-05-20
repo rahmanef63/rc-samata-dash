@@ -119,7 +119,24 @@ export const listValidationCandidates = query({
     const bank = bankAll.filter((b) =>
       b.category === "payable_payment" && !b.isValidated
     );
-    return { payables, bank };
+    // Vendor master + aliases — gives AI knowledge of every known vendor,
+    // even ones without open payables, so it can correctly skip orphans
+    // instead of forcing wrong matches.
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const aliases = await ctx.db.query("vendorBankAliases")
+      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .take(2000);
+    const aliasByVendor = new Map<string, string[]>();
+    for (const a of aliases) {
+      const arr = aliasByVendor.get(a.vendorId) ?? [];
+      if (!arr.includes(a.alias)) arr.push(a.alias);
+      aliasByVendor.set(a.vendorId, arr);
+    }
+    const vendorMaster = vendors.map((v) => ({
+      name: v.name,
+      aliases: aliasByVendor.get(v._id) ?? [],
+    }));
+    return { payables, bank, vendorMaster };
   },
 });
 
