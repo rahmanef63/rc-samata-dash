@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { paymentMethodValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import type { Id } from "../../_generated/dataModel";
 
 export const create = mutation({
   args: {
@@ -107,6 +108,92 @@ export const addPayment = mutation({
       actedBy: userId, branchId: payable.branchId,
     });
     return paymentId;
+  },
+});
+
+// ─── Bulk import payables (CSV) ─────────────────────────────
+// Resolves vendorName to vendorId via vendor master (fuzzy match).
+// Rows that fail to resolve are returned in `errors` so the UI can
+// prompt the user to either create the vendor master first or fix
+// the spelling.
+export const importPayablesBulk = mutation({
+  args: {
+    branchId: v.id("branches"),
+    rows: v.array(v.object({
+      vendorName: v.string(),
+      invoiceDate: v.string(),
+      dueDate: v.string(),
+      amount: v.number(),
+      paidAmount: v.number(),
+      description: v.string(),
+      reference: v.optional(v.string()),
+      fileName: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { branchId, rows }) => {
+    const userId = await requireAuth(ctx);
+
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
+
+    let inserted = 0;
+    const errors: { line: number; message: string }[] = [];
+    const unresolvedVendors = new Set<string>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      try {
+        const up = r.vendorName.toUpperCase().trim();
+        let vendor = byName.get(up);
+        if (!vendor) {
+          for (const [nm, vnd] of byName) {
+            if (up.includes(nm) || nm.includes(up)) { vendor = vnd; break; }
+          }
+        }
+        if (!vendor) {
+          unresolvedVendors.add(r.vendorName);
+          errors.push({ line: i + 2, message: `Vendor "${r.vendorName}" tidak ada di master` });
+          continue;
+        }
+
+        const status: "open" | "partial" | "paid" | "overdue" =
+          r.paidAmount >= r.amount && r.amount > 0 ? "paid"
+          : r.paidAmount > 0 ? "partial"
+          : "open";
+
+        const descriptionWithRef = [
+          r.description,
+          r.reference ? `ref: ${r.reference}` : null,
+          r.fileName ? `file: ${r.fileName}` : null,
+        ].filter(Boolean).join(" · ");
+
+        const id = await ctx.db.insert("payables", {
+          vendorId: vendor._id,
+          vendorName: vendor.name,
+          invoiceDate: r.invoiceDate,
+          dueDate: r.dueDate,
+          amount: r.amount,
+          paidAmount: r.paidAmount,
+          status,
+          description: descriptionWithRef,
+          branchId,
+        });
+        void id;
+        inserted++;
+      } catch (e) {
+        errors.push({ line: i + 2, message: e instanceof Error ? e.message : "row failed" });
+      }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "payables",
+      entityId: "" as Id<"payables">,
+      action: "create",
+      description: `Bulk import payables — ${inserted} insert, ${errors.length} error, ${unresolvedVendors.size} vendor unresolved`,
+      actedBy: userId, branchId,
+    });
+
+    return { inserted, errors, unresolvedVendors: [...unresolvedVendors] };
   },
 });
 

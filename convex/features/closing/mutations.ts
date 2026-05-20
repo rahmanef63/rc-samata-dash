@@ -224,6 +224,116 @@ export const createPaymentReceipt = mutation({
   },
 });
 
+// ─── Bulk import receipts (CSV) ─────────────────────────────
+// Mirror of bulk-closing import. Each row may carry a vendorName which
+// we resolve to the latest open payable for that vendor (if any), so
+// the system auto-credits payable.paidAmount + status. If no match
+// found, receipt is recorded standalone (payableId unset).
+export const importPaymentReceiptsBulk = mutation({
+  args: {
+    branchId: v.id("branches"),
+    rows: v.array(v.object({
+      paidDate: v.string(),
+      amount: v.number(),
+      paidBy: v.union(v.literal("owner"), v.literal("pic")),
+      vendorName: v.optional(v.string()),
+      channel: v.optional(v.string()),
+      reference: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      fileName: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { branchId, rows }) => {
+    const userId = await requireAuth(ctx);
+
+    // Cache: vendor name → vendorId, latest open payable per vendor.
+    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendorByName = new Map(
+      vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]),
+    );
+    const allPayables = await ctx.db.query("payables")
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .take(5000);
+    const openPayables = allPayables.filter((p) =>
+      p.status === "open" || p.status === "partial" || p.status === "overdue",
+    );
+
+    let inserted = 0;
+    let linked = 0;
+    const errors: { line: number; message: string }[] = [];
+    const now = Date.now();
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      try {
+        let payableId: Id<"payables"> | undefined;
+        if (r.vendorName) {
+          const up = r.vendorName.toUpperCase().trim();
+          let vendor = vendorByName.get(up);
+          if (!vendor) {
+            for (const [nm, vnd] of vendorByName) {
+              if (up.includes(nm) || nm.includes(up)) { vendor = vnd; break; }
+            }
+          }
+          if (vendor) {
+            // Pick the OLDEST open payable for this vendor (FIFO style)
+            // whose remaining ≥ amount, so partial payments still attach.
+            const candidates = openPayables
+              .filter((p) => p.vendorId === vendor._id && (p.amount - p.paidAmount) > 0)
+              .sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate));
+            if (candidates.length > 0) payableId = candidates[0]._id;
+          }
+        }
+
+        const id = await ctx.db.insert("paymentReceipts", {
+          payableId,
+          amount: r.amount,
+          paidDate: r.paidDate,
+          paidBy: r.paidBy,
+          channel: r.channel,
+          reference: r.reference,
+          notes: r.notes,
+          proofFileName: r.fileName,
+          branchId,
+          uploadedAt: now,
+          uploadedBy: userId,
+        });
+
+        if (payableId) {
+          const p = await ctx.db.get(payableId);
+          if (p) {
+            const newPaid = Math.min(p.amount, p.paidAmount + r.amount);
+            const newStatus: "open" | "partial" | "paid" | "overdue" =
+              newPaid >= p.amount && p.amount > 0 ? "paid"
+              : newPaid > 0 ? "partial"
+              : p.status;
+            await ctx.db.patch(payableId, { paidAmount: newPaid, status: newStatus });
+            // Refresh cache for subsequent rows
+            const refIdx = openPayables.findIndex((x) => x._id === payableId);
+            if (refIdx >= 0) openPayables[refIdx] = { ...openPayables[refIdx], paidAmount: newPaid, status: newStatus };
+          }
+          linked++;
+        }
+
+        void id;
+        inserted++;
+      } catch (e) {
+        errors.push({ line: i + 2, message: e instanceof Error ? e.message : "row failed" });
+      }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "paymentReceipts",
+      entityId: "" as Id<"paymentReceipts">,
+      action: "create",
+      description: `Bulk import bukti bayar — ${inserted} insert (${linked} dilink ke payable), ${errors.length} error`,
+      actedBy: userId, branchId,
+    });
+
+    return { inserted, linked, errors };
+  },
+});
+
 export const removePaymentReceipt = mutation({
   args: { id: v.id("paymentReceipts") },
   handler: async (ctx, { id }) => {

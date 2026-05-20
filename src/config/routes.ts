@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -47,6 +47,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
           { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
           { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
           { title: "Bukti Bayar & Statement", url: "/finance/owner-transfer", icon: Landmark },
+          { title: "Bulk Import (Chat)", url: "/laporan/bulk-import", icon: Upload },
         ],
       },
       { title: "Chat AI", url: "/chat", icon: Bot },
