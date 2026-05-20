@@ -269,6 +269,9 @@ const bankStatementRowValidator = v.object({
   channel: v.optional(v.string()),
   category: v.optional(bankStatementCategoryUnion),
   counterparty: v.optional(v.string()),
+  // Inline-edit additions: UI can preset link + alias-learning per row.
+  payableId: v.optional(v.id("payables")),
+  learnAlias: v.optional(v.boolean()),
 });
 
 export const importBankStatementEntries = mutation({
@@ -296,8 +299,24 @@ export const importBankStatementEntries = mutation({
     );
     const aliasesSeeded: Record<string, number> = {};
 
+    // Create a synthetic validationBatch up-front so any link operations
+    // here are auditable + undoable via deleteValidationBatch.
+    const hasLinks = rows.some((r) => r.payableId);
+    const linkBatchId = hasLinks
+      ? await ctx.db.insert("validationBatches", {
+          fileName: `statement-import-${batch.accountKind}-${batch.fileName}`,
+          rowsApplied: 0, rowsRejected: 0,
+          summary: `links applied during statement import (${batch.accountKind})`,
+          branchId: batch.branchId,
+          uploadedAt: Date.now(), uploadedBy: userId,
+        })
+      : null;
+    let linkApplied = 0;
+    const touchedPayableIds = new Set<string>();
+    const now = Date.now();
+
     for (const r of rows) {
-      await ctx.db.insert("bankStatementEntries", {
+      const entryId = await ctx.db.insert("bankStatementEntries", {
         accountKind: batch.accountKind,
         txDate: r.txDate,
         description: r.description,
@@ -307,13 +326,63 @@ export const importBankStatementEntries = mutation({
         channel: r.channel,
         category: r.category,
         counterparty: r.counterparty,
+        payableId: r.payableId,
+        isValidated: r.payableId ? true : undefined,
         batchId,
         branchId: batch.branchId,
       });
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
 
-      // Seed vendor alias if counterparty contains an existing vendor name.
-      if (r.counterparty && r.category === "payable_payment") {
+      // Inline link: write validationLogs so the undo path can reverse it.
+      if (r.payableId && linkBatchId) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "bank_entry", entryId, batchId: linkBatchId,
+          field: "payableId",
+          beforeValue: undefined, afterValue: r.payableId,
+          branchId: batch.branchId, changedAt: now,
+        });
+        await ctx.db.insert("validationLogs", {
+          entryType: "bank_entry", entryId, batchId: linkBatchId,
+          field: "isValidated",
+          beforeValue: "false", afterValue: "true",
+          branchId: batch.branchId, changedAt: now,
+        });
+        touchedPayableIds.add(r.payableId);
+        linkApplied++;
+      }
+
+      // Manual alias learn (UI set learnAlias=true). Distinct from the
+      // opportunistic vendor-name seeding below — this one trusts the user.
+      if (r.learnAlias && r.counterparty && r.payableId) {
+        const cp = r.counterparty.toUpperCase().trim();
+        const payable = await ctx.db.get(r.payableId);
+        if (payable && cp) {
+          const existingAlias = await ctx.db.query("vendorBankAliases")
+            .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId).eq("alias", cp))
+            .first();
+          if (existingAlias) {
+            await ctx.db.patch(existingAlias._id, {
+              vendorId: payable.vendorId,
+              lastSeenAt: now,
+              seenCount: existingAlias.seenCount + 1,
+            });
+          } else {
+            await ctx.db.insert("vendorBankAliases", {
+              vendorId: payable.vendorId,
+              alias: cp,
+              source: "statement" as const,
+              branchId: batch.branchId,
+              lastSeenAt: now,
+              seenCount: 1,
+            });
+            aliasesSeeded[cp] = (aliasesSeeded[cp] ?? 0) + 1;
+          }
+        }
+      }
+
+      // Seed vendor alias if counterparty contains an existing vendor name
+      // (opportunistic — kept for un-linked payable_payment rows).
+      if (!r.learnAlias && r.counterparty && r.category === "payable_payment") {
         const cp = r.counterparty.toUpperCase().trim();
         let matchedVendor = vendorByName.get(cp);
         if (!matchedVendor) {
@@ -348,6 +417,49 @@ export const importBankStatementEntries = mutation({
       }
     }
 
+    // Recompute paidAmount + status for every payable touched by inline links.
+    for (const pidStr of touchedPayableIds) {
+      const pid = pidStr as Id<"payables">;
+      const p = await ctx.db.get(pid) as {
+        amount?: number; paidAmount?: number;
+        status?: "open" | "partial" | "paid" | "overdue";
+      } | null;
+      if (!p) continue;
+      const linkedBanks = await ctx.db.query("bankStatementEntries")
+        .withIndex("by_payable", (q) => q.eq("payableId", pid))
+        .collect();
+      const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
+      const oldPaid = p.paidAmount ?? 0;
+      const newPaid = Math.min(p.amount ?? 0, bankSum);
+      const newStatus: "open" | "partial" | "paid" | "overdue" =
+        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
+        : newPaid > 0 ? "partial"
+        : (p.status ?? "open");
+      if (newPaid !== oldPaid && linkBatchId) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: pidStr, batchId: linkBatchId,
+          field: "paidAmount",
+          beforeValue: String(oldPaid), afterValue: String(newPaid),
+          branchId: batch.branchId, changedAt: now,
+        });
+      }
+      if (newStatus !== p.status && linkBatchId) {
+        await ctx.db.insert("validationLogs", {
+          entryType: "payable", entryId: pidStr, batchId: linkBatchId,
+          field: "status",
+          beforeValue: p.status, afterValue: newStatus,
+          branchId: batch.branchId, changedAt: now,
+        });
+      }
+      if (newPaid !== oldPaid || newStatus !== p.status) {
+        await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
+      }
+    }
+
+    if (linkBatchId) {
+      await ctx.db.patch(linkBatchId, { rowsApplied: linkApplied, rowsRejected: 0 });
+    }
+
     await ctx.db.patch(batchId, {
       rowCount: rows.length,
       status: "parsed",
@@ -356,11 +468,11 @@ export const importBankStatementEntries = mutation({
 
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: batchId, action: "update",
-      description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}`,
+      description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}${linkApplied > 0 ? ` · ${linkApplied} linked ke payable` : ""}`,
       actedBy: userId, branchId: batch.branchId,
     });
 
-    return { inserted: rows.length, closingBalance: closing };
+    return { inserted: rows.length, closingBalance: closing, linkApplied, linkBatchId };
   },
 });
 

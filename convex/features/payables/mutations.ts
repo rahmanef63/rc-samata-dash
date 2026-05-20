@@ -109,3 +109,23 @@ export const addPayment = mutation({
     return paymentId;
   },
 });
+
+// ─── Vendor alias maintenance ───────────────────────────────
+// Manual purge when an auto-learned alias is wrong (e.g. parser
+// matched a counterparty to the wrong vendor master row).
+export const removeVendorAlias = mutation({
+  args: { aliasId: v.id("vendorBankAliases") },
+  handler: async (ctx, { aliasId }) => {
+    const userId = await requireAuth(ctx);
+    const alias = await ctx.db.get(aliasId);
+    if (!alias) throw new Error("Alias not found");
+    await ctx.db.delete(aliasId);
+    await insertAuditLog(ctx, {
+      entityType: "vendorBankAliases", entityId: aliasId, action: "delete",
+      description: `Hapus alias bank "${alias.alias}"`,
+      actedBy: userId, branchId: alias.branchId,
+    });
+    return null;
+  },
+});
+
