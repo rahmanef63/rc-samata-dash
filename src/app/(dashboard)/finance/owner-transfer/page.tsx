@@ -15,6 +15,7 @@ import { formatRpFull } from "@/shared/lib";
 import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
 import { parseBankStatement, type BankStatementRow } from "@/features/report-upload/parsers/parseBankStatement";
 import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
+import { StatementImportPreview, type EditableBankRow } from "@/features/bank-statement/components/StatementImportPreview";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type AccountKind = "owner" | "pic";
@@ -311,7 +312,7 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
   const [periodStart, setPeriodStart] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
   const [uploading, setUploading] = useState(false);
-  const [parsed, setParsed] = useState<{ rows: BankStatementRow[]; file: File } | null>(null);
+  const [parsed, setParsed] = useState<{ rows: EditableBankRow[]; file: File } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [detailBatchId, setDetailBatchId] = useState<Id<"bankStatementBatches"> | null>(null);
 
@@ -357,9 +358,13 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
           channel: row.channel,
           category: row.category,
           counterparty: row.pihak,
+          payableId: row.payableId,
+          learnAlias: row.learnAlias,
         })),
       });
-      toast.success(`${res.inserted} transaksi tersimpan · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`);
+      toast.success(
+        `${res.inserted} transaksi tersimpan${res.linkApplied > 0 ? ` · ${res.linkApplied} dilink ke payable` : ""} · saldo akhir Rp ${res.closingBalance.toLocaleString("id-ID")}`,
+      );
       setParsed(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
@@ -370,7 +375,6 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
   };
 
   const label = accountKind === "owner" ? "Owner" : "PIC";
-  const summary = useStatementSummary(parsed?.rows);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -427,12 +431,13 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
             </p>
           )}
 
-          {parsed && summary && (
-            <StatementPreview
+          {parsed && (
+            <StatementImportPreview
               rows={parsed.rows}
-              summary={summary}
+              branchId={branchId}
               fileName={parsed.file.name}
               uploading={uploading}
+              onRowsChange={(rows) => setParsed({ ...parsed, rows })}
               onConfirm={confirmImport}
               onCancel={() => {
                 setParsed(null);
@@ -673,139 +678,6 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-// ─── Statement preview + summary ───────────────────────────
-
-function useStatementSummary(rows?: BankStatementRow[]) {
-  return useMemo(() => {
-    if (!rows || rows.length === 0) return null;
-    const by: Record<string, { count: number; debit: number; credit: number }> = {};
-    let totalDebit = 0;
-    let totalCredit = 0;
-    let openingSeen = false;
-    let openingBalance = 0;
-    let closingBalance = 0;
-    for (const r of rows) {
-      const k = r.category;
-      by[k] = by[k] ?? { count: 0, debit: 0, credit: 0 };
-      by[k].count++;
-      by[k].debit += r.debit;
-      by[k].credit += r.kredit;
-      totalDebit += r.debit;
-      totalCredit += r.kredit;
-      if (r.balance > 0) {
-        if (!openingSeen) { openingBalance = r.balance + r.debit - r.kredit; openingSeen = true; }
-        closingBalance = r.balance;
-      }
-    }
-    return { by, totalDebit, totalCredit, openingBalance, closingBalance, net: totalCredit - totalDebit };
-  }, [rows]);
-}
-
-function StatementPreview({
-  rows, summary, fileName, uploading, onConfirm, onCancel,
-}: {
-  rows: BankStatementRow[];
-  summary: NonNullable<ReturnType<typeof useStatementSummary>>;
-  fileName: string;
-  uploading: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          {rows.length} transaksi siap import
-        </div>
-        <span className="text-[10px] text-muted-foreground truncate max-w-xs" title={fileName}>{fileName}</span>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <SummaryCard label="Saldo Awal"  value={summary.openingBalance} />
-        <SummaryCard label="Total Kredit (Masuk)"  value={summary.totalCredit} positive />
-        <SummaryCard label="Total Debit (Keluar)"  value={summary.totalDebit} negative />
-        <SummaryCard label="Saldo Akhir" value={summary.closingBalance} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
-          Breakdown per Kategori
-        </div>
-        <div className="max-h-48 overflow-auto">
-          <table className="w-full text-[11px]">
-            <thead className="bg-muted/30 sticky top-0 z-10">
-              <tr className="text-left">
-                <th className="px-3 py-1 font-semibold">Kategori</th>
-                <th className="px-3 py-1 text-right font-semibold">Jml</th>
-                <th className="px-3 py-1 text-right font-semibold text-green-600">Kredit</th>
-                <th className="px-3 py-1 text-right font-semibold text-destructive">Debit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(summary.by).map(([cat, v]) => (
-                <tr key={cat} className="border-t border-border/50">
-                  <td className="px-3 py-1 font-medium">{CATEGORY_LABELS[cat] ?? cat}</td>
-                  <td className="px-3 py-1 text-right">{v.count}</td>
-                  <td className="px-3 py-1 text-right font-mono text-green-600">{v.credit > 0 ? formatRpFull(v.credit) : "—"}</td>
-                  <td className="px-3 py-1 text-right font-mono text-destructive">{v.debit > 0 ? formatRpFull(v.debit) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30 flex items-center justify-between">
-          <span>Preview Transaksi (15 pertama)</span>
-          <span className="text-muted-foreground/70">{rows.length} total</span>
-        </div>
-        <div className="overflow-auto max-h-64">
-          <table className="w-full text-[10px]">
-            <thead className="bg-muted/30 sticky top-0 z-10">
-              <tr className="text-left">
-                <th className="px-2 py-1">Tgl</th>
-                <th className="px-2 py-1">Kategori</th>
-                <th className="px-2 py-1">Pihak</th>
-                <th className="px-2 py-1 text-right">Debit</th>
-                <th className="px-2 py-1 text-right">Kredit</th>
-                <th className="px-2 py-1 text-right">Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 15).map((r, i) => (
-                <tr key={i} className="border-t border-border/50">
-                  <td className="px-2 py-1 font-mono">{r.txDate.slice(5)}</td>
-                  <td className="px-2 py-1"><span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary font-semibold">{CATEGORY_LABELS[r.category] ?? r.category}</span></td>
-                  <td className="px-2 py-1 truncate max-w-[140px]" title={r.pihak}>{r.pihak}</td>
-                  <td className="px-2 py-1 text-right font-mono text-destructive">{r.debit > 0 ? formatRpFull(r.debit) : "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono text-green-600">{r.kredit > 0 ? formatRpFull(r.kredit) : "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono text-muted-foreground">{r.balance > 0 ? formatRpFull(r.balance) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <button onClick={onCancel} disabled={uploading} className="px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted/50 text-xs font-semibold disabled:opacity-50">
-          Batal
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={uploading}
-          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold disabled:opacity-50"
-        >
-          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          {uploading ? "Mengimport..." : `Import ${rows.length} Transaksi`}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const CATEGORY_LABELS: Record<string, string> = {
   sales_inflow: "Penjualan",
   expense_outflow: "Pengeluaran",
@@ -815,17 +687,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   transfer_internal: "Transfer",
   other: "Lainnya",
 };
-
-function SummaryCard({ label, value, positive, negative }: { label: string; value: number; positive?: boolean; negative?: boolean }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-2 text-center">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-xs font-bold mt-0.5 ${positive ? "text-green-600" : negative ? "text-destructive" : "text-foreground"}`}>
-        {formatRpFull(value)}
-      </p>
-    </div>
-  );
-}
 
 // ─── Tiny field helper ─────────────────────────────────────
 
