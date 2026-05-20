@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import {
   Landmark, Upload, Receipt as ReceiptIcon, FileSpreadsheet,
   Trash2, ExternalLink, Loader2, Info, FileText, CheckCircle, AlertTriangle,
-  Download, GitCompare, Copy, History,
+  Download, GitCompare, Copy, History, Search,
 } from "lucide-react";
+import { useTableState } from "@/shared/hooks/useTableState";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatRpFull } from "@/shared/lib";
@@ -239,27 +240,74 @@ function ReceiptsSection({ branchId }: { branchId: Id<"branches"> }) {
       </div>
 
       {/* Daftar bukti */}
-      <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
-        <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
+      <ReceiptsListPanel
+        receipts={receipts}
+        onDelete={(id) => removeReceipt({ id }).then(() => toast.success("Bukti dihapus"))}
+      />
+    </div>
+  );
+}
+
+function ReceiptsListPanel({
+  receipts, onDelete,
+}: {
+  receipts: any[] | undefined;
+  onDelete: (id: Id<"paymentReceipts">) => void;
+}) {
+  const [paidByFilter, setPaidByFilter] = useState<"all" | "owner" | "pic">("all");
+  const filtered = useMemo(() => {
+    const list = receipts ?? [];
+    if (paidByFilter === "all") return list;
+    return list.filter((r) => r.paidBy === paidByFilter);
+  }, [receipts, paidByFilter]);
+  const { search, setSearch, sortedItems } = useTableState(
+    filtered,
+    ["paidDate", "notes", "reference", "channel", "proofFileName"],
+  );
+
+  return (
+    <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+      <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <ReceiptIcon className="h-4 w-4 text-primary" />
             Riwayat Bukti
           </h2>
-          {receipts && (
-            <p className="text-xs text-muted-foreground mt-0.5">{receipts.length} bukti tersimpan</p>
-          )}
+          <span className="text-[10px] text-muted-foreground font-mono">{sortedItems.length} / {receipts?.length ?? 0}</span>
         </div>
-        <div className="p-2 flex-1 overflow-y-auto">
-          {!receipts || receipts.length === 0 ? (
-            <p className="p-6 text-xs text-center text-muted-foreground">Belum ada bukti bayar</p>
-          ) : (
-            <div className="space-y-1">
-              {receipts.map((r) => (
-                <ReceiptRow key={r._id} receipt={r} onDelete={() => removeReceipt({ id: r._id }).then(() => toast.success("Bukti dihapus"))} />
-              ))}
-            </div>
-          )}
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari tanggal / catatan / ref..."
+            className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary"
+          />
         </div>
+        <div className="flex gap-1">
+          {(["all", "owner", "pic"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setPaidByFilter(k)}
+              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${paidByFilter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+            >
+              {k === "all" ? "Semua" : k}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="p-2 flex-1 overflow-y-auto">
+        {!receipts ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">Memuat...</p>
+        ) : sortedItems.length === 0 ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">{receipts.length === 0 ? "Belum ada bukti bayar" : "Tidak ada bukti sesuai filter"}</p>
+        ) : (
+          <div className="space-y-1">
+            {sortedItems.map((r) => (
+              <ReceiptRow key={r._id} receipt={r} onDelete={() => onDelete(r._id)} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -449,62 +497,126 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
       </div>
 
       {/* Riwayat batch */}
-      <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
-        <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Landmark className="h-4 w-4 text-primary" />
-            Riwayat Statement {label}
-          </h2>
-          {batches && (
-            <p className="text-xs text-muted-foreground mt-0.5">{batches.length} file diarsipkan</p>
-          )}
-        </div>
-        <div className="p-2 flex-1 overflow-y-auto">
-          {!batches || batches.length === 0 ? (
-            <p className="p-6 text-xs text-center text-muted-foreground">Belum ada statement</p>
-          ) : (
-            <div className="space-y-1">
-              {batches.map((b) => (
-                <div key={b._id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer" onClick={() => setDetailBatchId(b._id)}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate text-foreground group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
-                    <p className="text-[10px] text-muted-foreground">{b.periodStart} → {b.periodEnd}</p>
-                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                        b.status === "parsed" || b.status === "reconciled"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}>
-                        {b.status}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{b.rowCount} tx</span>
-                      {b.closingBalance != null && (
-                        <span className="text-[10px] font-mono text-primary">Rp {b.closingBalance.toLocaleString("id-ID")}</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!confirm(`Hapus statement "${b.fileName}"?`)) return;
-                      removeBatch({ id: b._id }).then(() => toast.success("Statement dihapus"));
-                    }}
-                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                    title="Hapus"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <StatementBatchesPanel
+        batches={batches}
+        label={label}
+        onOpenDetail={setDetailBatchId}
+        onDelete={(b) => {
+          if (!confirm(`Hapus statement "${b.fileName}"?\n\nSemua transaksi + link ke payable akan dihapus + payable.paidAmount direkomputasi.`)) return;
+          removeBatch({ id: b._id }).then(() => toast.success("Statement dihapus"));
+        }}
+      />
 
       <PanduanAiDialog open={showGuide} onOpenChange={setShowGuide} kind="bankStatement" />
       {detailBatchId && (
         <BatchDetailSheet batchId={detailBatchId} onClose={() => setDetailBatchId(null)} accountLabel={label} />
       )}
+    </div>
+  );
+}
+
+type StatementBatch = {
+  _id: Id<"bankStatementBatches">;
+  fileName: string;
+  periodStart: string;
+  periodEnd: string;
+  status: "uploaded" | "parsed" | "reconciled";
+  rowCount: number;
+  closingBalance?: number;
+};
+
+function StatementBatchesPanel({
+  batches, label, onOpenDetail, onDelete,
+}: {
+  batches: StatementBatch[] | undefined;
+  label: string;
+  onOpenDetail: (id: Id<"bankStatementBatches">) => void;
+  onDelete: (b: StatementBatch) => void;
+}) {
+  const [statusFilter, setStatusFilter] = useState<"all" | "uploaded" | "parsed" | "reconciled">("all");
+  const filtered = useMemo(() => {
+    const list = batches ?? [];
+    if (statusFilter === "all") return list;
+    return list.filter((b) => b.status === statusFilter);
+  }, [batches, statusFilter]);
+  const { search, setSearch, sortedItems } = useTableState(
+    filtered,
+    ["fileName", "periodStart", "periodEnd", "status"],
+  );
+
+  return (
+    <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+      <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Landmark className="h-4 w-4 text-primary" />
+            Riwayat Statement {label}
+          </h2>
+          <span className="text-[10px] text-muted-foreground font-mono">{sortedItems.length} / {batches?.length ?? 0}</span>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari file / periode..."
+            className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {(["all", "uploaded", "parsed", "reconciled"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setStatusFilter(k)}
+              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${statusFilter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+            >
+              {k === "all" ? "Semua" : k}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="p-2 flex-1 overflow-y-auto">
+        {!batches ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">Memuat...</p>
+        ) : sortedItems.length === 0 ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">{batches.length === 0 ? "Belum ada statement" : "Tidak ada statement sesuai filter"}</p>
+        ) : (
+          <div className="space-y-1">
+            {sortedItems.map((b) => (
+              <div
+                key={b._id}
+                className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer"
+                onClick={() => onOpenDetail(b._id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate text-foreground group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
+                  <p className="text-[10px] text-muted-foreground">{b.periodStart} → {b.periodEnd}</p>
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                      b.status === "parsed" || b.status === "reconciled"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}>
+                      {b.status}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{b.rowCount} tx</span>
+                    {b.closingBalance != null && (
+                      <span className="text-[10px] font-mono text-primary">Rp {b.closingBalance.toLocaleString("id-ID")}</span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(b); }}
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                  title="Hapus"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1187,62 +1299,12 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
       </div>
 
       {/* Riwayat batch validator */}
-      <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
-        <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
-            Riwayat Validasi
-          </h2>
-          {batches && (
-            <p className="text-xs text-muted-foreground mt-0.5">{batches.length} batch · klik untuk lihat log</p>
-          )}
-        </div>
-        <div className="p-2 flex-1 overflow-y-auto">
-          {!batches || batches.length === 0 ? (
-            <p className="p-6 text-xs text-center text-muted-foreground">Belum ada batch validasi</p>
-          ) : (
-            <div className="space-y-1">
-              {batches.map((b) => (
-                <div
-                  key={b._id}
-                  className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer"
-                  onClick={() => setOpenBatchLogId(b._id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {new Date(b.uploadedAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-700">
-                        {b.rowsApplied} applied
-                      </span>
-                      {b.rowsRejected > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-yellow-100 text-yellow-700">
-                          {b.rowsRejected} rejected
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleDeleteBatch(b._id, b.fileName, b.rowsApplied);
-                    }}
-                    disabled={deletingBatchId === b._id}
-                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 disabled:opacity-100 disabled:cursor-wait shrink-0"
-                    title="Hapus batch & undo semua perubahan"
-                  >
-                    {deletingBatchId === b._id
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Trash2 className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <ValidatorBatchesPanel
+        batches={batches}
+        deletingBatchId={deletingBatchId}
+        onOpenLog={setOpenBatchLogId}
+        onDelete={(b) => void handleDeleteBatch(b._id, b.fileName, b.rowsApplied)}
+      />
 
       {openBatchLogId && (() => {
         const batch = batches?.find((b) => b._id === openBatchLogId);
@@ -1258,6 +1320,113 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
           />
         );
       })()}
+    </div>
+  );
+}
+
+type ValidatorBatch = {
+  _id: Id<"validationBatches">;
+  fileName: string;
+  uploadedAt: number;
+  rowsApplied: number;
+  rowsRejected: number;
+};
+
+function ValidatorBatchesPanel({
+  batches, deletingBatchId, onOpenLog, onDelete,
+}: {
+  batches: ValidatorBatch[] | undefined;
+  deletingBatchId: Id<"validationBatches"> | null;
+  onOpenLog: (id: Id<"validationBatches">) => void;
+  onDelete: (b: ValidatorBatch) => void;
+}) {
+  const [appliedFilter, setAppliedFilter] = useState<"all" | "applied" | "empty">("all");
+  const filtered = useMemo(() => {
+    const list = batches ?? [];
+    if (appliedFilter === "applied") return list.filter((b) => b.rowsApplied > 0);
+    if (appliedFilter === "empty") return list.filter((b) => b.rowsApplied === 0);
+    return list;
+  }, [batches, appliedFilter]);
+  const { search, setSearch, sortedItems } = useTableState(
+    filtered,
+    ["fileName"],
+  );
+
+  return (
+    <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
+      <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Riwayat Validasi
+          </h2>
+          <span className="text-[10px] text-muted-foreground font-mono">{sortedItems.length} / {batches?.length ?? 0}</span>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari nama file..."
+            className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {(["all", "applied", "empty"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setAppliedFilter(k)}
+              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${appliedFilter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+            >
+              {k === "all" ? "Semua" : k === "applied" ? "Applied >0" : "Kosong"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="p-2 flex-1 overflow-y-auto">
+        {!batches ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">Memuat...</p>
+        ) : sortedItems.length === 0 ? (
+          <p className="p-6 text-xs text-center text-muted-foreground">{batches.length === 0 ? "Belum ada batch validasi" : "Tidak ada batch sesuai filter"}</p>
+        ) : (
+          <div className="space-y-1">
+            {sortedItems.map((b) => (
+              <div
+                key={b._id}
+                className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 group cursor-pointer"
+                onClick={() => onOpenLog(b._id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate group-hover:text-primary transition-colors" title={b.fileName}>{b.fileName}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {new Date(b.uploadedAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-700">
+                      {b.rowsApplied} applied
+                    </span>
+                    {b.rowsRejected > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-yellow-100 text-yellow-700">
+                        {b.rowsRejected} rejected
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(b); }}
+                  disabled={deletingBatchId === b._id}
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 disabled:opacity-100 disabled:cursor-wait shrink-0"
+                  title="Hapus batch & undo semua perubahan"
+                >
+                  {deletingBatchId === b._id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Trash2 className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, ExternalLink } from "lucide-react";
@@ -134,7 +134,11 @@ export function PayablesOverview() {
     updateMutation: updatePayable,
     deleteMutation: deletePayable,
   });
-  const table = useTableState(payablesData, ["vendorName", "description", "status"]);
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "partial" | "paid" | "overdue">("all");
+  const statusFilteredData = useMemo(() => (
+    statusFilter === "all" ? payablesData : payablesData.filter(p => p.status === statusFilter)
+  ), [payablesData, statusFilter]);
+  const table = useTableState(statusFilteredData, ["vendorName", "description", "status"]);
 
   const customCreate = async (data: Payable) => {
     if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
@@ -200,6 +204,18 @@ export function PayablesOverview() {
 
       {/* Table */}
       <SectionHeader title="Daftar Piutang / Hutang Vendor" />
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mr-1">Status:</span>
+        {(["all", "open", "partial", "paid", "overdue"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => setStatusFilter(k)}
+            className={`text-[10px] px-2 py-1 rounded font-semibold uppercase ${statusFilter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+          >
+            {k === "all" ? `Semua (${payablesData.length})` : `${k} (${payablesData.filter(p => p.status === k).length})`}
+          </button>
+        ))}
+      </div>
       <DataTable<Payable>
         data={table.sortedItems}
         columns={columns}
