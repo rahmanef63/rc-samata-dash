@@ -22,9 +22,35 @@ export function TableView({
   const sel = useRowSelectionOptional();
   const rowIds = rows.map((r) => r.id);
 
+  // Column width heuristic per type — auto-adjust biar tabel gak ketat &
+  // tetap muat content. Date column lebih lebar untuk format "7 Jan 2026".
+  // Number/currency rata kanan biar enak baca angka.
+  const widthFor = (type: string): string => {
+    switch (type) {
+      case "date":
+      case "created_time":
+      case "last_edited_time": return "min-w-[150px]";
+      case "number":           return "min-w-[120px]";
+      case "select":
+      case "status":           return "min-w-[140px]";
+      case "multi_select":     return "min-w-[180px]";
+      case "checkbox":         return "min-w-[80px]";
+      case "url":
+      case "email":            return "min-w-[200px]";
+      case "phone":            return "min-w-[140px]";
+      case "rollup":
+      case "formula":          return "min-w-[120px]";
+      case "relation":         return "min-w-[180px]";
+      default:                 return "min-w-[160px]";
+    }
+  };
+  const cellAlign = (type: string): string =>
+    (type === "number" || type === "rollup" || type === "formula") ? "text-right tabular-nums" : "";
+  const visibleProps = db.properties.filter((p) => !p.hidden);
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm" style={{ tableLayout: "auto" }}>
         <thead className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
           <tr>
             {sel && (
@@ -32,8 +58,8 @@ export function TableView({
                 <HeaderCheckboxGutter rowIds={rowIds} />
               </th>
             )}
-            {db.properties.filter((p) => !p.hidden).map((p) => (
-              <th key={p.id} className="px-3 py-1.5 font-normal">
+            {visibleProps.map((p) => (
+              <th key={p.id} className={cn("px-3 py-1.5 font-normal whitespace-nowrap", widthFor(p.type))}>
                 {renderColumnHeader ? renderColumnHeader(p) : (
                   <span className="truncate">{p.name}</span>
                 )}
@@ -59,8 +85,10 @@ export function TableView({
                     </div>
                   </td>
                 )}
-                {db.properties.filter((p) => !p.hidden).map((p) => (
-                  <td key={p.id} className="px-3 py-1.5">{renderCell(p, r)}</td>
+                {visibleProps.map((p) => (
+                  <td key={p.id} className={cn("px-3 py-1.5 align-top", widthFor(p.type), cellAlign(p.type))}>
+                    {renderCell(p, r)}
+                  </td>
                 ))}
                 {!readOnly && onRowRemove && (
                   <td className="px-2">
@@ -79,8 +107,8 @@ export function TableView({
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={db.properties.length + (sel ? 2 : 1)} className="px-3 py-4 text-center text-xs italic text-muted-foreground">
-                No rows match
+              <td colSpan={visibleProps.length + (sel ? 2 : 1)} className="px-3 py-4 text-center text-xs italic text-muted-foreground">
+                Tidak ada baris yang cocok
               </td>
             </tr>
           )}

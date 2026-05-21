@@ -73,22 +73,33 @@ function EntityNotionViewInner<T extends { _id: string }>({
   const [busy, setBusy] = useState(false);
   const [activeViewId, setActiveViewId] = useState(config.views[0]?.id ?? "v_table");
 
+  // Local view overrides — patches that the user accumulates by typing in
+  // search, toggling sort, picking filter. Keyed by view id, shallow-merged
+  // onto config.views[i] when computing the Database we pass to NotionDatabase.
+  // Lives in component state (ephemeral, per-session) — persistence to DB
+  // not required for these UX-level controls.
+  const [viewOverrides, setViewOverrides] = useState<Record<string, Partial<DatabaseViewConfig>>>({});
+
   const pages: Page[] = useMemo(() => (rows ?? []).map(config.toPage), [rows, config]);
 
   const database: Database = useMemo(() => {
     const now = Date.now();
+    const mergedViews: DatabaseViewConfig[] = config.views.map((v) => {
+      const ov = viewOverrides[v.id];
+      return ov ? ({ ...v, ...ov } as DatabaseViewConfig) : v;
+    });
     return {
       id: config.databaseId,
       name: config.databaseName,
       icon: config.databaseIcon,
       properties: config.properties,
       rowIds: pages.map((p) => p.id),
-      views: config.views,
+      views: mergedViews,
       activeViewId,
       createdAt: now,
       updatedAt: now,
     };
-  }, [config, pages, activeViewId]);
+  }, [config, pages, activeViewId, viewOverrides]);
 
   const handleRowUpdate = useCallback(
     async (rowId: string, propId: string, value: PropertyValue) => {
@@ -119,9 +130,13 @@ function EntityNotionViewInner<T extends { _id: string }>({
   );
 
   const handleViewActivate = (viewId: string) => setActiveViewId(viewId);
-  const handleViewConfigChange = (_viewId: string, _patch: Partial<DatabaseViewConfig>) => {
-    // ephemeral; persistence pending Phase M4
-    void _patch;
+  const handleViewConfigChange = (viewId: string, patch: Partial<DatabaseViewConfig>) => {
+    // Shallow-merge into viewOverrides; database useMemo picks it up next
+    // render so search / sort / filter apply immediately via applyView().
+    setViewOverrides((prev) => ({
+      ...prev,
+      [viewId]: { ...(prev[viewId] ?? {}), ...patch },
+    }));
   };
 
   const selectedRows = useMemo(
