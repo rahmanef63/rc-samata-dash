@@ -54,7 +54,7 @@ export const getDailyCheckData = query({
     const ym = businessDate.slice(0, 7); // YYYY-MM
     const monthSalesControl = await ctx.db.query("salesControl")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(2000);
+      .take(LIMITS.AUDIT_PAGE);
     const mtdCumulative = monthSalesControl
       .filter((s) => s.businessDate.startsWith(ym) && s.businessDate <= businessDate)
       .reduce((acc, s) => acc + (s.netSales ?? 0), 0);

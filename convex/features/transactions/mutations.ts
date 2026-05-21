@@ -2,6 +2,8 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { LIMITS } from "../../shared/limits";
+import { PARTY } from "../../projectConstants";
 import type { Id } from "../../_generated/dataModel";
 import {
   txKindValidator as kindValidator,
@@ -162,7 +164,7 @@ export const backfillTransactions = mutation({
   handler: async (ctx, { branchId, limit }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
-    const cap = limit ?? 5000;
+    const cap = limit ?? LIMITS.PAYABLES_PAGE;
     let inserted = 0;
 
     // 1. payables → kind=invoice, direction=in
@@ -241,7 +243,7 @@ export const backfillTransactions = mutation({
         date: t.transferDate,
         amount: t.amount,
         status: t.status,
-        counterparty: t.direction === "branch_to_owner" ? "OWNER" : "OWNER (incoming)",
+        counterparty: t.direction === "branch_to_owner" ? PARTY.OWNER : PARTY.OWNER_INCOMING,
         description: t.description ?? t.purpose,
         reference: t.referenceNo,
         method: t.direction,
@@ -267,7 +269,7 @@ export const backfillTransactions = mutation({
         date: c.businessDate,
         amount: c.cashSales + c.nonCashSales,
         status: c.status,
-        counterparty: "(setoran kasir)",
+        counterparty: PARTY.CASHIER_SETORAN,
         description: `Opening ${c.openingCash} · Expected ${c.expectedCash} · Actual ${c.actualCash} · Diff ${c.difference}`,
         sourceKind: "system" as const,
         createdBy: userId,

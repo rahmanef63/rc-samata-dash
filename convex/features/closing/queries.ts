@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeAlias, looseEqual } from "../../shared/normalize";
 import { LIMITS } from "../../shared/limits";
+import { MATCH } from "../../projectConstants";
 
 export const getClosingByDate = query({
   args: { branchId: v.id("branches"), businessDate: v.string() },
@@ -267,7 +268,7 @@ export const previewAutoMatch = query({
       }
     }
 
-    const TOL = 1500;
+    const TOL = MATCH.TOLERANCE_RP;
 
     for (const [vendorId, vendorBanks] of banksByVendor) {
       const vendorPayables = (payByVendor.get(vendorId) ?? []).slice();

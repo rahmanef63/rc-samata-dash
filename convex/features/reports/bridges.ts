@@ -23,39 +23,14 @@ import { requireAuth } from "../../shared/auth";
 import { SHEET, SHEET_BY_CHANNEL } from "../../shared/sheetNames";
 import { computePayableStatus } from "../../shared/payableStatus";
 import { LIMITS } from "../../shared/limits";
+import {
+  PARTY,
+  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_INCOME_CHANNELS,
+} from "../../projectConstants";
 import { mirrorTx } from "../transactions/_helpers";
 
 // ─── Master-data seeds ──────────────────────────────────────
-
-const DEFAULT_EXPENSE_CATEGORIES: { name: string; type: any }[] = [
-  { name: "Bahan Ayam", type: "cogs" },
-  { name: "Bahan Pelengkap", type: "cogs" },
-  { name: "Bahan Es", type: "cogs" },
-  { name: "Bahan Minuman", type: "cogs" },
-  { name: "Bahan Pembungkus", type: "cogs" },
-  { name: "Minyak Goreng", type: "cogs" },
-  { name: "Groceries/Bumbu", type: "cogs" },
-  { name: "Pengeluaran Kas Kecil", type: "other" },
-  { name: "Bahan Pembersih", type: "utility" },
-  { name: "Transport", type: "utility" },
-  { name: "Foto Copy/ATK", type: "other" },
-  { name: "Lain-lain", type: "other" },
-  { name: "BPJS", type: "bpjs" },
-  { name: "Insentif / Gaji", type: "salary_support" },
-  { name: "Maintenance", type: "maintenance" },
-  { name: "Marketing", type: "marketing" },
-  { name: "Platform Fee", type: "fee" },
-];
-
-const DEFAULT_INCOME_CHANNELS: { name: string; type: any; isSettlementDelayed: boolean }[] = [
-  { name: "Tunai (Cash)", type: "cash", isSettlementDelayed: false },
-  { name: "Dine-in", type: "dine_in", isSettlementDelayed: false },
-  { name: "Take Away", type: "take_away", isSettlementDelayed: false },
-  { name: "Gofood", type: "gofood", isSettlementDelayed: true },
-  { name: "Grabfood", type: "grabfood", isSettlementDelayed: true },
-  { name: "Shopeefood", type: "shopeefood", isSettlementDelayed: true },
-  { name: "Transfer Bank", type: "transfer", isSettlementDelayed: false },
-];
 
 export const seedMasterData = mutation({
   args: {},
@@ -91,7 +66,7 @@ export const deriveVendors = mutation({
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
 
-    const credits = await ctx.db.query("creditPurchases").take(8000);
+    const credits = await ctx.db.query("creditPurchases").take(LIMITS.STAGING_PAGE);
     const existingVendors = await ctx.db.query("vendors").collect();
     const existingNames = new Set(existingVendors.map((v) => v.name.toLowerCase()));
 
@@ -271,7 +246,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
         date: f.businessDate,
         amount: f.salesInflow,
         status: "submitted",
-        counterparty: "(setoran kasir)",
+        counterparty: PARTY.CASHIER_SETORAN,
         description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
@@ -599,7 +574,7 @@ function inferVendorType(name: string): "food_supplier" | "utility" | "service" 
 export const deriveVendorsInternal = internalMutation({
   args: {},
   handler: async (ctx): Promise<any> => {
-    const credits = await ctx.db.query("creditPurchases").take(8000);
+    const credits = await ctx.db.query("creditPurchases").take(LIMITS.STAGING_PAGE);
     const existingVendors = await ctx.db.query("vendors").collect();
     const existingNames = new Set(existingVendors.map((v) => v.name.toLowerCase()));
     const distinct = new Set<string>();
@@ -716,7 +691,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         branchId: report.branchId,
         kind: "transfer", direction: "transfer",
         date: f.businessDate, amount: f.salesInflow, status: "submitted",
-        counterparty: "(setoran kasir)",
+        counterparty: PARTY.CASHIER_SETORAN,
         description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
@@ -990,7 +965,7 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
           branchId: report.branchId,
           kind: "transfer", direction: "transfer",
           date: f.businessDate, amount: f.otherInflow, status: "completed",
-          counterparty: "OWNER (incoming)",
+          counterparty: PARTY.OWNER_INCOMING,
           description, reference: `IN-${f.businessDate}`,
           method: "owner_to_branch",
           sourceKind: "weekly_upload",
@@ -1089,7 +1064,7 @@ export const bridgeOneReportInternal = internalMutation({
 export const migrateInventoryNamesInternal = internalMutation({
   args: {},
   handler: async (ctx): Promise<any> => {
-    const rows = await ctx.db.query("inventoryValuation").take(8000);
+    const rows = await ctx.db.query("inventoryValuation").take(LIMITS.STAGING_PAGE);
     let fixed = 0;
     let skipped = 0;
     for (const r of rows) {
@@ -1111,7 +1086,7 @@ export const migrateInventoryNames = mutation({
   args: {},
   handler: async (ctx): Promise<any> => {
     await requireAuth(ctx);
-    const rows = await ctx.db.query("inventoryValuation").take(8000);
+    const rows = await ctx.db.query("inventoryValuation").take(LIMITS.STAGING_PAGE);
     let fixed = 0;
     let skipped = 0;
     for (const r of rows) {

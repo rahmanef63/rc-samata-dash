@@ -6,6 +6,7 @@ import { buildVendorIndex } from "../../shared/vendorResolver";
 import { CSV_SHEET } from "../../shared/sheetNames";
 import { computePayableStatus, applyPayment } from "../../shared/payableStatus";
 import { LIMITS } from "../../shared/limits";
+import { PARTY } from "../../projectConstants";
 import { mirrorTx } from "../transactions/_helpers";
 import {
   classificationValidator as classifyValidator,
@@ -165,7 +166,7 @@ export const importLaporanPicLong = mutation({
           const txId = await mirrorTx(ctx, {
             branchId, kind: "transfer", direction: "transfer",
             date: r.paidDate, amount: r.amount, status: "completed",
-            counterparty: direction === "branch_to_owner" ? "OWNER" : "OWNER (incoming)",
+            counterparty: direction === "branch_to_owner" ? PARTY.OWNER : PARTY.OWNER_INCOMING,
             description: r.notes, reference: r.reference, method: direction,
             sourceKind: "laporan_pic_csv",
             sourceFileName: sourceFileName ?? r.fileName,

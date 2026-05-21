@@ -14,6 +14,7 @@ import {
   transferStatusValidator,
   bankCategoryValidator,
 } from "./_types";
+import { MATCH } from "../../projectConstants";
 import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
@@ -669,7 +670,7 @@ export const importBankStatementEntries = mutation({
     //      (tolerance Rp 1500).
     //   3. Don't double-link: skip payables already linked by another
     //      entry in this same import pass.
-    const TOL = 1500;
+    const TOL = MATCH.TOLERANCE_RP;
     const openPayablesAll = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", batch.branchId))
       .take(LIMITS.PAYABLES_PAGE);
@@ -1074,7 +1075,7 @@ export const autoMatchPayables = mutation({
     }
     rejected += orphanBanks.length;
 
-    const TOL = 1500;
+    const TOL = MATCH.TOLERANCE_RP;
     const matchBank = async (b: BankEntry, payableId: string) => {
       const ref = nextRef(b.txDate, payableId);
       await ctx.db.insert("validationLogs", {

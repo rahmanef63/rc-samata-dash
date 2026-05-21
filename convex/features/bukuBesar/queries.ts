@@ -2,6 +2,7 @@ import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
+import { PARTY } from "../../projectConstants";
 
 // Unified ledger view — UNION + normalize rows from every cash-flow
 // table into a single shape so the Buku Besar UI can paint one table
@@ -12,7 +13,7 @@ export const listBukuBesar = query({
   args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
   handler: async (ctx, { branchId, limit }) => {
     await requireAuth(ctx);
-    const cap = limit ?? 5000;
+    const cap = limit ?? LIMITS.TX_PAGE;
 
     const payables = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
@@ -93,7 +94,7 @@ export const listBukuBesar = query({
         date: t.transferDate,
         direction: "transfer",
         kategori: t.direction === "branch_to_owner" ? "Setoran → Owner" : "Dana ← Owner",
-        counterparty: t.direction === "branch_to_owner" ? "OWNER" : "OWNER (incoming)",
+        counterparty: t.direction === "branch_to_owner" ? PARTY.OWNER : PARTY.OWNER_INCOMING,
         amount: t.amount,
         sisa: 0,
         status: t.status,
