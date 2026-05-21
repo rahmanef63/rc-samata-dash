@@ -2,8 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Landmark } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
+import { PageHeader } from "@/shared/components";
 
 const View = dynamic(
   () => import("@/features/closing/components/BankStatementBatchesNotionView").then((m) => ({ default: m.BankStatementBatchesNotionView })),
@@ -14,5 +15,14 @@ export default function Page() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
   const branchId = branches?.[0]?._id;
   if (!branchId) return <p className="p-8 text-center text-sm text-muted-foreground">Memuat cabang...</p>;
-  return <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8"><View branchId={branchId} /></div>;
+  return (
+    <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+      <PageHeader
+        icon={Landmark}
+        title="Statement Bank"
+        description="Batch statement bank owner & PIC yang sudah diupload. Klik baris untuk reconciliation detail."
+      />
+      <View branchId={branchId} />
+    </div>
+  );
 }

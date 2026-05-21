@@ -3,6 +3,8 @@ export { AreaChartCard } from "./AreaChartCard";
 export { PieChartCard } from "./PieChartCard";
 export { WaterfallChart } from "./WaterfallChart";
 export { SectionHeader } from "./SectionHeader";
+export { PageHeader } from "./PageHeader";
+export { EmptyState } from "./EmptyState";
 export { ListCard } from "./ListCard";
 export { ProgressBar } from "./ProgressBar";
 export { TabBar } from "./TabBar";
