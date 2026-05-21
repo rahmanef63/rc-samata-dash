@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAction, useQuery } from "convex/react";
-import { Database, Sparkles, Loader2, CheckCircle, RefreshCw } from "lucide-react";
+import { Database, Sparkles, Loader2, CheckCircle, RefreshCw, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import { useBranchScope } from "@/features/dashboard";
@@ -19,6 +19,7 @@ type SeedResult = {
 export function MasterDataSeed() {
   const { branchId } = useBranchScope();
   const runSeed = useAction(api.features.masterData.mutations.runFullMasterSeed);
+  const runBackfill = useAction(api.features.reports.bridges.backfillAllReports);
   const rules = useQuery(api.features.masterData.queries.listCategoryRules, { activeOnly: true });
   const sheets = useQuery(api.features.masterData.queries.listSheetRegistry, { activeOnly: true });
   const cats = useQuery(api.features.masterData.queries.listExpenseCategories);
@@ -26,7 +27,29 @@ export function MasterDataSeed() {
   const ingredients = useQuery(api.features.masterData.queries.listMasterIngredients, {});
 
   const [running, setRunning] = useState(false);
+  const [bridging, setBridging] = useState(false);
   const [result, setResult] = useState<SeedResult | null>(null);
+  const [bridgeResult, setBridgeResult] = useState<{ reports: number; inserted: number } | null>(null);
+
+  async function handleBackfill() {
+    setBridging(true);
+    try {
+      const out = await runBackfill();
+      const inserted = (out.results ?? []).reduce((s: number, r: { payables?: { inserted?: number }; expenses?: { inserted?: number }; sales?: { inserted?: number }; transfers?: { inserted?: number }; incentives?: { inserted?: number } }) =>
+        s +
+        (r.payables?.inserted ?? 0) +
+        (r.expenses?.inserted ?? 0) +
+        (r.sales?.inserted ?? 0) +
+        (r.transfers?.inserted ?? 0) +
+        (r.incentives?.inserted ?? 0), 0);
+      setBridgeResult({ reports: out.reports, inserted });
+      toast.success(`Bridge selesai: ${out.reports} laporan, +${inserted} transaksi`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bridge gagal");
+    } finally {
+      setBridging(false);
+    }
+  }
 
   async function handleSeed() {
     if (!branchId) {
@@ -124,6 +147,38 @@ export function MasterDataSeed() {
           Tip: jalankan setiap habis upload laporan baru — bahan/produk yang muncul
           di file otomatis ke-bootstrap ke master.
         </p>
+
+        <div className="border-t border-border/60 pt-4 mt-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+              <GitBranch className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Bridge ulang semua laporan</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Sinkron ulang staging → Buku Besar (transactions) + Piutang (payables) +
+                Closings + Stock movements untuk SEMUA laporan yang sudah ada. Pakai
+                kalau Buku Besar / Piutang kosong padahal upload sukses (terjadi pada
+                laporan yang di-upload sebelum auto-bridge ada).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleBackfill}
+              disabled={bridging}
+              className="inline-flex items-center gap-2 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {bridging ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+              {bridging ? "Bridging..." : "Bridge Sekarang"}
+            </button>
+          </div>
+          {bridgeResult && (
+            <p className="text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-2 flex items-center gap-2">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+              {bridgeResult.reports} laporan diproses · +{bridgeResult.inserted} transaksi/payable di-insert
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

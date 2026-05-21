@@ -486,6 +486,47 @@ export const bridgeOneReport = mutation({
   },
 });
 
+// ─── Per-report bridge action (auto-run after upload) ──────
+
+/**
+ * Orchestrate semua bridge untuk SATU report. Dipanggil setiap kali
+ * `finalizeWeeklyReport` selesai sukses. Tanpa ini, staging tables
+ * terisi tapi `transactions` (buku besar) + `payables` (piutang) kosong.
+ *
+ * 7 bridges + deriveVendors di awal supaya creditPurchases bisa link
+ * ke vendor.
+ */
+export const runBridgesForReport = action({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }): Promise<{
+    deriveVendors: any;
+    sales: any; closings: any; payables: any;
+    stock: any; expenses: any; transfers: any; incentives: any;
+    movements: any;
+  }> => {
+    // 1. Pastikan vendor master populated dulu dari creditPurchases.supplierName
+    const deriveVendors = await ctx.runMutation(internal.features.reports.bridges.deriveVendorsInternal);
+
+    // 2. 7 bridges sequential
+    const sales = await ctx.runMutation(internal.features.reports.bridges.bridgeProductSalesToDailySalesInternal, { reportId });
+    const closings = await ctx.runMutation(internal.features.reports.bridges.bridgeDailyCashFlowToClosingsInternal, { reportId });
+    const payables = await ctx.runMutation(internal.features.reports.bridges.bridgeCreditPurchasesToPayablesInternal, { reportId });
+    const stock = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryToStockInternal, { reportId });
+    const expenses = await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToExpensesInternal, { reportId });
+    const transfers = await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToOwnerTransfersInternal, { reportId });
+    const incentives = await ctx.runMutation(internal.features.reports.bridges.bridgeIncentivesToExpensesInternal, { reportId });
+
+    // 3. Inventory movements per branch (compute deltas across reports)
+    const reportRow: any = await ctx.runQuery(internal.features.reports.bridges.getReportInternal, { reportId });
+    let movements: any = { inserted: 0 };
+    if (reportRow?.branchId) {
+      movements = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: reportRow.branchId });
+    }
+
+    return { deriveVendors, sales, closings, payables, stock, expenses, transfers, incentives, movements };
+  },
+});
+
 // ─── Backfill action over all weeklyReports ────────────────
 
 export const backfillAllReports = action({
@@ -535,6 +576,13 @@ export const listAllReportsInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("weeklyReports").collect();
+  },
+});
+
+export const getReportInternal = internalQuery({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    return await ctx.db.get(reportId);
   },
 });
 

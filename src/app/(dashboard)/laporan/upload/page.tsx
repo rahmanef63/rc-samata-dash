@@ -309,6 +309,7 @@ export default function LaporanUploadPage() {
   const importOwnerTransfers = useMutation(api.features.reports.mutations.importOwnerTransfersBatch);
   const importIncentive   = useMutation(api.features.reports.mutations.importEmployeeIncentivesBatch);
   const finalizeReport    = useMutation(api.features.reports.mutations.finalizeWeeklyReport);
+  const runBridges        = useAction(api.features.reports.bridges.runBridgesForReport);
   const deleteReport      = useMutation(api.features.reports.mutations.deleteWeeklyReport);
   const updateValidation  = useMutation(api.features.reports.mutations.updateValidationStatus);
   const indexReport       = useAction(api.features.ai.indexing.indexReportData);
@@ -565,6 +566,26 @@ export default function LaporanUploadPage() {
           tip: w.tip,
         })),
       });
+
+      // Auto-bridge: write staging → transactions (buku besar) + payables.
+      // Tanpa langkah ini, /finance/buku-besar dan /finance/payables tetap
+      // kosong meski staging tables terisi sempurna.
+      setProgress({ current: total, total, label: "Sinkron Buku Besar & Piutang..." });
+      try {
+        const bridgeResult = await runBridges({ reportId });
+        const totalBridged =
+          (bridgeResult.payables?.inserted ?? 0) +
+          (bridgeResult.expenses?.inserted ?? 0) +
+          (bridgeResult.sales?.inserted ?? 0) +
+          (bridgeResult.transfers?.inserted ?? 0) +
+          (bridgeResult.incentives?.inserted ?? 0);
+        if (totalBridged > 0) {
+          toast.success(`Buku Besar tersinkron: +${totalBridged} transaksi`);
+        }
+      } catch (e) {
+        toast.error("Bridge gagal — buka Settings → Bridge Ulang untuk retry");
+        console.error("bridge error", e);
+      }
 
       setResult(counts);
       setLastReportId(reportId);
