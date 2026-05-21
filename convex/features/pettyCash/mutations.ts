@@ -2,7 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
-import { pettyCashCategoryValidator } from "../../shared/validators";
+import { pettyCashCategoryValidator, pettyCashStatusValidator } from "./_types";
 
 export const create = mutation({
   args: {
@@ -12,7 +12,7 @@ export const create = mutation({
     requestedAmount: v.number(),
     approvedAmount: v.number(),
     actualAmount: v.number(),
-    status: v.union(v.literal("requested"), v.literal("approved"), v.literal("rejected"), v.literal("disbursed"), v.literal("closed")),
+    status: pettyCashStatusValidator,
     notes: v.string(),
     hasAttachment: v.boolean(),
     branchId: v.id("branches"),
@@ -35,7 +35,11 @@ export const update = mutation({
     id: v.id("pettyCashRequests"),
     approvedAmount: v.optional(v.number()),
     actualAmount: v.optional(v.number()),
-    status: v.optional(v.union(v.literal("requested"), v.literal("approved"), v.literal("rejected"), v.literal("disbursed"), v.literal("closed"))),
+    status: v.optional(pettyCashStatusValidator),
+    requestDate: v.optional(v.string()),
+    requestedAmount: v.optional(v.number()),
+    purposeCategory: v.optional(pettyCashCategoryValidator),
+    hasAttachment: v.optional(v.boolean()),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...data }) => {

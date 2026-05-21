@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Download, Upload, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { NotionDatabase } from "@/features/notion-shell/components/NotionDatabase";
 import type { Database, DatabaseViewConfig, Page, PropertyValue, Property } from "@/features/notion-shell/types";
+import { RowSelectionProvider, useRowSelection } from "@/features/notion-shell/row-selection";
 import { parseCsvText, csvEscape, downloadCsv } from "@/shared/lib/csv";
 import { cn } from "@/lib/utils";
 
@@ -56,10 +57,19 @@ export type EntityNotionViewProps<T extends { _id: string }> = {
   toolbarExtras?: React.ReactNode;
 };
 
-export function EntityNotionView<T extends { _id: string }>({
+export function EntityNotionView<T extends { _id: string }>(props: EntityNotionViewProps<T>) {
+  const rowOrder = useMemo(() => (props.rows ?? []).map((r) => r._id), [props.rows]);
+  return (
+    <RowSelectionProvider rowOrder={rowOrder}>
+      <EntityNotionViewInner {...props} />
+    </RowSelectionProvider>
+  );
+}
+
+function EntityNotionViewInner<T extends { _id: string }>({
   config, rows, onRowUpdate, onBulkPatch, onBulkDelete, toolbarExtras,
 }: EntityNotionViewProps<T>) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const sel = useRowSelection();
   const [busy, setBusy] = useState(false);
   const [activeViewId, setActiveViewId] = useState(config.views[0]?.id ?? "v_table");
 
@@ -103,8 +113,8 @@ export function EntityNotionView<T extends { _id: string }>({
   };
 
   const selectedRows = useMemo(
-    () => (rows ?? []).filter((r) => selected.has(r._id)),
-    [rows, selected],
+    () => (rows ?? []).filter((r) => sel.isSelected(r._id)),
+    [rows, sel],
   );
 
   const handleExport = () => {
@@ -177,7 +187,7 @@ export function EntityNotionView<T extends { _id: string }>({
     try {
       const res = await onBulkDelete(selectedRows.map((r) => r._id));
       toast.success(`${res.deleted} row dihapus`);
-      setSelected(new Set());
+      sel.clear();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Bulk delete gagal");
     } finally {
@@ -196,11 +206,20 @@ export function EntityNotionView<T extends { _id: string }>({
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-border bg-card shadow-sm p-3 flex items-center gap-2 flex-wrap">
-        <SelectionControl
-          rows={rows}
-          selected={selected}
-          setSelected={setSelected}
-        />
+        <SelectionStatus rows={rows} />
+        <button
+          onClick={() => sel.setIds(rows.map((r) => r._id))}
+          className="px-2 py-0.5 rounded border border-border hover:bg-muted/50 text-xs font-semibold"
+        >
+          Pilih Semua
+        </button>
+        <button
+          onClick={() => sel.clear()}
+          disabled={sel.count === 0}
+          className="px-2 py-0.5 rounded border border-border hover:bg-muted/50 text-xs font-semibold disabled:opacity-50"
+        >
+          Clear
+        </button>
         <button
           onClick={handleExport}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs font-semibold"
@@ -249,33 +268,12 @@ export function EntityNotionView<T extends { _id: string }>({
   );
 }
 
-function SelectionControl<T extends { _id: string }>({
-  rows, selected, setSelected,
-}: {
-  rows: T[];
-  selected: Set<string>;
-  setSelected: (s: Set<string>) => void;
-}) {
+function SelectionStatus<T extends { _id: string }>({ rows }: { rows: T[] }) {
+  const sel = useRowSelection();
   return (
-    <div className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground">Pilih:</span>
-      <button
-        onClick={() => setSelected(new Set(rows.map((r) => r._id)))}
-        className="px-2 py-0.5 rounded border border-border hover:bg-muted/50 font-semibold"
-      >
-        Semua ({rows.length})
-      </button>
-      <button
-        onClick={() => setSelected(new Set())}
-        disabled={selected.size === 0}
-        className="px-2 py-0.5 rounded border border-border hover:bg-muted/50 font-semibold disabled:opacity-50"
-      >
-        Clear
-      </button>
-      <span className="ml-1 font-mono text-[10px] text-muted-foreground">
-        {selected.size} terpilih
-      </span>
-    </div>
+    <span className="font-mono text-[10px] text-muted-foreground">
+      {sel.count} / {rows.length} terpilih
+    </span>
   );
 }
 
