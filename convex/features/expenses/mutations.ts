@@ -59,6 +59,38 @@ export const update = mutation({
   },
 });
 
+// Partial expense patch — per-cell edit from Notion view.
+export const patch = mutation({
+  args: {
+    id: v.id("expenses"),
+    expenseDate: v.optional(v.string()),
+    amount: v.optional(v.number()),
+    description: v.optional(v.string()),
+    paymentSource: v.optional(paymentSourceValidator),
+    status: v.optional(approvalStatusValidator),
+    hasAttachment: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Expense not found");
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) {
+      if (val !== undefined) patch[k] = val;
+    }
+    if (typeof patch.amount === "number" && (patch.amount as number) <= 0) {
+      throw new Error("amount must be > 0");
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    await insertAuditLog(ctx, {
+      entityType: "expenses", entityId: id, action: "update",
+      description: `Patched expense ${existing.categoryName}`,
+      actedBy: userId, branchId: existing.branchId,
+    });
+    return id;
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("expenses") },
   handler: async (ctx, args) => {

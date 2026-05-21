@@ -6,6 +6,7 @@ import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
 import { computePayableStatus } from "../../shared/payableStatus";
 import { LIMITS } from "../../shared/limits";
+import { syncTxFromPayable } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
 export const create = mutation({
@@ -72,6 +73,18 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, patch);
+    // Two-way mirror: keep the SSOT row in sync so Buku Besar sees the
+    // updated invoice instantly. Idempotent via bridge transactionId.
+    if (existing.transactionId) {
+      await syncTxFromPayable(ctx, existing.transactionId, {
+        date: data.invoiceDate,
+        amount: data.amount,
+        paidAmount: data.paidAmount,
+        status: patch.status as string | undefined,
+        counterparty: data.vendorName,
+        description: data.description,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: id, action: "update",
       description: `Updated payable ${data.vendorName ?? existing.vendorName}`,

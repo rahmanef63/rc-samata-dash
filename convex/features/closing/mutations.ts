@@ -15,7 +15,7 @@ import {
   bankCategoryValidator,
 } from "./_types";
 import { MATCH } from "../../projectConstants";
-import { mirrorTx } from "../transactions/_helpers";
+import { mirrorTx, syncTxFromClosing, syncTxFromTransfer, syncTxFromReceipt } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
 export const createClosing = mutation({
@@ -141,6 +141,15 @@ export const updateClosing = mutation({
       if (val !== undefined) patch[key] = val;
     }
     await ctx.db.patch(id, patch);
+    // Two-way sync to transactions SSOT
+    if (existing.transactionId) {
+      await syncTxFromClosing(ctx, existing.transactionId, {
+        amount: data.actualCash !== undefined
+          ? (data.actualCash + (existing.nonCashSales ?? 0))
+          : undefined,
+        status: data.status,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "dailyClosings", entityId: id, action: "update",
       description: `Updated closing ${existing.businessDate}`,
@@ -196,6 +205,16 @@ export const updateTransfer = mutation({
       if (v !== undefined) patch[k] = v;
     }
     await ctx.db.patch(id, patch);
+    // Two-way sync to transactions SSOT
+    if (existing.transactionId) {
+      await syncTxFromTransfer(ctx, existing.transactionId, {
+        date: data.transferDate,
+        amount: data.amount,
+        status: data.status,
+        reference: data.referenceNo,
+        method: data.direction,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: id, action: "update",
       description: `Updated transfer ${existing.transferDate} Rp${existing.amount}`,

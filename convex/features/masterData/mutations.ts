@@ -64,6 +64,28 @@ export const deleteVendor = mutation({
   },
 });
 
+// Partial vendor patch — for per-cell edits from Notion view where
+// only one field changes at a time.
+export const patchVendor = mutation({
+  args: {
+    id: v.id("vendors"),
+    name: v.optional(v.string()),
+    type: v.optional(vendorTypeValidator),
+    phone: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) {
+      if (val !== undefined) patch[k] = val;
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
 // ─── Income Channels ────────────────────────────────────────
 export const createIncomeChannel = mutation({
   args: { name: v.string(), type: incomeChannelTypeValidator, isSettlementDelayed: v.boolean() },
