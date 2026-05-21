@@ -1,6 +1,7 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { inferFromRules, isUncategorized } from "../../shared/categoryInference";
 
 // ─── Validators ──────────────────────────────────────────────
 
@@ -135,20 +136,16 @@ export const importLPKKBatch = mutation({
 
     // Server-side fallback: kalau parser klien gagal infer (rules belum loaded
     // saat parse) atau xlsx col "Lain-lain" punya amount, kita coba sekali
-    // lagi di sini berdasarkan description via categoryRules DB.
-    const rulesRaw = await ctx.db.query("categoryRules").withIndex("by_priority").take(2000);
-    const activeRules = rulesRaw.filter((r) => r.isActive).sort((a, b) => a.priority - b.priority);
+    // lagi di sini berdasarkan description via categoryRules DB. Pakai shared
+    // inferFromRules() supaya match logic identik dengan client (termasuk
+    // whitespace-norm fallback: TFOWNER ↔ TF OWNER, KIRIMLAPORAN ↔ KIRIM LAPORAN).
+    const activeRules = await ctx.db.query("categoryRules").withIndex("by_priority").take(2000);
     const upgradeLabel = (label: string, desc: string): { label: string; type: "cogs" | "utility" | "other" } => {
-      if (label.toLowerCase().trim() !== "lain-lain") return { label, type: "other" };
-      const up = String(desc ?? "").toUpperCase();
-      if (!up.trim()) return { label, type: "other" };
-      for (const r of activeRules) {
-        if (up.includes(r.keyword.toUpperCase())) {
-          const newType = r.type === "cogs" || r.type === "utility" ? r.type : "other";
-          return { label: r.label, type: newType as "cogs" | "utility" | "other" };
-        }
-      }
-      return { label, type: "other" };
+      if (!isUncategorized(label)) return { label, type: "other" };
+      const inferred = inferFromRules(desc, activeRules);
+      if (!inferred || isUncategorized(inferred.label)) return { label, type: "other" };
+      const newType = inferred.type === "cogs" || inferred.type === "utility" ? inferred.type : "other";
+      return { label: inferred.label, type: newType };
     };
 
     let count = 0;
@@ -158,7 +155,7 @@ export const importLPKKBatch = mutation({
       if (item.amount <= 0) { rowIdx++; continue; }
       const upgraded = upgradeLabel(item.categoryLabel, item.description);
       const useLabel = upgraded.label;
-      const useType = item.categoryLabel.toLowerCase().trim() === "lain-lain" ? upgraded.type : item.categoryType;
+      const useType = isUncategorized(item.categoryLabel) ? upgraded.type : item.categoryType;
       const cat = findCategory(useLabel, useType);
       if (!cat) { rowIdx++; continue; }
       await ctx.db.insert("expenses", {

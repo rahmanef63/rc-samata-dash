@@ -87,11 +87,25 @@ export function inferFromRules(
   const up = String(text ?? "").toUpperCase();
   if (!up.trim()) return null;
   const sorted = [...rules].filter((r) => r.isActive).sort((a, b) => a.priority - b.priority);
+
+  // Pass 1: literal substring match (preserves spacing)
   for (const r of sorted) {
     if (up.includes(r.keyword.toUpperCase())) {
       return { label: r.label, type: r.type as CategoryType };
     }
   }
+
+  // Pass 2: whitespace-stripped match — handles variant spellings like
+  // "TFOWNER" vs "TF OWNER", "KIRIMLAPORAN" vs "KIRIM LAPORAN". Restricted
+  // to keywords ≥4 chars (stripped) to avoid noise from tiny abbreviations.
+  const upStripped = up.replace(/\s+/g, "");
+  for (const r of sorted) {
+    const kwStripped = r.keyword.toUpperCase().replace(/\s+/g, "");
+    if (kwStripped.length >= 4 && upStripped.includes(kwStripped)) {
+      return { label: r.label, type: r.type as CategoryType };
+    }
+  }
+
   return null;
 }
 

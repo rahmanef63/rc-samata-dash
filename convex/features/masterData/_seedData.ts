@@ -216,6 +216,30 @@ export const DEFAULT_CATEGORY_RULES: { keyword: string; label: string; type: str
   { keyword: "CABLE TIES",    label: "Foto Copy/ATK",   type: "other", priority: 35 },
   { keyword: "ISOLASI",       label: "Foto Copy/ATK",   type: "other", priority: 35 },
   { keyword: "TUSUK GIGI",    label: "Bahan Pembungkus", type: "cogs", priority: 35 },
+
+  // ── Pulsa / Internet karyawan + provider
+  { keyword: "XL PRABAYAR",   label: "Internet",        type: "utility", priority: 10 },
+  { keyword: "PRABAYAR",      label: "Internet",        type: "utility", priority: 20 },
+  { keyword: "BUDGET PULSA",  label: "Internet",        type: "utility", priority: 15 },
+  { keyword: "PULSA",         label: "Internet",        type: "utility", priority: 25 },
+  { keyword: "TELKOMSEL",     label: "Internet",        type: "utility", priority: 20 },
+  { keyword: "INDOSAT",       label: "Internet",        type: "utility", priority: 20 },
+
+  // ── Bahan tambahan resep (PATTY untuk burger, dll)
+  { keyword: "BAHAN PATTY",   label: "Groceries/Bumbu", type: "cogs", priority: 15 },
+  { keyword: "PATTY",         label: "Groceries/Bumbu", type: "cogs", priority: 30 },
+  { keyword: "BURGER",        label: "Groceries/Bumbu", type: "cogs", priority: 35 },
+
+  // ── Renovasi / equipment
+  { keyword: "RENOVASI DAPUR",label: "Maintenance",     type: "maintenance", priority: 10 },
+  { keyword: "RENOVASI",      label: "Maintenance",     type: "maintenance", priority: 15 },
+  { keyword: "MIC",           label: "Maintenance",     type: "maintenance", priority: 60 }, // setelah MICIN (40)
+  { keyword: "SOUND",         label: "Maintenance",     type: "maintenance", priority: 35 },
+
+  // ── Print / materai (varian Foto Copy/ATK)
+  { keyword: "PRINT",         label: "Foto Copy/ATK",   type: "other", priority: 25 },
+  { keyword: "PRINTING",      label: "Foto Copy/ATK",   type: "other", priority: 25 },
+  { keyword: "MATERAI",       label: "Foto Copy/ATK",   type: "other", priority: 15 },
 ];
 
 /**
