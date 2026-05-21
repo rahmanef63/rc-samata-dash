@@ -14,7 +14,7 @@ import type { DailyCashFlowItem } from "../parsers/parseLapCF";
 import type { DailyCashSummaryItem } from "../parsers/parseLaporanKasPeriode";
 import type { LPKKItem } from "../parsers/parseLPKK";
 import type { InventoryValuationItem } from "../parsers/parseWeeklyFC";
-import { isUncategorized } from "../../../../convex/shared/categoryInference";
+import { isUncategorized, inferFromRules } from "../../../../convex/shared/categoryInference";
 
 export type ValidationSeverity = "warning" | "info";
 
@@ -44,6 +44,8 @@ type ParsedDataForValidation = {
   periodEnd: string;
   /** DB-backed sheet registry — filters known-skipped sheets out of Sheet Baru warning. */
   sheetRegistry?: Array<{ sheetNamePattern: string; isParsed: boolean; isActive: boolean }>;
+  /** DB-backed category rules — predicts server-side upgrade so "Lain-lain" count is accurate even when parser used static fallback. */
+  categoryRules?: Array<{ keyword: string; label: string; type: string; priority: number; isActive: boolean }>;
 };
 
 /** Normalize for comparison (same as server-side normalizeItemName) */
@@ -222,8 +224,19 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
 
   // 9. Uncategorized expense rows — owner should validate before import
   //    so food ingredients don't silently land in "Lain-lain" bucket.
-  const lpkkLainLain = (data.lpkk ?? []).filter((l) => isUncategorized(l.categoryLabel));
-  const weeklyFcLainLain = (data.weeklyFc ?? []).filter((w) => isUncategorized(w.category));
+  //    Predict server-side upgrade: if categoryRules can recategorize the
+  //    description, the row WON'T end up as "Lain-lain" in DB → skip from
+  //    warning count.
+  const willStayLainLain = (label: string, description: string): boolean => {
+    if (!isUncategorized(label)) return false;
+    if (data.categoryRules && data.categoryRules.length > 0) {
+      const inferred = inferFromRules(description, data.categoryRules);
+      if (inferred && !isUncategorized(inferred.label)) return false;
+    }
+    return true;
+  };
+  const lpkkLainLain = (data.lpkk ?? []).filter((l) => willStayLainLain(l.categoryLabel, l.description));
+  const weeklyFcLainLain = (data.weeklyFc ?? []).filter((w) => willStayLainLain(w.category, w.itemName));
   if (lpkkLainLain.length > 0 || weeklyFcLainLain.length > 0) {
     const details: string[] = [];
     const fullDetails: string[] = [];

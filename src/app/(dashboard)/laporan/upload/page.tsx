@@ -273,6 +273,26 @@ export default function LaporanUploadPage() {
   const categoryRules = useQuery(api.features.masterData.queries.listCategoryRules, { activeOnly: true });
   const categoryRulesRef = useRef<typeof categoryRules>(undefined);
   categoryRulesRef.current = categoryRules;
+
+  // Re-validate kalau rules / sheetRegistry baru loaded SETELAH parse selesai —
+  // covers race condition cold-page + immediate upload.
+  useEffect(() => {
+    if (!parsed) return;
+    const warnings = validateParsedData(
+      {
+        ...parsed,
+        sheetRegistry: sheetRegistry ?? [],
+        categoryRules: categoryRules ?? [],
+      },
+      parsed.fileName,
+    );
+    setValidationWarnings((prev) => {
+      const dup = prev.find((w) => w.category === "Duplikat Periode");
+      return dup ? [dup, ...warnings] : warnings;
+    });
+    // parsed reference stable per upload; we only want to re-fire when DB data arrives
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryRules, sheetRegistry]);
   const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
   const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
   const importVendor      = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
@@ -354,7 +374,11 @@ export default function LaporanUploadPage() {
       };
       setParsed(data);
       const warnings = validateParsedData(
-        { ...data, sheetRegistry: sheetRegistryRef.current ?? [] },
+        {
+          ...data,
+          sheetRegistry: sheetRegistryRef.current ?? [],
+          categoryRules: categoryRulesRef.current ?? [],
+        },
         file.name,
       );
       setValidationWarnings(warnings);

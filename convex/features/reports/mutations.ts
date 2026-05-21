@@ -132,12 +132,34 @@ export const importLPKKBatch = mutation({
       categories.find((c) => c.type === type) ??
       categories.find((c) => c.type === "other") ??
       categories[0];
+
+    // Server-side fallback: kalau parser klien gagal infer (rules belum loaded
+    // saat parse) atau xlsx col "Lain-lain" punya amount, kita coba sekali
+    // lagi di sini berdasarkan description via categoryRules DB.
+    const rulesRaw = await ctx.db.query("categoryRules").withIndex("by_priority").take(2000);
+    const activeRules = rulesRaw.filter((r) => r.isActive).sort((a, b) => a.priority - b.priority);
+    const upgradeLabel = (label: string, desc: string): { label: string; type: "cogs" | "utility" | "other" } => {
+      if (label.toLowerCase().trim() !== "lain-lain") return { label, type: "other" };
+      const up = String(desc ?? "").toUpperCase();
+      if (!up.trim()) return { label, type: "other" };
+      for (const r of activeRules) {
+        if (up.includes(r.keyword.toUpperCase())) {
+          const newType = r.type === "cogs" || r.type === "utility" ? r.type : "other";
+          return { label: r.label, type: newType as "cogs" | "utility" | "other" };
+        }
+      }
+      return { label, type: "other" };
+    };
+
     let count = 0;
     let rowIdx = 0;
     const report: any = await ctx.db.get(reportId);
     for (const item of items) {
       if (item.amount <= 0) { rowIdx++; continue; }
-      const cat = findCategory(item.categoryLabel, item.categoryType);
+      const upgraded = upgradeLabel(item.categoryLabel, item.description);
+      const useLabel = upgraded.label;
+      const useType = item.categoryLabel.toLowerCase().trim() === "lain-lain" ? upgraded.type : item.categoryType;
+      const cat = findCategory(useLabel, useType);
       if (!cat) { rowIdx++; continue; }
       await ctx.db.insert("expenses", {
         expenseDate: item.expenseDate,

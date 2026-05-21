@@ -55,6 +55,7 @@ import type * as features_laporanPic__types from "../features/laporanPic/_types.
 import type * as features_laporanPic_mutations from "../features/laporanPic/mutations.js";
 import type * as features_laporanPic_queries from "../features/laporanPic/queries.js";
 import type * as features_masterData__schema from "../features/masterData/_schema.js";
+import type * as features_masterData__seedData from "../features/masterData/_seedData.js";
 import type * as features_masterData__types from "../features/masterData/_types.js";
 import type * as features_masterData_mutations from "../features/masterData/mutations.js";
 import type * as features_masterData_queries from "../features/masterData/queries.js";
@@ -154,6 +155,7 @@ declare const fullApi: ApiFromModules<{
   "features/laporanPic/mutations": typeof features_laporanPic_mutations;
   "features/laporanPic/queries": typeof features_laporanPic_queries;
   "features/masterData/_schema": typeof features_masterData__schema;
+  "features/masterData/_seedData": typeof features_masterData__seedData;
   "features/masterData/_types": typeof features_masterData__types;
   "features/masterData/mutations": typeof features_masterData_mutations;
   "features/masterData/queries": typeof features_masterData_queries;

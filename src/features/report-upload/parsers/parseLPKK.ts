@@ -111,10 +111,24 @@ export function parseLPKK(wb: XLSX.WorkBook, rules?: CategoryRule[]): LPKKItem[]
     for (const col of CATEGORY_COLS) {
       const amt = toNumber(row[col.index]);
       if (amt > 0) {
+        let label = col.label;
+        let type: "cogs" | "utility" | "other" = col.type;
+        // Owner sering nyimpen item ber-kategori (TF OWNER, ADMIN OVO, GAS,
+        // TOKEN LISTRIK, dll) di kolom "Lain-lain" xlsx. Coba upgrade via
+        // inference berdasarkan description — DB rules first, static fallback
+        // kedua. Tetap "Lain-lain" hanya kalau inference juga mentok.
+        if (label === "Lain-lain") {
+          const fromDb = rules && rules.length > 0 ? inferFromRules(description, rules) : null;
+          const inferred = fromDb ?? inferIngredientCategory(description);
+          if (inferred && inferred.label && inferred.label !== "Lain-lain") {
+            label = inferred.label;
+            type = inferred.type === "cogs" || inferred.type === "utility" ? inferred.type : "other";
+          }
+        }
         result.push({
           expenseDate: lastDate,
-          categoryType: col.type,
-          categoryLabel: col.label,
+          categoryType: type,
+          categoryLabel: label,
           description,
           amount: amt,
           referenceNo,
