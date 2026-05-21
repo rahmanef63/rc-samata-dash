@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator } from "../../shared/validators";
+import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator, productCategoryValidator, ingredientCategoryValidator } from "./_types";
 import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
 import {
@@ -141,15 +141,6 @@ export const deleteExpenseCategory = mutation({
 });
 
 // ─── Master Products ───────────────────────────────────────
-
-const productCategoryValidator = v.union(
-  v.literal("ayam"),
-  v.literal("minuman"),
-  v.literal("snack"),
-  v.literal("paket"),
-  v.literal("sambal"),
-  v.literal("lainnya"),
-);
 
 /**
  * Bootstrap masterProducts from existing productSales + productHPP data.
@@ -319,16 +310,6 @@ export const upsertMasterProduct = mutation({
   },
 });
 
-const ingredientCategoryValidator = v.union(
-  v.literal("protein"),
-  v.literal("sayur"),
-  v.literal("bumbu"),
-  v.literal("minyak"),
-  v.literal("kemasan"),
-  v.literal("minuman_bahan"),
-  v.literal("lainnya"),
-);
-
 export const upsertMasterIngredient = mutation({
   args: {
     id: v.optional(v.id("masterIngredients")),
@@ -385,12 +366,97 @@ export const addIngredientAlias = mutation({
   },
 });
 
+export const patchMasterProduct = mutation({
+  args: {
+    id: v.id("masterProducts"),
+    canonicalName: v.optional(v.string()),
+    code: v.optional(v.string()),
+    category: v.optional(productCategoryValidator),
+    defaultSellingPrice: v.optional(v.number()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const patchMasterIngredient = mutation({
+  args: {
+    id: v.id("masterIngredients"),
+    canonicalName: v.optional(v.string()),
+    code: v.optional(v.string()),
+    category: v.optional(ingredientCategoryValidator),
+    unit: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
 export const deleteMasterProduct = mutation({
   args: { id: v.id("masterProducts") },
   handler: async (ctx, { id }) => {
     await requireAuth(ctx);
     await ctx.db.delete(id);
     return null;
+  },
+});
+
+// ─── Partial patches for Notion view per-cell edits ────────
+export const patchIncomeChannel = mutation({
+  args: {
+    id: v.id("incomeChannels"),
+    name: v.optional(v.string()),
+    type: v.optional(incomeChannelTypeValidator),
+    isSettlementDelayed: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const patchExpenseCategory = mutation({
+  args: {
+    id: v.id("expenseCategories"),
+    name: v.optional(v.string()),
+    type: v.optional(expenseCategoryTypeValidator),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const patchBranch = mutation({
+  args: {
+    id: v.id("branches"),
+    code: v.optional(v.string()),
+    name: v.optional(v.string()),
+    location: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
   },
 });
 

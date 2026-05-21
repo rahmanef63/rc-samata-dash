@@ -154,6 +154,16 @@ export const listValidationBatches = query({
   },
 });
 
+export const listVendorBankAliases = query({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }) => {
+    await requireAuth(ctx);
+    return await ctx.db.query("vendorBankAliases")
+      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .take(LIMITS.ALIASES_PAGE);
+  },
+});
+
 export const listValidationLogs = query({
   args: {
     branchId: v.id("branches"),

@@ -74,7 +74,9 @@ export interface Page {
 
 export type PropertyType =
   | "text" | "number" | "select" | "multi_select" | "status"
-  | "date" | "checkbox" | "url" | "email" | "phone";
+  | "date" | "checkbox" | "url" | "email" | "phone"
+  | "relation" | "rollup" | "formula"
+  | "created_time" | "last_edited_time";
 
 export interface SelectOption {
   id: string;
@@ -83,6 +85,10 @@ export interface SelectOption {
 }
 
 export type NumberFormat = "number" | "decimal" | "percent" | "currency";
+
+export type RollupAggregate =
+  | "count" | "count_unique" | "values" | "sum" | "avg"
+  | "min" | "max" | "earliest" | "latest" | "checked" | "percent_checked";
 
 export interface Property {
   id: string;
@@ -93,6 +99,30 @@ export interface Property {
   options?: SelectOption[];
   numberFormat?: NumberFormat;
   numberDecimals?: number;
+  numberCurrencyCode?: string;
+
+  // ─── Relation ─────────────────────────────────────────
+  /** Convex table the related row lives in. Used by RelationCell to
+   *  resolve titles via a runtime lookup hook. */
+  relationTableName?: string;
+  /** Cached display field on the related row (e.g. `name`, `vendorName`). */
+  relationDisplayField?: string;
+  /** Two-way mirror flag — kept for parity with notion-clone domain.
+   *  Convex schema enforces inverse via explicit FK; this is metadata. */
+  relationTwoWay?: boolean;
+  /** Inverse property id on the target db (if mirrored). */
+  relationInversePropertyId?: string;
+
+  // ─── Rollup ───────────────────────────────────────────
+  /** Property id on THIS database whose value is a relation. */
+  rollupRelationPropertyId?: string;
+  /** Property id on the TARGET database whose value is being aggregated. */
+  rollupTargetPropertyId?: string;
+  rollupAggregate?: RollupAggregate;
+
+  // ─── Formula ─────────────────────────────────────────
+  /** Mock formula expression. Supports {{title}}, {{Property}}, simple =math. */
+  formulaExpression?: string;
 }
 
 export type PropertyValue =

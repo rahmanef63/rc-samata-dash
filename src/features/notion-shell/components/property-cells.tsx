@@ -162,6 +162,41 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
         />
       );
 
+    case "relation": {
+      // Read-only render. Value can be a single id, array of ids, or
+      // a pre-resolved display string (preferred — host pre-computes
+      // names in `toPage` for cheaper render).
+      if (Array.isArray(value)) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {(value as string[]).slice(0, 5).map((s, i) => (
+              <span key={i} className="rounded-full border border-border bg-muted/30 px-1.5 py-0.5 text-[10px]">{s}</span>
+            ))}
+            {(value as string[]).length > 5 && (
+              <span className="text-[10px] text-muted-foreground">+{(value as string[]).length - 5}</span>
+            )}
+          </div>
+        );
+      }
+      return <span className="text-xs">{String(value ?? "—")}</span>;
+    }
+
+    case "rollup":
+    case "formula":
+    case "created_time":
+    case "last_edited_time": {
+      // Read-only computed columns. Host pre-computes the value in `toPage`
+      // and stores it in rowProps. We just display.
+      if (value == null) return <span className="text-muted-foreground/60">—</span>;
+      if (typeof value === "number") {
+        const fmt = prop.numberFormat === "currency"
+          ? new Intl.NumberFormat("id-ID", { style: "currency", currency: prop.numberCurrencyCode ?? "IDR", maximumFractionDigits: 0 })
+          : new Intl.NumberFormat("id-ID");
+        return <span className="text-xs font-mono">{fmt.format(value)}</span>;
+      }
+      return <span className="text-xs">{String(value)}</span>;
+    }
+
     default:
       return (
         <Input

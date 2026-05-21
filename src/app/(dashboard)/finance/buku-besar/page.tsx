@@ -1,9 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Loader2 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
-import { BukuBesarNotion } from "@/features/buku-besar/components/BukuBesarNotion";
+
+const BukuBesarNotion = dynamic(
+  () => import("@/features/buku-besar/components/BukuBesarNotion").then((m) => ({ default: m.BukuBesarNotion })),
+  { ssr: false, loading: () => <p className="px-8 py-12 text-sm text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Memuat Buku Besar...</p> },
+);
 
 export default function Page() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -17,7 +22,7 @@ export default function Page() {
           Buku Besar
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Semua transaksi cabang dalam satu tabel SSOT. 6 visual (Tabel / Board / List / Kalender / Gallery / Feed), per-cell edit, multi-row select via checkbox, Export+Replace via CSV.
+          Semua transaksi cabang dalam satu tabel SSOT. 6 visual, per-cell edit, multi-row checkbox, Export+Replace CSV.
         </p>
       </header>
       <BukuBesarNotion branchId={branchId} />

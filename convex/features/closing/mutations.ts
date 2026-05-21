@@ -1253,6 +1253,33 @@ export const autoMatchPayables = mutation({
 });
 
 // Learn vendor alias from a manual binding (PIC fixes match in UI).
+export const patchVendorAlias = mutation({
+  args: {
+    id: v.id("vendorBankAliases"),
+    alias: v.optional(v.string()),
+    accountNo: v.optional(v.string()),
+    vendorId: v.optional(v.id("vendors")),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
+    if (patch.alias !== undefined) patch.alias = normalizeAlias(patch.alias as string);
+    patch.lastSeenAt = Date.now();
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const deleteVendorAlias = mutation({
+  args: { id: v.id("vendorBankAliases") },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    await ctx.db.delete(args.id);
+    return null;
+  },
+});
+
 export const learnVendorAlias = mutation({
   args: {
     vendorId: v.id("vendors"),
