@@ -3,30 +3,11 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import type { Id } from "../../_generated/dataModel";
-
-const kindValidator = v.union(
-  v.literal("invoice"),
-  v.literal("payment"),
-  v.literal("receipt"),
-  v.literal("transfer"),
-  v.literal("expense"),
-  v.literal("anomaly"),
-);
-
-const directionValidator = v.union(
-  v.literal("in"),
-  v.literal("out"),
-  v.literal("transfer"),
-);
-
-const sourceKindValidator = v.union(
-  v.literal("weekly_upload"),
-  v.literal("statement_bank"),
-  v.literal("laporan_pic_csv"),
-  v.literal("bulk_import_csv"),
-  v.literal("manual"),
-  v.literal("system"),
-);
+import {
+  txKindValidator as kindValidator,
+  txDirectionValidator as directionValidator,
+  sourceKindValidator,
+} from "./_types";
 
 // ─── Idempotent upsert by source signature ──────────────────
 // Caller passes the source trace; if a row already exists with the

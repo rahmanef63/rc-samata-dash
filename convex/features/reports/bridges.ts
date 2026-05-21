@@ -20,6 +20,7 @@ import { mutation, action, internalMutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../../_generated/api";
 import { requireAuth } from "../../shared/auth";
+import { SHEET, SHEET_BY_CHANNEL } from "../../shared/sheetNames";
 import { mirrorTx } from "../transactions/_helpers";
 
 // ─── Master-data seeds ──────────────────────────────────────
@@ -258,7 +259,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
         submittedBy: userId,
         submittedAt: new Date().toISOString(),
         sourceFileName: report.fileName,
-        sourceSheetName: "LAP. CF",
+        sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: inserted + 2,
         branchId: report.branchId,
       });
@@ -272,7 +273,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
         description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
-        sourceSheetName: "LAP. CF",
+        sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: inserted + 2,
         sourceReportId: reportId,
         userId,
@@ -348,12 +349,12 @@ export const bridgeCreditPurchasesToPayables = mutation({
         status,
         description,
         sourceFileName: report.fileName,
-        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
-          rowIndex: rowIdx, sheetName: "PEMBELIAN KREDIT",
+          rowIndex: rowIdx, sheetName: SHEET.PEMBELIAN_KREDIT,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
@@ -365,7 +366,7 @@ export const bridgeCreditPurchasesToPayables = mutation({
         counterparty: g.supplier, description,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
-        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         sourceReportId: reportId,
         userId,
@@ -486,7 +487,7 @@ export const bridgeCashFlowToExpenses = mutation({
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
-          rowIndex: rowIdx, sheetName: "LAP. CF",
+          rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
@@ -662,10 +663,6 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       const promoCost = dayTotalGross > 0 ? (g.gross / dayTotalGross) * totalDiscount : 0;
       const netAmount = Math.max(0, g.gross - platformFee - promoCost);
       const cashReceivedAmount = g.channel === "all" ? netAmount : 0;
-      const sheetMap: Record<string, string> = {
-        all: "LAP. PENJUALAN", gofood: "LAP. PENJUALAN GRAB FOOD",
-        grabfood: "LAP. PENJUALAN GRAB FOOD", shopeefood: "LAP. PENJUALAN SHOPEE FOOD", tambahan: "LAP. PENJUALAN",
-      };
       await ctx.db.insert("dailySales", {
         businessDate: g.date, channelId: chan.id, channelName: chan.name,
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
@@ -676,7 +673,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
           stagingTable: "productSales",
           tabLabel: "Penjualan",
           rowIndex: rowIdx,
-          sheetName: sheetMap[g.channel] ?? "LAP. PENJUALAN",
+          sheetName: SHEET_BY_CHANNEL[g.channel] ?? SHEET.LAP_PENJUALAN,
           fileName: report.fileName,
           periodStart: report.periodStart,
           periodEnd: report.periodEnd,
@@ -708,11 +705,11 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         nonCashSales: 0, expensesPaidCash, expectedCash, actualCash: f.closingBalance, difference,
         status: "submitted", submittedBy: "system", submittedAt: new Date().toISOString(), branchId: report.branchId,
         sourceFileName: report.fileName,
-        sourceSheetName: "LAP. CF",
+        sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: rowIdx + 2,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
-          rowIndex: rowIdx, sheetName: "LAP. CF",
+          rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
@@ -724,7 +721,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         description: `Opening ${f.openingBalance} · Sales ${f.salesInflow} · Closing ${f.closingBalance} · Diff ${difference}`,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
-        sourceSheetName: "LAP. CF",
+        sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: rowIdx + 2,
         sourceReportId: reportId,
         userId: "system",
@@ -773,12 +770,12 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         amount: g.amount, paidAmount, status,
         description,
         sourceFileName: report.fileName,
-        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
-          rowIndex: rowIdx, sheetName: "PEMBELIAN KREDIT",
+          rowIndex: rowIdx, sheetName: SHEET.PEMBELIAN_KREDIT,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
@@ -791,7 +788,7 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         counterparty: g.supplier, description,
         sourceKind: "weekly_upload",
         sourceFileName: report.fileName,
-        sourceSheetName: "PEMBELIAN KREDIT",
+        sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         sourceReportId: reportId,
         userId: "system",
@@ -822,7 +819,7 @@ export const bridgeInventoryToStockInternal = internalMutation({
       const status = v.qty <= 0 ? "Critical" : v.qty < 5 ? "Low" : "Stable";
       const etlSource = {
         reportId, stagingTable: "inventoryValuation", tabLabel: "Inventory",
-        rowIndex: rowIdx, sheetName: "WEEKLY FC",
+        rowIndex: rowIdx, sheetName: SHEET.WEEKLY_FC,
         fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
       };
       if (existing) {
@@ -867,7 +864,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
-          rowIndex: rowIdx, sheetName: "LAP. CF",
+          rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
       });
@@ -940,7 +937,7 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
             stagingTable: "inventoryValuation",
             tabLabel: "Stock Delta",
             rowIndex: i,
-            sheetName: "WEEKLY FC",
+            sheetName: SHEET.WEEKLY_FC,
             fileName: curReport?.fileName,
             periodStart: curReport?.periodStart,
             periodEnd: curReport?.periodEnd,
@@ -987,7 +984,7 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
           referenceNo: `IN-${f.businessDate}`,
           status: "completed" as const,
           sourceFileName: report.fileName,
-          sourceSheetName: "LAP. CF",
+          sourceSheetName: SHEET.LAP_CF,
           sourceRowNumber: rowIdx + 2,
           branchId: report.branchId,
           reportId,
@@ -1002,7 +999,7 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
           method: "owner_to_branch",
           sourceKind: "weekly_upload",
           sourceFileName: report.fileName,
-          sourceSheetName: "LAP. CF",
+          sourceSheetName: SHEET.LAP_CF,
           sourceRowNumber: rowIdx + 2,
           sourceReportId: reportId,
           userId: "system",

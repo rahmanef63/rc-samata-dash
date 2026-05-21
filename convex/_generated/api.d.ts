@@ -64,6 +64,7 @@ import type * as features_reports_queries from "../features/reports/queries.js";
 import type * as features_sales__schema from "../features/sales/_schema.js";
 import type * as features_sales_mutations from "../features/sales/mutations.js";
 import type * as features_sales_queries from "../features/sales/queries.js";
+import type * as features_transactions__helpers from "../features/transactions/_helpers.js";
 import type * as features_transactions__schema from "../features/transactions/_schema.js";
 import type * as features_transactions_mutations from "../features/transactions/mutations.js";
 import type * as features_transactions_queries from "../features/transactions/queries.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "features/sales/_schema": typeof features_sales__schema;
   "features/sales/mutations": typeof features_sales_mutations;
   "features/sales/queries": typeof features_sales_queries;
+  "features/transactions/_helpers": typeof features_transactions__helpers;
   "features/transactions/_schema": typeof features_transactions__schema;
   "features/transactions/mutations": typeof features_transactions_mutations;
   "features/transactions/queries": typeof features_transactions_queries;

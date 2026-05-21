@@ -7,6 +7,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { useImportLong, useImportPivot } from "../api";
 import { parseLaporanPicCsv, classifyTransaksi, type TransaksiRow, type MatchPiutangRow, type Classification } from "../parsers";
 import { formatRpFull } from "@/shared/lib";
+import { CSV_SHEET as SHEET_TAGS } from "@/shared/constants/sheetNames";
 import { cn } from "@/lib/utils";
 
 type ParsedState =
@@ -97,7 +98,7 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
         const res = await importLong({
           branchId, rows: rowsWithIdx,
           sourceFileName: fileName || undefined,
-          sourceSheetName: "TRANSAKSI",
+          sourceSheetName: SHEET_TAGS.TRANSAKSI,
         });
         let msg = `Selesai — ${res.payablesCreated} tagihan, ${res.receiptsCreated} bayar (${res.receiptsLinked} linked), ${res.transfersCreated} transfer, ${res.anomaliesCreated} anomali`;
         if (res.unresolved > 0) msg += `, ${res.unresolved} vendor unresolved`;
@@ -110,7 +111,7 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
         const res = await importPivot({
           branchId, rows: rowsWithIdx,
           sourceFileName: fileName || undefined,
-          sourceSheetName: "MATCH_PIUTANG",
+          sourceSheetName: SHEET_TAGS.MATCH_PIUTANG,
         });
         let msg = `Selesai — ${res.payablesCreated} tagihan, ${res.receiptsCreated} bayar matched`;
         if (res.unresolved > 0) msg += `, ${res.unresolved} vendor unresolved`;

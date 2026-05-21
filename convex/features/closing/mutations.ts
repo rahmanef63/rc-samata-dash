@@ -2,6 +2,9 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { inferTxKind } from "../../shared/txClassify";
+import { buildVendorIndex } from "../../shared/vendorResolver";
+import { normalizeAlias, looseEqual } from "../../shared/normalize";
 import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
@@ -280,9 +283,7 @@ export const importPaymentReceiptsBulk = mutation({
 
     // Cache: vendor name → vendorId, latest open payable per vendor.
     const vendors = await ctx.db.query("vendors").take(2000);
-    const vendorByName = new Map(
-      vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]),
-    );
+    const vendorIdx = buildVendorIndex(vendors);
     const allPayables = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .take(5000);
@@ -300,13 +301,7 @@ export const importPaymentReceiptsBulk = mutation({
       try {
         let payableId: Id<"payables"> | undefined;
         if (r.vendorName) {
-          const up = r.vendorName.toUpperCase().trim();
-          let vendor = vendorByName.get(up);
-          if (!vendor) {
-            for (const [nm, vnd] of vendorByName) {
-              if (up.includes(nm) || nm.includes(up)) { vendor = vnd; break; }
-            }
-          }
+          const vendor = vendorIdx.resolve(r.vendorName);
           if (vendor) {
             // Pick the OLDEST open payable for this vendor (FIFO style)
             // whose remaining ≥ amount, so partial payments still attach.
@@ -516,9 +511,7 @@ export const importBankStatementEntries = mutation({
 
     // Pre-load vendor list once for opportunistic alias seeding.
     const vendors = await ctx.db.query("vendors").take(2000);
-    const vendorByName = new Map(
-      vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]),
-    );
+    const vendorIdx = buildVendorIndex(vendors);
     const aliasesSeeded: Record<string, number> = {};
 
     // Synthetic validationBatch lazily created on first link so any
@@ -572,23 +565,11 @@ export const importBankStatementEntries = mutation({
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
 
       // ── Mirror to transactions SSOT ──────────────────────
-      const txKind: "invoice" | "payment" | "receipt" | "transfer" | "expense" | "anomaly" =
-        r.category === "sales_inflow" ? "receipt"
-        : r.category === "expense_outflow" ? "expense"
-        : r.category === "payable_payment" ? "payment"
-        : r.category === "topup_pic" ? "transfer"
-        : r.category === "owner_capital" ? "transfer"
-        : r.category === "transfer_internal" ? "transfer"
-        : r.category === "other" ? "anomaly"
-        : r.debit > 0 ? "expense" : "receipt";
-      const txDirection: "in" | "out" | "transfer" =
-        r.category === "topup_pic" || r.category === "transfer_internal" ? "transfer"
-        : r.credit > 0 ? "in" : "out";
-      const amount = r.debit > 0 ? r.debit : r.credit;
+      const cls = inferTxKind(r.category, r.debit, r.credit);
       const txId = await mirrorTx(ctx, {
         branchId: batch.branchId,
-        kind: txKind, direction: txDirection,
-        date: r.txDate, amount,
+        kind: cls.kind, direction: cls.direction,
+        date: r.txDate, amount: cls.amount,
         status: r.payableId ? "linked" : "unlinked",
         payableId: r.payableId,
         counterparty: r.counterparty,
@@ -628,7 +609,7 @@ export const importBankStatementEntries = mutation({
       // Manual alias learn (UI set learnAlias=true). Distinct from the
       // opportunistic vendor-name seeding below — this one trusts the user.
       if (r.learnAlias && r.counterparty && r.payableId) {
-        const cp = r.counterparty.toUpperCase().trim();
+        const cp = normalizeAlias(r.counterparty);
         const payable = await ctx.db.get(r.payableId);
         if (payable && cp) {
           const existingAlias = await ctx.db.query("vendorBankAliases")
@@ -657,16 +638,8 @@ export const importBankStatementEntries = mutation({
       // Seed vendor alias if counterparty contains an existing vendor name
       // (opportunistic — kept for un-linked payable_payment rows).
       if (!r.learnAlias && r.counterparty && r.category === "payable_payment") {
-        const cp = r.counterparty.toUpperCase().trim();
-        let matchedVendor = vendorByName.get(cp);
-        if (!matchedVendor) {
-          for (const [name, vnd] of vendorByName) {
-            if (cp.includes(name) || name.includes(cp)) {
-              matchedVendor = vnd;
-              break;
-            }
-          }
-        }
+        const cp = normalizeAlias(r.counterparty);
+        const matchedVendor = vendorIdx.resolve(cp);
         if (matchedVendor) {
           const existing = await ctx.db.query("vendorBankAliases")
             .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId).eq("alias", cp))
@@ -717,19 +690,19 @@ export const importBankStatementEntries = mutation({
       .take(2000);
     type AliasIdx = { name: string; vendorId: string };
     const aliasIndex: AliasIdx[] = [];
-    for (const a of aliases) aliasIndex.push({ name: a.alias.toUpperCase().trim(), vendorId: a.vendorId });
+    for (const a of aliases) aliasIndex.push({ name: normalizeAlias(a.alias), vendorId: a.vendorId });
     for (const vnd of vendors) {
       const cleaned = vnd.name.toUpperCase().replace(/\b(INDONES(IA)?|CV|PT|TBK)\b/g, "").trim();
       aliasIndex.push({ name: cleaned, vendorId: vnd._id });
-      aliasIndex.push({ name: vnd.name.toUpperCase().trim(), vendorId: vnd._id });
+      aliasIndex.push({ name: normalizeAlias(vnd.name), vendorId: vnd._id });
     }
     aliasIndex.sort((a, b) => b.name.length - a.name.length);
     const findVendorId = (text: string): string | null => {
-      const up = (text ?? "").toUpperCase().trim();
+      const up = normalizeAlias(text);
       if (!up) return null;
       for (const { name, vendorId } of aliasIndex) {
         if (name.length < 3) continue;
-        if (up.includes(name) || name.includes(up)) return vendorId;
+        if (looseEqual(up, name)) return vendorId;
       }
       return null;
     };
@@ -1054,17 +1027,17 @@ export const autoMatchPayables = mutation({
       .take(2000);
     const vendors = await ctx.db.query("vendors").take(2000);
     const aliasMap = new Map<string, string>();
-    for (const a of aliases) aliasMap.set(a.alias.toUpperCase().trim(), a.vendorId);
-    for (const v of vendors) aliasMap.set(v.name.toUpperCase().trim(), v._id);
+    for (const a of aliases) aliasMap.set(normalizeAlias(a.alias), a.vendorId);
+    for (const v of vendors) aliasMap.set(normalizeAlias(v.name), v._id);
 
     // helper: find vendorId from text via alias or substring
     const findVendorId = (text: string): string | null => {
-      const up = text.toUpperCase().trim();
+      const up = normalizeAlias(text);
       if (!up) return null;
       const direct = aliasMap.get(up);
       if (direct) return direct;
       for (const [name, id] of aliasMap) {
-        if (up.includes(name) || name.includes(up)) return id;
+        if (looseEqual(up, name)) return id;
       }
       return null;
     };
@@ -1242,7 +1215,7 @@ export const learnVendorAlias = mutation({
   },
   handler: async (ctx, { vendorId, alias, branchId }) => {
     await requireAuth(ctx);
-    const norm = alias.toUpperCase().trim();
+    const norm = normalizeAlias(alias);
     if (!norm) return { ok: false };
     const existing = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", norm))
@@ -1337,7 +1310,7 @@ export const commitAutoMatchSuggestions = mutation({
 
           // Learn vendor alias for future auto-match
           if (cur.counterparty && payable.vendorId) {
-            const aliasNorm = cur.counterparty.toUpperCase().trim();
+            const aliasNorm = normalizeAlias(cur.counterparty);
             if (aliasNorm) {
               const existingAlias = await ctx.db.query("vendorBankAliases")
                 .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", aliasNorm))

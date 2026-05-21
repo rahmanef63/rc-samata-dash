@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { paymentMethodValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { buildVendorIndex } from "../../shared/vendorResolver";
 import type { Id } from "../../_generated/dataModel";
 
 export const create = mutation({
@@ -157,7 +158,7 @@ export const importPayablesBulk = mutation({
     const userId = await requireAuth(ctx);
 
     const vendors = await ctx.db.query("vendors").take(2000);
-    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
+    const vendorIdx = buildVendorIndex(vendors);
 
     let inserted = 0;
     const errors: { line: number; message: string }[] = [];
@@ -166,13 +167,7 @@ export const importPayablesBulk = mutation({
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       try {
-        const up = r.vendorName.toUpperCase().trim();
-        let vendor = byName.get(up);
-        if (!vendor) {
-          for (const [nm, vnd] of byName) {
-            if (up.includes(nm) || nm.includes(up)) { vendor = vnd; break; }
-          }
-        }
+        const vendor = vendorIdx.resolve(r.vendorName);
         if (!vendor) {
           unresolvedVendors.add(r.vendorName);
           errors.push({ line: i + 2, message: `Vendor "${r.vendorName}" tidak ada di master` });

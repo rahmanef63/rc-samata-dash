@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { normalizeAlias, looseEqual } from "../../shared/normalize";
 
 export const getClosingByDate = query({
   args: { branchId: v.id("branches"), businessDate: v.string() },
@@ -208,22 +209,22 @@ export const previewAutoMatch = query({
 
     type AliasIdx = { name: string; vendorId: string };
     const aliasIndex: AliasIdx[] = [];
-    for (const a of aliases) aliasIndex.push({ name: a.alias.toUpperCase().trim(), vendorId: a.vendorId });
+    for (const a of aliases) aliasIndex.push({ name: normalizeAlias(a.alias), vendorId: a.vendorId });
     for (const v of vendors) {
       // Strip common corporate suffixes for better substring match
       const cleaned = v.name.toUpperCase().replace(/\b(INDONES(IA)?|CV|PT|TBK)\b/g, "").trim();
       aliasIndex.push({ name: cleaned, vendorId: v._id });
-      aliasIndex.push({ name: v.name.toUpperCase().trim(), vendorId: v._id });
+      aliasIndex.push({ name: normalizeAlias(v.name), vendorId: v._id });
     }
 
     const findVendorId = (text: string): string | null => {
-      const up = (text ?? "").toUpperCase().trim();
+      const up = normalizeAlias(text);
       if (!up) return null;
       // Longest-first scan
       const sorted = aliasIndex.slice().sort((a, b) => b.name.length - a.name.length);
       for (const { name, vendorId } of sorted) {
         if (name.length < 3) continue;
-        if (up.includes(name) || name.includes(up)) return vendorId;
+        if (looseEqual(up, name)) return vendorId;
       }
       return null;
     };

@@ -11,6 +11,8 @@
  * Order matters: more-specific keywords first (MINYAK before BERAS).
  */
 
+import { normalizeAlias } from "./normalize";
+
 export type CategoryType = "cogs" | "utility" | "other" | "bpjs" | "salary_support" | "maintenance" | "marketing" | "fee";
 
 export type InferredCategory = {
@@ -70,6 +72,6 @@ export function inferIngredientCategory(text: string): InferredCategory {
  * Check whether an inferred result is the fallback (i.e. nothing matched).
  */
 export function isUncategorized(label: string): boolean {
-  const up = label.toUpperCase().trim();
+  const up = normalizeAlias(label);
   return up === "LAIN-LAIN" || up === "UMUM" || up === "OTHER" || up === "";
 }

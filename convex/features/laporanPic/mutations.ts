@@ -2,6 +2,8 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { buildVendorIndex } from "../../shared/vendorResolver";
+import { CSV_SHEET } from "../../shared/sheetNames";
 import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
@@ -49,15 +51,8 @@ export const importLaporanPicLong = mutation({
     const now = Date.now();
 
     const vendors = await ctx.db.query("vendors").take(2000);
-    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
-    const resolveVendor = (name: string) => {
-      const up = name.toUpperCase().trim();
-      if (byName.has(up)) return byName.get(up)!;
-      for (const [nm, vnd] of byName) {
-        if (up.includes(nm) || nm.includes(up)) return vnd;
-      }
-      return null;
-    };
+    const vendorIdx = buildVendorIndex(vendors);
+    const resolveVendor = vendorIdx.resolve;
 
     const openPayables = (await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
@@ -276,15 +271,8 @@ export const importLaporanPicPivot = mutation({
     const now = Date.now();
 
     const vendors = await ctx.db.query("vendors").take(2000);
-    const byName = new Map(vendors.map((vnd) => [vnd.name.toUpperCase().trim(), vnd]));
-    const resolveVendor = (name: string) => {
-      const up = name.toUpperCase().trim();
-      if (byName.has(up)) return byName.get(up)!;
-      for (const [nm, vnd] of byName) {
-        if (up.includes(nm) || nm.includes(up)) return vnd;
-      }
-      return null;
-    };
+    const vendorIdx = buildVendorIndex(vendors);
+    const resolveVendor = vendorIdx.resolve;
 
     let payablesCreated = 0;
     let receiptsCreated = 0;

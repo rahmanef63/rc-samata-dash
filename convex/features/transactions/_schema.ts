@@ -1,5 +1,10 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  txKindValidator,
+  txDirectionValidator,
+  sourceKindValidator,
+} from "./_types";
 
 // ─── Unified transactions table (SSOT) ──────────────────────
 //
@@ -23,20 +28,9 @@ import { v } from "convex/values";
 
 export const transactionsTables = {
   transactions: defineTable({
-    // ─── Discriminator ───────────────────────────────────────
-    kind: v.union(
-      v.literal("invoice"),       // tagihan vendor (payables-equivalent)
-      v.literal("payment"),       // bayar piutang (paymentReceipts-equivalent)
-      v.literal("receipt"),       // pemasukan cash (sales)
-      v.literal("transfer"),      // PIC ↔ Owner
-      v.literal("expense"),       // pengeluaran kas (expenses-equivalent)
-      v.literal("anomaly"),       // flagged for review
-    ),
-    direction: v.union(
-      v.literal("in"),
-      v.literal("out"),
-      v.literal("transfer"),
-    ),
+    // ─── Discriminator (literals SSOT in ./_types) ───────────
+    kind: txKindValidator,
+    direction: txDirectionValidator,
 
     // ─── Core fields ─────────────────────────────────────────
     branchId: v.id("branches"),
@@ -73,14 +67,7 @@ export const transactionsTables = {
     proofMimeType: v.optional(v.string()),
 
     // ─── Source trace ───────────────────────────────────────
-    sourceKind: v.union(
-      v.literal("weekly_upload"),
-      v.literal("statement_bank"),
-      v.literal("laporan_pic_csv"),
-      v.literal("bulk_import_csv"),
-      v.literal("manual"),
-      v.literal("system"),                 // auto-derived / bridge
-    ),
+    sourceKind: sourceKindValidator,
     sourceFileName: v.optional(v.string()),
     sourceFileStorageId: v.optional(v.id("_storage")),
     sourceSheetName: v.optional(v.string()),

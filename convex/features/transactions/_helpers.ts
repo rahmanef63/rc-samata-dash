@@ -1,5 +1,6 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
+import type { TxKind, TxDirection, SourceKind } from "./_types";
 
 // Internal mirror helper — call from any legacy mutation that inserts
 // into payables / paymentReceipts / ownerTransfers / dailyClosings /
@@ -10,8 +11,8 @@ import type { Id } from "../../_generated/dataModel";
 
 export type MirrorArgs = {
   branchId: Id<"branches">;
-  kind: "invoice" | "payment" | "receipt" | "transfer" | "expense" | "anomaly";
-  direction: "in" | "out" | "transfer";
+  kind: TxKind;
+  direction: TxDirection;
   date: string;
   amount: number;
   paidAmount?: number;
@@ -35,7 +36,7 @@ export type MirrorArgs = {
   proofFileName?: string;
   proofStorageId?: Id<"_storage">;
   proofMimeType?: string;
-  sourceKind: "weekly_upload" | "statement_bank" | "laporan_pic_csv" | "bulk_import_csv" | "manual" | "system";
+  sourceKind: SourceKind;
   sourceFileName?: string;
   sourceFileStorageId?: Id<"_storage">;
   sourceSheetName?: string;

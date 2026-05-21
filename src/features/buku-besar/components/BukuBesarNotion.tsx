@@ -9,6 +9,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { NotionDatabase } from "@/features/notion-shell/components/NotionDatabase";
 import type { Database, DatabaseViewConfig, Page, PropertyValue } from "@/features/notion-shell/types";
 import { PROPERTIES, buildDatabase, txToPage, propToColumn, type TxRow } from "../lib/notionAdapter";
+import { parseCsvLine, parseCsvText, csvEscape, downloadCsv } from "@/shared/lib/csv";
 import { cn } from "@/lib/utils";
 
 // Wraps notion-shell's NotionDatabase with convex bindings so the
@@ -80,17 +81,11 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
     const header = ["_id", ...PROPERTIES.map((p) => p.name)];
     const lines = target.map((r) => cols.map((c) => {
       const v = c === "_id" ? r._id : (r as unknown as Record<string, unknown>)[c];
-      const s = v == null ? "" : String(v);
-      return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      return csvEscape(v);
     }).join(","));
     const csv = [header.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `buku-besar-${selectedRows.length > 0 ? "selected-" : ""}${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `buku-besar-${selectedRows.length > 0 ? "selected-" : ""}${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadCsv(filename, csv);
     toast.success(`${target.length} row di-export${selectedRows.length > 0 ? " (selected)" : ""}`);
   };
 
@@ -98,12 +93,11 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
     setBusy(true);
     try {
       const text = await file.text();
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-      if (lines.length < 2) {
+      const { header, rows: csvRows } = parseCsvText(text);
+      if (csvRows.length === 0) {
         toast.error("CSV kosong atau tanpa data");
         return;
       }
-      const header = lines[0].split(",").map((s) => s.trim().replace(/^"|"$/g, ""));
       const idIdx = header.indexOf("_id");
       if (idIdx < 0) {
         toast.error("CSV tidak punya kolom _id — gunakan file hasil Export Selected");
@@ -115,8 +109,7 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
       const colToProp = header.map((name) => name === "_id" ? null : (nameToProp[name] ?? null));
 
       const patches: { id: Id<"transactions">; data: Record<string, unknown> }[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cells = parseCsvLine(lines[i]);
+      for (const cells of csvRows) {
         const id = (cells[idIdx] ?? "").trim() as Id<"transactions">;
         if (!id) continue;
         const data: Record<string, unknown> = {};
@@ -286,22 +279,3 @@ function SelectionControl({
   );
 }
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQ) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (ch === '"') inQ = false;
-      else cur += ch;
-    } else {
-      if (ch === ",") { out.push(cur); cur = ""; }
-      else if (ch === '"') inQ = true;
-      else cur += ch;
-    }
-  }
-  out.push(cur);
-  return out;
-}
