@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { TabBar, DataTable, CrudDialog, SectionHeader } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState } from "@/shared/hooks";
+import { VendorsNotionView } from "./VendorsNotionView";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Vendor, IncomeChannel, ExpenseCategory } from "@/shared/types";
 import { vendorTypeLabels, channelTypeLabels, expenseCategoryTypeLabels } from "../lib";
@@ -94,30 +95,7 @@ export function MasterDataPanel() {
       {activeTab === "Vendor" && (
         <>
           <SectionHeader title="Daftar Vendor / Pemasok" />
-          <DataTable<Vendor>
-            data={vendorTable.sortedItems}
-            columns={vendorColumns}
-            search={vendorTable.search}
-            onSearchChange={vendorTable.setSearch}
-            sort={vendorTable.sort}
-            onToggleSort={vendorTable.toggleSort}
-            onReorder={vendorTable.setOrderedItems}
-            onAdd={vendorCrud.openCreate}
-            onEdit={vendorCrud.openEdit}
-            onDelete={vendorCrud.openDelete}
-            onImport={async (items) => {
-              for (const i of items) {
-                if (i.name) await vendorCrud.onCreate(i);
-              }
-            }}
-            entityName="Vendor"
-          />
-          <CrudDialog<Vendor>
-            open={vendorCrud.isOpen} mode={vendorCrud.mode} item={vendorCrud.selectedItem}
-            fields={vendorFields} entityName="Vendor" onClose={vendorCrud.close}
-            onSubmit={vendorCrud.mode === "edit" ? vendorCrud.onUpdate : vendorCrud.onCreate}
-            onDelete={vendorCrud.onDelete}
-          />
+          <VendorsNotionView />
         </>
       )}
 

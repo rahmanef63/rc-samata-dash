@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
@@ -276,6 +277,12 @@ function ReceiptsListPanel({
           </h2>
           <span className="text-[10px] text-muted-foreground font-mono">{sortedItems.length} / {receipts?.length ?? 0}</span>
         </div>
+        <Link
+          href="/finance/bukti-bayar"
+          className="block w-full text-center text-[11px] font-medium text-primary hover:underline bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded px-2 py-1"
+        >
+          Lihat tabel lengkap (sort · filter · export) →
+        </Link>
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <input
@@ -548,6 +555,12 @@ function StatementBatchesPanel({
   return (
     <div className="lg:col-span-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)]">
       <div className="p-4 border-b border-border/50 bg-muted/20 shrink-0 space-y-2">
+        <Link
+          href="/finance/bank-batches"
+          className="block w-full text-center text-[11px] font-medium text-primary hover:underline bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded px-2 py-1"
+        >
+          Lihat tabel lengkap (sort · filter · export) →
+        </Link>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <Landmark className="h-4 w-4 text-primary" />

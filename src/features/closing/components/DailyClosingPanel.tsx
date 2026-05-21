@@ -14,6 +14,7 @@ import { useState } from "react";
 import { TabBar } from "@/shared/components";
 import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, useCreateTransfer, useUpdateTransfer, useDeleteTransfer } from "../api";
 import { ClosingImportPreview } from "./ClosingImportPreview";
+import { DailyClosingsNotionView } from "./DailyClosingsNotionView";
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
@@ -204,20 +205,11 @@ export function DailyClosingPanel() {
           )}
 
           <SectionHeader title="Riwayat Daily Closing" />
-          <DataTable<DailyClosing>
-            data={closingTable.sortedItems}
-            columns={closingColumns}
-            search={closingTable.search}
-            onSearchChange={closingTable.setSearch}
-            sort={closingTable.sort}
-            onToggleSort={closingTable.toggleSort}
-            onReorder={closingTable.setOrderedItems}
-            onAdd={closingCrud.openCreate}
-            onEdit={closingCrud.openEdit}
-            onDelete={closingCrud.openDelete}
-            onRowClick={(item) => setClosingSourceRow(item)}
-            entityName="Closing"
-          />
+          {currentBranchId ? (
+            <DailyClosingsNotionView branchId={currentBranchId} />
+          ) : (
+            <p className="text-sm text-muted-foreground px-2 py-6">Pilih cabang di header dulu.</p>
+          )}
           <RowSourceDialog
             open={!!closingSourceRow}
             onClose={() => setClosingSourceRow(null)}

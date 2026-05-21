@@ -390,7 +390,7 @@ const userPreferences: TableSpec = {
 
 const aiProviders: TableSpec = {
   name: "aiProviders", feature: "ai", fk: [],
-  incoming: [{ from: "aiCustomInstructions", field: "scopeProviderId" }],
+  incoming: [],
 };
 
 const aiTools: TableSpec = {
@@ -405,7 +405,7 @@ const aiAgents: TableSpec = {
 
 const aiCustomInstructions: TableSpec = {
   name: "aiCustomInstructions", feature: "ai",
-  fk: [{ field: "scopeProviderId", target: "aiProviders", typed: true, note: "optional" }],
+  fk: [],
   incoming: [],
 };
 

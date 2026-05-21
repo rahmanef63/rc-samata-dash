@@ -685,6 +685,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       const promoCost = dayTotalGross > 0 ? (g.gross / dayTotalGross) * totalDiscount : 0;
       const netAmount = Math.max(0, g.gross - platformFee - promoCost);
       const cashReceivedAmount = g.channel === "all" ? netAmount : 0;
+      const sheetName = SHEET_BY_CHANNEL[g.channel] ?? SHEET.LAP_PENJUALAN;
       await ctx.db.insert("dailySales", {
         businessDate: g.date, channelId: chan.id, channelName: chan.name,
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
@@ -695,11 +696,31 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
           stagingTable: "productSales",
           tabLabel: "Penjualan",
           rowIndex: rowIdx,
-          sheetName: SHEET_BY_CHANNEL[g.channel] ?? SHEET.LAP_PENJUALAN,
+          sheetName,
           fileName: report.fileName,
           periodStart: report.periodStart,
           periodEnd: report.periodEnd,
         },
+      });
+      // Mirror to transactions (SSOT for Buku Besar) — kind=receipt (income), direction=in.
+      // Idempotent via (sourceKind+sourceFileName+sourceSheetName+sourceRowNumber).
+      await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "receipt",
+        direction: "in",
+        date: g.date,
+        amount: netAmount,
+        status: "recorded",
+        channelId: chan.id,
+        channelName: chan.name,
+        description: `Penjualan ${chan.name} — ${g.date}`,
+        reference: `etl:${reportId}:${g.channel}:${g.date}`,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: sheetName,
+        sourceRowNumber: rowIdx,
+        sourceReportId: reportId,
+        userId: "system",
       });
       inserted++;
       rowIdx++;
@@ -886,6 +907,23 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
           rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
           fileName: report.fileName, periodStart: report.periodStart, periodEnd: report.periodEnd,
         },
+      });
+      // Mirror ke transactions (SSOT Buku Besar) — kind=expense, direction=out.
+      await mirrorTx(ctx, {
+        branchId: report.branchId,
+        kind: "expense",
+        direction: "out",
+        date: f.businessDate,
+        amount: totalOut,
+        status: "approved",
+        categoryId: cat._id,
+        description: `Pengeluaran harian · ${breakdown}`,
+        sourceKind: "weekly_upload",
+        sourceFileName: report.fileName,
+        sourceSheetName: SHEET.LAP_CF,
+        sourceRowNumber: rowIdx,
+        sourceReportId: reportId,
+        userId: "system",
       });
       inserted++;
       rowIdx++;
