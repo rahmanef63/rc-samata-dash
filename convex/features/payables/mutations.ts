@@ -95,10 +95,28 @@ export const remove = mutation({
     for (const p of payments) {
       await ctx.db.delete(p._id);
     }
+    // Cascade: null out incoming FKs so no orphan refs survive.
+    // paymentReceipts.payableId
+    const linkedReceipts = await ctx.db.query("paymentReceipts")
+      .withIndex("by_payable", (q) => q.eq("payableId", args.id)).collect();
+    for (const r of linkedReceipts) {
+      await ctx.db.patch(r._id, { payableId: undefined });
+    }
+    // bankStatementEntries.payableId
+    const linkedBanks = await ctx.db.query("bankStatementEntries")
+      .withIndex("by_payable", (q) => q.eq("payableId", args.id)).collect();
+    for (const b of linkedBanks) {
+      await ctx.db.patch(b._id, { payableId: undefined });
+    }
+    // transactions.payableId — bridge-FK from SSOT to this legacy row.
+    if (existing.transactionId) {
+      const tx = await ctx.db.get(existing.transactionId);
+      if (tx) await ctx.db.patch(existing.transactionId, { payableId: undefined });
+    }
     await ctx.db.delete(args.id);
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: args.id, action: "delete",
-      description: `Deleted payable ${existing.vendorName} (${payments.length} payments)`,
+      description: `Deleted payable ${existing.vendorName} (${payments.length} payments, ${linkedReceipts.length + linkedBanks.length} bridge FKs cleared)`,
       actedBy: userId, branchId: existing.branchId,
     });
     return null;

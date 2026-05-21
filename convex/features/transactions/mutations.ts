@@ -140,17 +140,81 @@ export const bulkDeleteTransactions = mutation({
   handler: async (ctx, { branchId, ids }) => {
     const userId = await requireAuth(ctx);
     let deleted = 0;
+    let cleared = 0;
+    // Cascade: clear bridge-FK pointers on legacy rows that reference
+    // this tx, otherwise the legacy row holds a dangling transactionId.
+    // We DO NOT delete the legacy row itself — it remains the system of
+    // record for that data.
     for (const id of ids) {
-      try { await ctx.db.delete(id); deleted++; } catch { /* skip */ }
+      try {
+        const tx = await ctx.db.get(id);
+        if (!tx) continue;
+        if (tx.payableId) {
+          const p = await ctx.db.get(tx.payableId);
+          if (p && p.transactionId === id) {
+            await ctx.db.patch(tx.payableId, { transactionId: undefined });
+            cleared++;
+          }
+        }
+        if (tx.receiptId) {
+          const r = await ctx.db.get(tx.receiptId);
+          if (r && r.transactionId === id) {
+            await ctx.db.patch(tx.receiptId, { transactionId: undefined });
+            cleared++;
+          }
+        }
+        // Self-FK: any tx that pointed at me as linked/parent — null it.
+        const linked = await ctx.db.query("transactions")
+          .withIndex("by_linked", (q) => q.eq("linkedTxId", id)).collect();
+        for (const l of linked) {
+          await ctx.db.patch(l._id, { linkedTxId: undefined });
+          cleared++;
+        }
+        const parented = await ctx.db.query("transactions")
+          .withIndex("by_parent", (q) => q.eq("parentTxId", id)).collect();
+        for (const p of parented) {
+          await ctx.db.patch(p._id, { parentTxId: undefined });
+          cleared++;
+        }
+        // bankStatementEntries can also bridge-FK back to us.
+        const bankEntries = await ctx.db.query("bankStatementEntries")
+          .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).collect();
+        for (const be of bankEntries) {
+          if (be.transactionId === id) {
+            await ctx.db.patch(be._id, { transactionId: undefined });
+            cleared++;
+          }
+        }
+        // ownerTransfers + dailyClosings bridge — small per-branch
+        // tables; scan + patch.
+        const transfers = await ctx.db.query("ownerTransfers")
+          .withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+        for (const t of transfers) {
+          if (t.transactionId === id) {
+            await ctx.db.patch(t._id, { transactionId: undefined });
+            cleared++;
+          }
+        }
+        const closings = await ctx.db.query("dailyClosings")
+          .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).collect();
+        for (const c of closings) {
+          if (c.transactionId === id) {
+            await ctx.db.patch(c._id, { transactionId: undefined });
+            cleared++;
+          }
+        }
+        await ctx.db.delete(id);
+        deleted++;
+      } catch { /* skip */ }
     }
     await insertAuditLog(ctx, {
       entityType: "transactions",
       entityId: "" as Id<"transactions">,
       action: "delete",
-      description: `Bulk delete transactions — ${deleted}/${ids.length}`,
+      description: `Bulk delete transactions — ${deleted}/${ids.length} (${cleared} bridge FKs cleared)`,
       actedBy: userId, branchId,
     });
-    return { deleted };
+    return { deleted, bridgeFksCleared: cleared };
   },
 });
 

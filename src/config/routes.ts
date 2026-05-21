@@ -88,6 +88,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
       { title: "Master Data", url: "/operation/master-data", icon: Database },
       { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot, roles: SUPER_ADMIN_ONLY },
+      { title: "Schema Graph", url: "/operation/schema-graph", icon: Database, roles: SUPER_ADMIN_ONLY },
       { title: "Manajemen User", url: "/operation/users", icon: Users, roles: SUPER_ADMIN_ONLY },
       { title: "Pengaturan", url: "/operation/settings", icon: Settings },
     ],
