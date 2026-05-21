@@ -58,6 +58,10 @@ const RULES = INFERENCE_RULES.map((r) => ({
 /**
  * Returns inferred {label, type} for an item or description string.
  * Falls back to { label: "Lain-lain", type: "other" } if no rule matches.
+ *
+ * This is the pure/static fallback. Server-side code that has DB access
+ * should prefer `inferFromRules(text, rules[])` which reads from the
+ * `categoryRules` table — keeps the ruleset editable without code change.
  */
 export function inferIngredientCategory(text: string): InferredCategory {
   const up = String(text ?? "").toUpperCase();
@@ -66,6 +70,45 @@ export function inferIngredientCategory(text: string): InferredCategory {
     if (rule.pattern.test(up)) return { label: rule.label, type: rule.type };
   }
   return { label: "Lain-lain", type: "other" };
+}
+
+/**
+ * DB-backed inference. Caller supplies the `categoryRules` rows already
+ * sorted by priority asc (lower = checked first). Matches a keyword if it
+ * appears as a substring (UPPER) of the text. Returns first match.
+ *
+ * Use from client (parsers) via useQuery(api.features.masterData.queries.listCategoryRules)
+ * or from a Convex mutation via ctx.db.query("categoryRules")...
+ */
+export function inferFromRules(
+  text: string,
+  rules: Array<{ keyword: string; label: string; type: string; priority: number; isActive: boolean }>,
+): InferredCategory | null {
+  const up = String(text ?? "").toUpperCase();
+  if (!up.trim()) return null;
+  const sorted = [...rules].filter((r) => r.isActive).sort((a, b) => a.priority - b.priority);
+  for (const r of sorted) {
+    if (up.includes(r.keyword.toUpperCase())) {
+      return { label: r.label, type: r.type as CategoryType };
+    }
+  }
+  return null;
+}
+
+/**
+ * Test if a sheet name matches a known sheet pattern (case-insensitive
+ * substring). Returns the matching registry row or null.
+ */
+export function matchSheetPattern(
+  sheetName: string,
+  registry: Array<{ sheetNamePattern: string; isParsed: boolean; isActive: boolean }>,
+): { isParsed: boolean } | null {
+  const up = sheetName.toUpperCase();
+  for (const r of registry) {
+    if (!r.isActive) continue;
+    if (up.includes(r.sheetNamePattern.toUpperCase())) return { isParsed: r.isParsed };
+  }
+  return null;
 }
 
 /**

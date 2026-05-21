@@ -167,3 +167,24 @@ export const checkItemCoverage = query({
     };
   },
 });
+
+
+// ─── Category rules + sheet registry (DB-backed inference) ──
+
+export const listCategoryRules = query({
+  args: { activeOnly: v.optional(v.boolean()) },
+  handler: async (ctx, { activeOnly }) => {
+    await requireAuth(ctx);
+    const rules = await ctx.db.query("categoryRules").withIndex("by_priority").take(2000);
+    return activeOnly ? rules.filter((r) => r.isActive) : rules;
+  },
+});
+
+export const listSheetRegistry = query({
+  args: { activeOnly: v.optional(v.boolean()) },
+  handler: async (ctx, { activeOnly }) => {
+    await requireAuth(ctx);
+    const rows = await ctx.db.query("sheetTypeRegistry").take(500);
+    return activeOnly ? rows.filter((r) => r.isActive) : rows;
+  },
+});

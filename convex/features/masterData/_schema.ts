@@ -71,4 +71,34 @@ export const masterDataTables = {
   })
     .index("by_code", ["code"])
     .index("by_normalized", ["normalizedName"]),
+
+  /**
+   * DB-backed keyword inference rules. Replaces the static INFERENCE_RULES array
+   * in shared/categoryInference.ts. Read by parsers via useQuery + by server
+   * mutations directly. Order by priority asc — first match wins.
+   */
+  categoryRules: defineTable({
+    keyword: v.string(),       // UPPER-cased, can be a multi-word phrase
+    label: v.string(),         // expense category label (matches expenseCategories.name)
+    type: v.string(),          // expense category type ("cogs" | "utility" | "other" | ...)
+    priority: v.number(),      // lower = checked first; default 100
+    isActive: v.boolean(),
+    source: v.optional(v.string()), // "seed" | "user" | "ai"
+  })
+    .index("by_priority", ["priority"])
+    .index("by_keyword", ["keyword"]),
+
+  /**
+   * Known sheet types from the various RC Samata weekly xlsx variants.
+   * `isParsed: true` → parser exists. `isParsed: false` → known but intentionally
+   * skipped (so validateParsedData doesn't show as "Sheet Baru" warning).
+   */
+  sheetTypeRegistry: defineTable({
+    sheetNamePattern: v.string(), // case-insensitive substring match
+    description: v.string(),
+    isParsed: v.boolean(),
+    parserName: v.optional(v.string()),
+    isActive: v.boolean(),
+  })
+    .index("by_pattern", ["sheetNamePattern"]),
 };

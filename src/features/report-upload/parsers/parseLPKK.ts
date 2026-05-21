@@ -26,8 +26,10 @@
  */
 
 import { getSheetRows, toDateString, toNumber, type RawSheet } from "../lib/xlsxHelpers";
-import { inferIngredientCategory } from "../../../../convex/shared/categoryInference";
+import { inferIngredientCategory, inferFromRules } from "../../../../convex/shared/categoryInference";
 import type XLSX from "xlsx";
+
+export type CategoryRule = { keyword: string; label: string; type: string; priority: number; isActive: boolean };
 
 export type LPKKItem = {
   expenseDate: string;
@@ -72,7 +74,7 @@ function isStopRow(row: RawSheet[0]): boolean {
   );
 }
 
-export function parseLPKK(wb: XLSX.WorkBook): LPKKItem[] {
+export function parseLPKK(wb: XLSX.WorkBook, rules?: CategoryRule[]): LPKKItem[] {
   // Cari sheet dengan nama yang mengandung "LPKK"
   const sheetName = wb.SheetNames.find((n) => n.toUpperCase().includes("LPKK"));
   if (!sheetName) return [];
@@ -126,7 +128,8 @@ export function parseLPKK(wb: XLSX.WorkBook): LPKKItem[] {
     // yang ngumpet di kolom JUMLAH (tanpa kolom kategori spesifik) tetap
     // ke-tag ke kategori yang benar.
     if (!hasSpecificCategory && jumlah > 0) {
-      const inferred = inferIngredientCategory(description);
+      const fromDb = rules && rules.length > 0 ? inferFromRules(description, rules) : null;
+      const inferred = fromDb ?? inferIngredientCategory(description);
       result.push({
         expenseDate: lastDate,
         categoryType: inferred.type === "cogs" || inferred.type === "utility" || inferred.type === "other"

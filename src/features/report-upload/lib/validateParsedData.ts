@@ -42,6 +42,8 @@ type ParsedDataForValidation = {
   unknownSheets?: string[];
   periodStart: string;
   periodEnd: string;
+  /** DB-backed sheet registry — filters known-skipped sheets out of Sheet Baru warning. */
+  sheetRegistry?: Array<{ sheetNamePattern: string; isParsed: boolean; isActive: boolean }>;
 };
 
 /** Normalize for comparison (same as server-side normalizeItemName) */
@@ -251,15 +253,25 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     });
   }
 
-  // 10. Unknown sheets — variant xlsx structure detected
+  // 10. Unknown sheets — variant xlsx structure detected. Filter out
+  //     sheets already registered via sheetTypeRegistry (DB-backed).
   if (data.unknownSheets && data.unknownSheets.length > 0) {
-    warnings.push({
-      severity: "info",
-      category: "Sheet Baru",
-      message: `${data.unknownSheets.length} sheet belum punya parser`,
-      tip: "Sheet ini ada di file tapi tidak ada parser yang mengenalinya. Data di sheet ini di-skip — laporkan ke developer kalau perlu dimuat.",
-      details: data.unknownSheets,
-    });
+    const registry = data.sheetRegistry ?? [];
+    const isKnown = (sheetName: string) => {
+      const up = sheetName.toUpperCase();
+      return registry.some((r) => r.isActive && up.includes(r.sheetNamePattern.toUpperCase()));
+    };
+    const truly = data.unknownSheets.filter((s) => !isKnown(s));
+    if (truly.length > 0) {
+      warnings.push({
+        severity: "info",
+        category: "Sheet Baru",
+        message: `${truly.length} sheet belum punya parser`,
+        tip: "Sheet ini belum ada di registry. Klik Settings → Master Data → Seed Semua untuk re-seed, atau tambah manual via Settings.",
+        details: truly,
+        fullDetails: truly,
+      });
+    }
   }
 
   return warnings;

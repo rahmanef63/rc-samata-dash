@@ -1,14 +1,21 @@
-import { mutation } from "../../_generated/server";
+import { mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
-import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator, productCategoryValidator, ingredientCategoryValidator } from "./_types";
+import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator, productCategoryValidator, ingredientCategoryValidator, EXPENSE_CATEGORY_TYPES, type ExpenseCategoryType } from "./_types";
 import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
+import { api } from "../../_generated/api";
 import {
   normalizeItemName,
   generateItemCode,
   categorizeProduct,
   categorizeIngredient,
 } from "../../shared/helpers";
+import {
+  DEFAULT_CATEGORY_RULES,
+  DEFAULT_SHEET_REGISTRY,
+  ALL_EXPENSE_CATEGORIES,
+} from "./_seedData";
+import { DEFAULT_INCOME_CHANNELS } from "../../projectConstants";
 
 // ─── Branches ───────────────────────────────────────────────
 export const createBranch = mutation({
@@ -466,5 +473,116 @@ export const deleteMasterIngredient = mutation({
     await requireAuth(ctx);
     await ctx.db.delete(id);
     return null;
+  },
+});
+
+
+// ─── Master seed bundle ─────────────────────────────────────
+
+function toExpenseType(raw: string): ExpenseCategoryType {
+  return (EXPENSE_CATEGORY_TYPES as readonly string[]).includes(raw) ? (raw as ExpenseCategoryType) : "other";
+}
+
+export const seedExpenseCategoriesFull = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.query("expenseCategories").collect();
+    const have = new Set(existing.map((c) => c.name.toLowerCase()));
+    let inserted = 0;
+    for (const c of ALL_EXPENSE_CATEGORIES) {
+      if (have.has(c.name.toLowerCase())) continue;
+      await ctx.db.insert("expenseCategories", { name: c.name, type: toExpenseType(c.type), uploadedBy: userId });
+      inserted++;
+    }
+    return { inserted, total: existing.length + inserted };
+  },
+});
+
+export const seedIncomeChannelsFull = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.query("incomeChannels").collect();
+    const have = new Set(existing.map((c) => c.name.toLowerCase()));
+    let inserted = 0;
+    for (const c of DEFAULT_INCOME_CHANNELS) {
+      if (have.has(c.name.toLowerCase())) continue;
+      await ctx.db.insert("incomeChannels", { ...c, uploadedBy: userId });
+      inserted++;
+    }
+    return { inserted, total: existing.length + inserted };
+  },
+});
+
+export const seedCategoryRules = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    const existing = await ctx.db.query("categoryRules").collect();
+    const have = new Set(existing.map((r) => r.keyword.toUpperCase()));
+    let inserted = 0;
+    for (const rule of DEFAULT_CATEGORY_RULES) {
+      const kw = rule.keyword.toUpperCase();
+      if (have.has(kw)) continue;
+      await ctx.db.insert("categoryRules", {
+        keyword: kw,
+        label: rule.label,
+        type: rule.type,
+        priority: rule.priority,
+        isActive: true,
+        source: "seed",
+      });
+      inserted++;
+    }
+    return { inserted, total: existing.length + inserted };
+  },
+});
+
+export const seedSheetRegistry = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    const existing = await ctx.db.query("sheetTypeRegistry").collect();
+    const have = new Set(existing.map((r) => r.sheetNamePattern.toUpperCase()));
+    let inserted = 0;
+    for (const sheet of DEFAULT_SHEET_REGISTRY) {
+      const up = sheet.sheetNamePattern.toUpperCase();
+      if (have.has(up)) continue;
+      await ctx.db.insert("sheetTypeRegistry", {
+        sheetNamePattern: sheet.sheetNamePattern,
+        description: sheet.description,
+        isParsed: sheet.isParsed,
+        parserName: sheet.parserName,
+        isActive: true,
+      });
+      inserted++;
+    }
+    return { inserted, total: existing.length + inserted };
+  },
+});
+
+/**
+ * Master seed orchestrator. Runs everything: categories + channels +
+ * inference rules + sheet registry + bootstrap products + bootstrap
+ * ingredients. Returns per-step counts so the Settings UI can show progress.
+ */
+export const runFullMasterSeed = action({
+  args: { branchId: v.id("branches") },
+  handler: async (ctx, { branchId }): Promise<{
+    expenseCategories: { inserted: number; total: number };
+    incomeChannels: { inserted: number; total: number };
+    categoryRules: { inserted: number; total: number };
+    sheetRegistry: { inserted: number; total: number };
+    products: { inserted: number; total: number };
+    ingredients: { inserted: number; total: number };
+  }> => {
+    const expenseCategories = await ctx.runMutation(api.features.masterData.mutations.seedExpenseCategoriesFull, {});
+    const incomeChannels = await ctx.runMutation(api.features.masterData.mutations.seedIncomeChannelsFull, {});
+    const categoryRules = await ctx.runMutation(api.features.masterData.mutations.seedCategoryRules, {});
+    const sheetRegistry = await ctx.runMutation(api.features.masterData.mutations.seedSheetRegistry, {});
+    const products = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterProducts, { branchId });
+    const ingredients = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterIngredients, { branchId });
+    return { expenseCategories, incomeChannels, categoryRules, sheetRegistry, products, ingredients };
   },
 });

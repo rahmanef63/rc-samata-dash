@@ -267,6 +267,12 @@ export default function LaporanUploadPage() {
 
   const createReport      = useMutation(api.features.reports.mutations.createWeeklyReport);
   const generateUploadUrl = useMutation(api.features.reports.mutations.generateReportUploadUrl);
+  const sheetRegistry = useQuery(api.features.masterData.queries.listSheetRegistry, { activeOnly: true });
+  const sheetRegistryRef = useRef<typeof sheetRegistry>(undefined);
+  sheetRegistryRef.current = sheetRegistry;
+  const categoryRules = useQuery(api.features.masterData.queries.listCategoryRules, { activeOnly: true });
+  const categoryRulesRef = useRef<typeof categoryRules>(undefined);
+  categoryRulesRef.current = categoryRules;
   const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
   const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
   const importVendor      = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
@@ -324,11 +330,11 @@ export default function LaporanUploadPage() {
         return !KNOWN_SHEET_PATTERNS.some((p) => up.includes(p.toUpperCase()));
       });
       const data: ParsedData = {
-        lpkk:            parseLPKK(wb),
+        lpkk:            parseLPKK(wb, categoryRulesRef.current ?? undefined),
         penjualan:       parsePenjualan(wb),
         platformSales:   parsePlatformSales(wb),
         vendor:          parseVendor(wb),
-        weeklyFc:        parseWeeklyFC(wb),
+        weeklyFc:        parseWeeklyFC(wb, categoryRulesRef.current ?? undefined),
         leftover:        parseLeftOver(wb),
         kasPeriode:      parseLaporanKasPeriode(wb),
         salesControl:    parseSalesControl(wb, start, end),
@@ -347,7 +353,10 @@ export default function LaporanUploadPage() {
         fileStorageId:   await storagePromise,
       };
       setParsed(data);
-      const warnings = validateParsedData(data, file.name);
+      const warnings = validateParsedData(
+        { ...data, sheetRegistry: sheetRegistryRef.current ?? [] },
+        file.name,
+      );
       setValidationWarnings(warnings);
       setStep("preview");
       const total = Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);

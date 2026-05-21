@@ -13,8 +13,10 @@
  */
 
 import { getSheetRows, toNumber } from "../lib/xlsxHelpers";
-import { inferIngredientCategory, isUncategorized } from "../../../../convex/shared/categoryInference";
+import { inferIngredientCategory, inferFromRules, isUncategorized } from "../../../../convex/shared/categoryInference";
 import type XLSX from "xlsx";
+
+export type CategoryRule = { keyword: string; label: string; type: string; priority: number; isActive: boolean };
 
 export type InventoryValuationItem = {
   category: string;
@@ -56,7 +58,7 @@ function isDataRow(row: (string | number | Date | null | boolean)[]): boolean {
   return hasNumber;
 }
 
-export function parseWeeklyFC(wb: XLSX.WorkBook): InventoryValuationItem[] {
+export function parseWeeklyFC(wb: XLSX.WorkBook, rules?: CategoryRule[]): InventoryValuationItem[] {
   const sheetName = wb.SheetNames.find((n) =>
     n.toUpperCase().includes("WEEKLY") || n.toUpperCase().includes("FC")
   );
@@ -132,7 +134,8 @@ export function parseWeeklyFC(wb: XLSX.WorkBook): InventoryValuationItem[] {
     // get bucketed as miscellaneous.
     let category = currentCategory;
     if (isUncategorized(category)) {
-      const inferred = inferIngredientCategory(itemName);
+      const fromDb = rules && rules.length > 0 ? inferFromRules(itemName, rules) : null;
+      const inferred = fromDb ?? inferIngredientCategory(itemName);
       if (!isUncategorized(inferred.label)) category = inferred.label;
     }
 

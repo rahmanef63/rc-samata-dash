@@ -7,6 +7,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { AiProviderConfig, AiToolsConfig, AiInstructionsConfig, AiAgentsConfig } from "@/features/ai";
+import { MasterDataSeed } from "./MasterDataSeed";
 import { BRAND } from "@/config/branding";
 import { api } from "../../../../convex/_generated/api";
 import { toast } from "sonner";
@@ -102,6 +103,9 @@ export function SettingsPanel() {
 
       {/* AI Custom Instructions */}
       <AiInstructionsConfig />
+
+      {/* Master Data Seed */}
+      <MasterDataSeed />
 
       {/* Permissions */}
       <div>
