@@ -20,7 +20,9 @@ import {
   ListChecks,
   Upload,
   Download,
+  FileSpreadsheet,
 } from "lucide-react";
+import { downloadReportAsXlsx } from "../lib/exportReport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,6 +83,29 @@ export default function ReportHub() {
       a.remove();
     } catch {
       toast.error("Gagal mengunduh file");
+    }
+  }
+
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  async function handleExportConverted(e: React.MouseEvent, reportId: string) {
+    e.stopPropagation();
+    setExporting(reportId);
+    try {
+      const data = await convex.query(
+        api.features.reports.queries.getReportExport,
+        { reportId: reportId as Id<"weeklyReports"> },
+      );
+      if (!data) {
+        toast.error("Laporan tidak ditemukan");
+        return;
+      }
+      downloadReportAsXlsx(data);
+      toast.success("Export selesai");
+    } catch {
+      toast.error("Gagal export data");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -305,8 +330,22 @@ export default function ReportHub() {
                   variant="ghost"
                   size="sm"
                   className="h-8 px-2 shrink-0"
+                  onClick={(e) => handleExportConverted(e, r._id)}
+                  title="Export data hasil parse RCS (multi-sheet xlsx) — untuk compare dengan xlsx asli"
+                  disabled={exporting === r._id}
+                >
+                  {exporting === r._id ? (
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <FileSpreadsheet className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 shrink-0"
                   onClick={(e) => handleDownload(e, r.fileStorageId, r.fileName)}
-                  title={r.fileStorageId ? "Unduh file asli" : "File asli tidak tersimpan (upload lama)"}
+                  title={r.fileStorageId ? "Unduh xlsx asli" : "File asli tidak tersimpan (upload lama)"}
                   disabled={!r.fileStorageId}
                 >
                   <Download className="h-4 w-4" />

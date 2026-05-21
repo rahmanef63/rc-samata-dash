@@ -12,6 +12,56 @@ export const getReportFileUrl = query({
   },
 });
 
+/**
+ * Bundle setiap row yang ter-link ke 1 laporan untuk client-side xlsx export.
+ * Owner pakai hasil ini buat compare side-by-side dengan xlsx asli — cari
+ * baris yang gagal masuk database.
+ *
+ * Expenses TIDAK punya reportId field, jadi diquery by_branch_date pakai
+ * periodStart..periodEnd. Bisa overlap dengan input non-laporan (manual
+ * petty cash dll) — caveat ditulis di nama sheet.
+ */
+export const getReportExport = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    const report = await ctx.db.get(reportId);
+    if (!report) return null;
+
+    const fromReports = [
+      "productSales", "vendorPurchases", "inventoryValuation",
+      "leftoverItems", "dailyCashSummary", "salesControl", "creditPurchases",
+      "foodCostSummary", "transferItems", "productHPP",
+      "costAnalysis", "dailyCashFlow", "employeeIncentives",
+    ] as const;
+
+    const result: Record<string, unknown[]> = {};
+    for (const t of fromReports) {
+      const rows = await ctx.db.query(t)
+        .withIndex("by_report", (q) => q.eq("reportId", reportId))
+        .take(LIMITS.EXPENSES_PAGE);
+      result[t] = rows;
+    }
+
+    // ownerTransfers di closing schema — by_report index ada
+    result["ownerTransfers"] = await ctx.db.query("ownerTransfers")
+      .withIndex("by_report", (q) => q.eq("reportId", reportId))
+      .take(2000);
+
+    // expenses by date range (no reportId link — caveat)
+    if (report.periodStart && report.periodEnd) {
+      result["expenses_byPeriod"] = await ctx.db.query("expenses")
+        .withIndex("by_branch_date", (q) =>
+          q.eq("branchId", report.branchId)
+            .gte("expenseDate", report.periodStart)
+            .lte("expenseDate", report.periodEnd))
+        .take(5000);
+    }
+
+    return { report, tables: result };
+  },
+});
+
 function isIsoDateString(value: string | undefined): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
