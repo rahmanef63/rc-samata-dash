@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { ClipboardList, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
@@ -76,19 +76,7 @@ export function AuditLogViewer() {
   });
 
   return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-primary/10 text-primary p-2">
-          <ClipboardList className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Log Audit</h1>
-          <p className="text-sm text-muted-foreground">
-            Riwayat mutasi data — 200 entri terakhir per cabang
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       <Card className="p-3">
         <div className="flex flex-col md:flex-row gap-2">
           <Input

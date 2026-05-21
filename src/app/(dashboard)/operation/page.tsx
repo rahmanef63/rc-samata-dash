@@ -1,8 +1,10 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { Boxes } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { StockItemsNotionView } from "@/features/inventory/components/StockItemsNotionView";
+import { PageHeader } from "@/shared/components";
 
 export default function Page() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -10,6 +12,11 @@ export default function Page() {
   if (!branchId) return <p className="p-8 text-center text-sm text-muted-foreground">Memuat cabang...</p>;
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+      <PageHeader
+        icon={Boxes}
+        title="Inventaris"
+        description="Master stock items cabang — kategori, satuan, minimum stock, status active."
+      />
       <StockItemsNotionView branchId={branchId} />
     </div>
   );
