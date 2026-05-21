@@ -76,7 +76,7 @@ export const patch = mutation({
     if (!existing) throw new Error("Expense not found");
     const patch: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(data)) {
-      if (val !== undefined) patch[k] = val;
+      if (val !== undefined && val !== null) patch[k] = val;
     }
     if (typeof patch.amount === "number" && (patch.amount as number) <= 0) {
       throw new Error("amount must be > 0");

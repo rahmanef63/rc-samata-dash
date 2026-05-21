@@ -53,6 +53,56 @@ export const updateItem = mutation({
   },
 });
 
+// Partial patch — per-cell edits from Notion view.
+export const patchItem = mutation({
+  args: {
+    id: v.id("stockItems"),
+    name: v.optional(v.string()),
+    currentQty: v.optional(v.number()),
+    unit: v.optional(v.string()),
+    minQty: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("Stable"), v.literal("Low"), v.literal("Critical"))),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined && v !== null) patch[k] = v;
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const patchMovement = mutation({
+  args: {
+    id: v.id("stockMovements"),
+    qty: v.optional(v.number()),
+    unit: v.optional(v.string()),
+    date: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    type: v.optional(v.union(v.literal("stock_in"), v.literal("usage"), v.literal("adjustment"), v.literal("waste"))),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined && v !== null) patch[k] = v;
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
+export const removeMovement = mutation({
+  args: { id: v.id("stockMovements") },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    await ctx.db.delete(args.id);
+    return null;
+  },
+});
+
 export const deleteItem = mutation({
   args: { id: v.id("stockItems") },
   handler: async (ctx, args) => {

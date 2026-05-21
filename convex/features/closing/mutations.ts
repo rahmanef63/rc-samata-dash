@@ -385,6 +385,47 @@ export const importPaymentReceiptsBulk = mutation({
   },
 });
 
+// Partial patch — per-cell edits from Notion view.
+export const patchPaymentReceipt = mutation({
+  args: {
+    id: v.id("paymentReceipts"),
+    paidDate: v.optional(v.string()),
+    amount: v.optional(v.number()),
+    paidBy: v.optional(v.union(v.literal("owner"), v.literal("pic"))),
+    channel: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    bankAccount: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    anomalyFlag: v.optional(v.union(
+      v.literal("ok"), v.literal("mislabel"), v.literal("duplicate"),
+      v.literal("not_transfer"), v.literal("partial"),
+    )),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("paymentReceipt not found");
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined && v !== null) patch[k] = v;
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    if (existing.transactionId) {
+      await syncTxFromReceipt(ctx, existing.transactionId, {
+        date: data.paidDate,
+        amount: data.amount,
+        paidBy: data.paidBy,
+        method: data.channel,
+        reference: data.reference,
+        bankAccount: data.bankAccount,
+        notes: data.notes,
+        anomalyFlag: data.anomalyFlag,
+      });
+    }
+    return id;
+  },
+});
+
 export const removePaymentReceipt = mutation({
   args: { id: v.id("paymentReceipts") },
   handler: async (ctx, { id }) => {

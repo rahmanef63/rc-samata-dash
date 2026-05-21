@@ -97,8 +97,20 @@ function EntityNotionViewInner<T extends { _id: string }>({
         toast.error(`Field "${propId}" tidak bisa di-edit`);
         return;
       }
+      // Convex's v.optional() validators reject `null` outright — they
+      // accept either `undefined` or a literal of the union. Notion's
+      // select/checkbox cells emit `null` when cleared. Translate to
+      // a sensible per-type default so the mutation accepts the patch.
+      const prop = config.properties.find((p) => p.id === propId);
+      let safeValue: unknown = value;
+      if (value === null) {
+        if (prop?.type === "text") safeValue = "";
+        else if (prop?.type === "number") safeValue = 0;
+        else if (prop?.type === "checkbox") safeValue = false;
+        else return; // select/date — skip the patch entirely
+      }
       try {
-        await onRowUpdate(rowId, col, value);
+        await onRowUpdate(rowId, col, safeValue as PropertyValue);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Gagal update cell");
       }

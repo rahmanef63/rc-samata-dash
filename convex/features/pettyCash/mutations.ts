@@ -48,7 +48,7 @@ export const update = mutation({
     if (!existing) throw new Error("Petty cash request not found");
     const patch: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) patch[key] = val;
+      if (val !== undefined && val !== null) patch[key] = val;
     }
     await ctx.db.patch(id, patch);
     await insertAuditLog(ctx, {

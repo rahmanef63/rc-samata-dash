@@ -54,13 +54,13 @@ export const update = mutation({
     if (!existing) throw new Error("Record not found");
 
     const patch: Record<string, unknown> = {};
-    if (data.vendorId !== undefined) patch.vendorId = data.vendorId;
-    if (data.vendorName !== undefined) patch.vendorName = data.vendorName;
-    if (data.invoiceDate !== undefined) patch.invoiceDate = data.invoiceDate;
-    if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
-    if (data.amount !== undefined) patch.amount = data.amount;
-    if (data.paidAmount !== undefined) patch.paidAmount = data.paidAmount;
-    if (data.description !== undefined) patch.description = data.description;
+    const setIfReal = <K extends keyof typeof data>(k: K) => {
+      const v = data[k];
+      if (v !== undefined && v !== null) patch[k as string] = v;
+    };
+    setIfReal("vendorId"); setIfReal("vendorName");
+    setIfReal("invoiceDate"); setIfReal("dueDate");
+    setIfReal("amount"); setIfReal("paidAmount"); setIfReal("description");
 
     // Recompute status if amount or paidAmount changed (unless caller
     // explicitly overrode status).

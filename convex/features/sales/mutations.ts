@@ -66,6 +66,33 @@ export const update = mutation({
   },
 });
 
+// Partial patch — for per-cell edits from Notion view.
+export const patch = mutation({
+  args: {
+    id: v.id("dailySales"),
+    businessDate: v.optional(v.string()),
+    grossAmount: v.optional(v.number()),
+    platformFee: v.optional(v.number()),
+    promoCost: v.optional(v.number()),
+    netAmount: v.optional(v.number()),
+    cashReceivedAmount: v.optional(v.number()),
+    settlementDate: v.optional(v.string()),
+    referenceNo: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("recorded"), v.literal("settled"), v.literal("pending_settlement"))),
+  },
+  handler: async (ctx, { id, ...data }) => {
+    await requireAuth(ctx);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("dailySales not found");
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined && v !== null) patch[k] = v;
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("dailySales") },
   handler: async (ctx, args) => {

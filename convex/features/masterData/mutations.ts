@@ -79,7 +79,7 @@ export const patchVendor = mutation({
     await requireAuth(ctx);
     const patch: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(data)) {
-      if (val !== undefined) patch[k] = val;
+      if (val !== undefined && val !== null) patch[k] = val;
     }
     if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
     return id;
