@@ -23,7 +23,10 @@ export type ValidationWarning = {
   category: string;
   message: string;
   tip: string;
+  /** Truncated list shown in card UI + persisted to DB. */
   details?: string[];
+  /** Complete list, in-memory only — used by the Copy button so owner can paste full set into AI. */
+  fullDetails?: string[];
 };
 
 type ParsedDataForValidation = {
@@ -101,7 +104,8 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       category: "HPP Coverage",
       message: `${salesWithoutHPP.length} produk penjualan tanpa data HPP`,
       tip: "Produk ini tetap di-import, tapi perhitungan margin/profit tidak bisa dihitung karena tidak ada data HPP. Ini normal jika sheet HPP tidak lengkap.",
-      details: salesWithoutHPP.slice(0, 10).map((n) => n),
+      details: salesWithoutHPP.slice(0, 10),
+      fullDetails: salesWithoutHPP,
     });
   }
 
@@ -117,6 +121,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       message: `${vendorWithoutCA.length} item vendor tanpa cost analysis`,
       tip: "Item vendor tetap di-import. Cost analysis hanya untuk cross-check harga vendor — tidak wajib ada.",
       details: vendorWithoutCA.slice(0, 8),
+      fullDetails: vendorWithoutCA,
     });
   }
 
@@ -137,6 +142,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       message: `${negativeItems.length} record dengan nilai negatif`,
       tip: "Nilai negatif bisa berarti retur atau koreksi. Data tetap di-import apa adanya — cek di laporan jika angka terlihat janggal.",
       details: negativeItems.slice(0, 8),
+      fullDetails: negativeItems,
     });
   }
 
@@ -162,6 +168,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
         message: `${unique.length} record di luar periode ${data.periodStart} → ${data.periodEnd}`,
         tip: "Kemungkinan tanggal di Excel berbeda dari periode nama file. Data tetap di-import semua — cek ulang nanti jika ada tanggal yang salah.",
         details: unique.slice(0, 8),
+        fullDetails: unique,
       });
     }
   }
@@ -207,6 +214,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       message: `${dupes.length} kemungkinan duplikat nama produk`,
       tip: "Nama produk yang mirip (beda spasi/titik) mungkin sebenarnya produk yang sama. Tidak mempengaruhi import.",
       details: dupes.slice(0, 5).map((g) => g.join(" ↔ ")),
+      fullDetails: dupes.map((g) => g.join(" ↔ ")),
     });
   }
 
@@ -216,13 +224,22 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
   const weeklyFcLainLain = (data.weeklyFc ?? []).filter((w) => isUncategorized(w.category));
   if (lpkkLainLain.length > 0 || weeklyFcLainLain.length > 0) {
     const details: string[] = [];
+    const fullDetails: string[] = [];
     if (lpkkLainLain.length > 0) {
-      details.push(`Kas Kecil: ${lpkkLainLain.length} baris tanpa kategori spesifik`);
-      details.push(...lpkkLainLain.slice(0, 5).map((l) => `· ${l.expenseDate} — ${l.description} (${formatRp(l.amount)})`));
+      const head = `Kas Kecil: ${lpkkLainLain.length} baris tanpa kategori spesifik`;
+      details.push(head);
+      fullDetails.push(head);
+      const all = lpkkLainLain.map((l) => `· ${l.expenseDate} — ${l.description} (${formatRp(l.amount)})`);
+      details.push(...all.slice(0, 5));
+      fullDetails.push(...all);
     }
     if (weeklyFcLainLain.length > 0) {
-      details.push(`Food Cost: ${weeklyFcLainLain.length} item tanpa kategori`);
-      details.push(...weeklyFcLainLain.slice(0, 5).map((w) => `· ${w.itemName} (${w.qty} ${w.unit})`));
+      const head = `Food Cost: ${weeklyFcLainLain.length} item tanpa kategori`;
+      details.push(head);
+      fullDetails.push(head);
+      const all = weeklyFcLainLain.map((w) => `· ${w.itemName} (${w.qty} ${w.unit})`);
+      details.push(...all.slice(0, 5));
+      fullDetails.push(...all);
     }
     warnings.push({
       severity: "warning",
@@ -230,6 +247,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       message: `${lpkkLainLain.length + weeklyFcLainLain.length} baris masuk ke "Lain-lain"`,
       tip: "Inferensi otomatis gagal menebak kategori. Buka tab terkait di preview, klik kolom Kategori di tiap baris, lalu pilih kategori yang benar SEBELUM klik Import. Data masih bisa di-import tanpa diubah.",
       details,
+      fullDetails,
     });
   }
 
