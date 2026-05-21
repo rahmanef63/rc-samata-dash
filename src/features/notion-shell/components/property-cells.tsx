@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { TagSelect, MultiTagSelect, TAG_COLORS, type TagOption } from "@/components/ui/tag-select";
+import { DatePickerCell } from "./DatePickerCell";
 import { cn } from "@/lib/utils";
 import type { Property, PropertyValue, SelectOption } from "../types";
 
@@ -127,18 +128,8 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
       );
     }
 
-    case "date": {
-      const v = (value && typeof value === "object" && "date" in value ? value.date : null) ?? "";
-      return (
-        <Input
-          type="date"
-          value={String(v)}
-          disabled={readOnly}
-          onChange={(e) => onChange?.(e.target.value ? { date: e.target.value } : null)}
-          className="h-7 text-sm"
-        />
-      );
-    }
+    case "date":
+      return <DatePickerCell value={value} onChange={onChange} readOnly={readOnly} />;
 
     case "url":
       return (
