@@ -48,7 +48,18 @@ export function toDateString(value: unknown): string | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    // Coba parse berbagai format
+    // DD/MM/YYYY atau D/M/YYYY (format Indonesia, owner sering tulis manual)
+    const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashMatch) {
+      const [, d, m, y] = slashMatch;
+      const dd = d.padStart(2, "0");
+      const mm = m.padStart(2, "0");
+      // Sanity check
+      if (+dd >= 1 && +dd <= 31 && +mm >= 1 && +mm <= 12) {
+        return `${y}-${mm}-${dd}`;
+      }
+    }
+    // ISO-ish fallback (YYYY-MM-DD or Date.parse compatible)
     const parsed = new Date(trimmed);
     if (!isNaN(parsed.getTime())) {
       return parsed.toLocaleDateString("en-CA");

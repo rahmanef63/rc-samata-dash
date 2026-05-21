@@ -19,16 +19,18 @@ const PLATFORM_SHEETS: { keyword: string; channel: string }[] = [
   { keyword: "GO",       channel: "gofood"     },
   { keyword: "SHOPEE",   channel: "shopeefood" },
   { keyword: "TAMBAHAN", channel: "tambahan"   },
+  // PPN 10% sheet — penjualan dine-in dengan PPN, format kolom sama dengan
+  // LAP. PENJUALAN platform lain. Channel "ppn_10" supaya bisa di-filter di
+  // dashboard tanpa konflik dengan settlement channel utama.
+  { keyword: "PPN",      channel: "ppn_10"     },
 ];
 
 function detectChannel(sheetName: string): string | null {
   const upper = sheetName.toUpperCase().trim();
-  // Skip main penjualan sheet and PPN sheet
   if (!upper.includes("PENJUALAN") && !upper.includes("TAMBAHAN")) return null;
-  // Exact match exclusions
+  // Hanya skip sheet LAP. PENJUALAN utama (all-channel) — itu di-handle parsePenjualan
   const clean = upper.replace(/\s+/g, " ").trim();
   if (clean === "LAP. PENJUALAN" || clean === "LAP PENJUALAN") return null;
-  if (upper.includes("PPN")) return null;
 
   for (const p of PLATFORM_SHEETS) {
     if (upper.includes(p.keyword)) return p.channel;
@@ -94,9 +96,16 @@ export function parsePlatformSales(wb: XLSX.WorkBook): ProductSaleItem[] {
       }
     }
 
+    // LAP TAMBAHAN & PPN 10% pakai col 2 sebagai nama produk spesifik (variant),
+    // col 1 cuma kategori generik (Dada/Sayap/dll). Channel utama (GoFood/GrabFood/
+    // ShopeeFood) sebaliknya — col 1 = nama produk, col 2 mungkin kosong.
+    const isVariantSheet = channel === "tambahan" || channel === "ppn_10";
+
     for (let i = dataStart; i < rows.length; i++) {
       const row = rows[i];
-      const productName = String(row[1] ?? row[2] ?? "").trim();
+      const productName = isVariantSheet
+        ? String(row[2] ?? row[1] ?? "").trim()
+        : String(row[1] ?? row[2] ?? "").trim();
       if (!productName) continue;
 
       const upper = productName.toUpperCase();

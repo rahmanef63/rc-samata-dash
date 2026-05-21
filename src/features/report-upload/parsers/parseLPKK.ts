@@ -63,14 +63,26 @@ const CATEGORY_COLS: ColDef[] = [
 
 const DATA_START_ROW = 9; // row index 9 = baris pertama data (0-based)
 
+/** "SUB TOTAL" diulang per-hari di LPKK; harus di-SKIP tapi parsing lanjut.
+ *  Yang bener-bener akhir = "JUMLAH" / "GRAND TOTAL" / "TOTAL " standalone. */
+function isSubTotalRow(row: RawSheet[0]): boolean {
+  const c0 = String(row[0] ?? "").toUpperCase().trim();
+  const c1 = String(row[1] ?? "").toUpperCase().trim();
+  return c0.includes("SUB TOTAL") || c0 === "SUBTOTAL" || c1.includes("SUB TOTAL") || c1 === "SUBTOTAL";
+}
+
 function isStopRow(row: RawSheet[0]): boolean {
-  const firstCell = String(row[0] ?? "").toUpperCase();
-  const secondCell = String(row[1] ?? "").toUpperCase();
+  const c0 = String(row[0] ?? "").toUpperCase().trim();
+  const c1 = String(row[1] ?? "").toUpperCase().trim();
+  // Skip SUB TOTAL — bukan akhir
+  if (isSubTotalRow(row)) return false;
   return (
-    firstCell.includes("JUMLAH") ||
-    firstCell.includes("TOTAL") ||
-    secondCell.includes("JUMLAH") ||
-    secondCell.includes("TOTAL")
+    c0.startsWith("JUMLAH") ||
+    c0.startsWith("GRAND TOTAL") ||
+    c0 === "TOTAL" || c0.startsWith("TOTAL ") ||
+    c1.startsWith("JUMLAH") ||
+    c1.startsWith("GRAND TOTAL") ||
+    c1 === "TOTAL" || c1.startsWith("TOTAL ")
   );
 }
 
@@ -88,6 +100,8 @@ export function parseLPKK(wb: XLSX.WorkBook, rules?: CategoryRule[]): LPKKItem[]
 
     // Baris total/jumlah = stop
     if (isStopRow(row)) break;
+    // Sub-total per-hari = skip tapi lanjut parsing
+    if (isSubTotalRow(row)) continue;
 
     // Skip baris kosong
     const jumlah = toNumber(row[15]);
