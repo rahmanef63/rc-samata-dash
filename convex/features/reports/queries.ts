@@ -4,6 +4,14 @@ import { requireAuth } from "../../shared/auth";
 import type { Doc } from "../../_generated/dataModel";
 import { LIMITS } from "../../shared/limits";
 
+export const getReportFileUrl = query({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    await requireAuth(ctx);
+    return await ctx.storage.getUrl(storageId);
+  },
+});
+
 function isIsoDateString(value: string | undefined): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }

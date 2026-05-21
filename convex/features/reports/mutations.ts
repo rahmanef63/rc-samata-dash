@@ -87,10 +87,19 @@ const creditPurchaseItemValidator = v.object({
 
 // ─── 1. Buat header report ───────────────────────────────────
 
+export const generateReportUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const createWeeklyReport = mutation({
   args: {
     branchId: v.id("branches"),
     fileName: v.string(),
+    fileStorageId: v.optional(v.id("_storage")),
     periodStart: v.string(),
     periodEnd: v.string(),
     unknownSheets: v.optional(v.array(v.string())),
@@ -717,6 +726,10 @@ export const deleteWeeklyReport = mutation({
         .withIndex("by_report", (q) => q.eq("reportId", reportId))
         .collect();
       for (const row of rows) await ctx.db.delete(row._id);
+    }
+    const report = await ctx.db.get(reportId);
+    if (report?.fileStorageId) {
+      try { await ctx.storage.delete(report.fileStorageId); } catch { /* file may be gone */ }
     }
     await ctx.db.delete(reportId);
     return null;

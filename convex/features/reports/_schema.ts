@@ -6,6 +6,8 @@ export const reportsTables = {
   weeklyReports: defineTable({
     branchId: v.id("branches"),
     fileName: v.string(),
+    /** Original xlsx persisted to Convex storage for re-download/comparison. Optional for legacy rows. */
+    fileStorageId: v.optional(v.id("_storage")),
     periodStart: v.string(),
     periodEnd: v.string(),
     uploadedBy: v.string(),

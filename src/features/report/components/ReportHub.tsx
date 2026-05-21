@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useQuery } from "convex/react";
+import { useQuery, useConvex } from "convex/react";
+import { toast } from "sonner";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useBranchScope } from "@/features/dashboard";
 import { useFilteredByDate } from "@/shared/hooks";
 import { api } from "../../../../convex/_generated/api";
@@ -17,6 +19,7 @@ import {
   Gauge,
   ListChecks,
   Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +53,36 @@ const STATUS_BADGE: Record<string, string> = {
  */
 export default function ReportHub() {
   const router = useRouter();
+  const convex = useConvex();
   const isOwner = useUserRole() === "owner";
+
+  async function handleDownload(
+    e: React.MouseEvent,
+    storageId: string | undefined,
+    fileName: string,
+  ) {
+    e.stopPropagation();
+    if (!storageId) {
+      toast.error("File asli tidak tersimpan untuk laporan ini (upload lama sebelum fitur download aktif).");
+      return;
+    }
+    try {
+      const url = await convex.query(
+        api.features.reports.queries.getReportFileUrl,
+        { storageId: storageId as Id<"_storage"> },
+      );
+      if (!url) throw new Error("URL kosong");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      toast.error("Gagal mengunduh file");
+    }
+  }
 
   // Respect the global header BranchSelector via useBranchScope.
   const { branchId: scopeBranchId, branches } = useBranchScope();
@@ -248,11 +280,10 @@ export default function ReportHub() {
         ) : (
           <div className="space-y-2">
             {filteredReports.map((r) => (
-              <button
+              <div
                 key={r._id}
-                type="button"
                 onClick={() => router.push(`/laporan/${r._id}`)}
-                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/20 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/20 transition-colors text-left cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                   <FileText className="h-4 w-4 text-muted-foreground" />
@@ -270,6 +301,16 @@ export default function ReportHub() {
                     {r.expenseCount ?? 0} pengeluaran
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 shrink-0"
+                  onClick={(e) => handleDownload(e, r.fileStorageId, r.fileName)}
+                  title={r.fileStorageId ? "Unduh file asli" : "File asli tidak tersimpan (upload lama)"}
+                  disabled={!r.fileStorageId}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
                     STATUS_BADGE[r.status] ?? STATUS_BADGE.uploaded
@@ -277,7 +318,7 @@ export default function ReportHub() {
                 >
                   {STATUS_LABEL[r.status] ?? r.status}
                 </span>
-              </button>
+              </div>
             ))}
           </div>
         )}

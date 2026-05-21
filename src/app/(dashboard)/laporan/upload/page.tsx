@@ -56,6 +56,8 @@ type ParsedData = {
   periodStart: string;
   periodEnd: string;
   fileName: string;
+  /** Storage id of the original xlsx — persisted for re-download/comparison. */
+  fileStorageId?: Id<"_storage">;
 };
 
 type ImportStep = "idle" | "parsing" | "preview" | "importing" | "done" | "error";
@@ -152,6 +154,7 @@ export default function LaporanUploadPage() {
   }, [branches, createBranch]);
 
   const createReport      = useMutation(api.features.reports.mutations.createWeeklyReport);
+  const generateUploadUrl = useMutation(api.features.reports.mutations.generateReportUploadUrl);
   const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
   const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
   const importVendor      = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
@@ -178,6 +181,22 @@ export default function LaporanUploadPage() {
   const handleFileSelect = useCallback(async (file: File) => {
     setStep("parsing");
     try {
+      // Persist xlsx ke Convex storage paralel dengan parse — supaya user bisa download balik
+      const storagePromise: Promise<Id<"_storage"> | undefined> = (async () => {
+        try {
+          const uploadUrl = await generateUploadUrl({});
+          const res = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+          const { storageId } = await res.json() as { storageId: Id<"_storage"> };
+          return storageId;
+        } catch {
+          return undefined;
+        }
+      })();
       const wb = await parseExcelFile(file);
       const { start, end } = extractPeriod(file.name);
       // Discover sheets we don't have a parser for — owner can request a new
@@ -213,6 +232,7 @@ export default function LaporanUploadPage() {
         periodStart:     start,
         periodEnd:       end,
         fileName:        file.name,
+        fileStorageId:   await storagePromise,
       };
       setParsed(data);
       const warnings = validateParsedData(data, file.name);
@@ -228,7 +248,7 @@ export default function LaporanUploadPage() {
       toast.error("Gagal membaca file. Pastikan format .xlsx valid.");
       setStep("idle");
     }
-  }, []);
+  }, [generateUploadUrl]);
 
   // ─── Cek duplikat sebelum import ────────────────────────────
 
@@ -295,6 +315,7 @@ export default function LaporanUploadPage() {
       const reportId = await createReport({
         branchId,
         fileName: parsed.fileName,
+        fileStorageId: parsed.fileStorageId,
         periodStart: parsed.periodStart,
         periodEnd: parsed.periodEnd,
         unknownSheets: parsed.unknownSheets.length > 0 ? parsed.unknownSheets : undefined,
