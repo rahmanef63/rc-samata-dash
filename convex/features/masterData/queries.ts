@@ -2,6 +2,7 @@ import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName, findBestMatch } from "../../shared/helpers";
+import { LIMITS } from "../../shared/limits";
 
 export const listBranches = query({
   args: {},
@@ -60,7 +61,7 @@ export const listMasterProducts = query({
   args: { activeOnly: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    const all = await ctx.db.query("masterProducts").take(5000);
+    const all = await ctx.db.query("masterProducts").take(LIMITS.INVENTORY_PAGE);
     if (args.activeOnly) return all.filter((p) => p.isActive);
     return all;
   },
@@ -86,7 +87,7 @@ export const findMasterProductByName = query({
     if (exact) return exact;
 
     // Fallback: fuzzy search (bounded)
-    const all = await ctx.db.query("masterProducts").take(5000);
+    const all = await ctx.db.query("masterProducts").take(LIMITS.INVENTORY_PAGE);
     const idx = findBestMatch(name, all);
     return idx >= 0 ? all[idx] : null;
   },
@@ -98,7 +99,7 @@ export const listMasterIngredients = query({
   args: { activeOnly: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    const all = await ctx.db.query("masterIngredients").take(5000);
+    const all = await ctx.db.query("masterIngredients").take(LIMITS.INVENTORY_PAGE);
     if (args.activeOnly) return all.filter((p) => p.isActive);
     return all;
   },
@@ -123,7 +124,7 @@ export const findMasterIngredientByName = query({
       .first();
     if (exact) return exact;
 
-    const all = await ctx.db.query("masterIngredients").take(5000);
+    const all = await ctx.db.query("masterIngredients").take(LIMITS.INVENTORY_PAGE);
     const idx = findBestMatch(name, all);
     return idx >= 0 ? all[idx] : null;
   },
@@ -141,8 +142,8 @@ export const checkItemCoverage = query({
   handler: async (ctx, { productNames, ingredientNames }) => {
     await requireAuth(ctx);
 
-    const products = await ctx.db.query("masterProducts").take(5000);
-    const ingredients = await ctx.db.query("masterIngredients").take(5000);
+    const products = await ctx.db.query("masterProducts").take(LIMITS.INVENTORY_PAGE);
+    const ingredients = await ctx.db.query("masterIngredients").take(LIMITS.INVENTORY_PAGE);
 
     const unmatchedProducts: string[] = [];
     for (const name of productNames) {

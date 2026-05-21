@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { vendorTypeValidator, incomeChannelTypeValidator, expenseCategoryTypeValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 import {
   normalizeItemName,
   generateItemCode,
@@ -153,7 +154,7 @@ export const bootstrapMasterProducts = mutation({
     for (const h of hpp) nameSet.add(h.productName.trim());
 
     // Get existing master products to avoid duplicates
-    const existing = await ctx.db.query("masterProducts").take(5000);
+    const existing = await ctx.db.query("masterProducts").take(LIMITS.SALES_PAGE);
     const existingNorms = new Set(existing.map((e) => e.normalizedName));
 
     // Get next sequence number
@@ -238,7 +239,7 @@ export const bootstrapMasterIngredients = mutation({
     }
 
     // Get existing to avoid duplicates
-    const existing = await ctx.db.query("masterIngredients").take(5000);
+    const existing = await ctx.db.query("masterIngredients").take(LIMITS.STAGING_PAGE);
     const existingNorms = new Set(existing.map((e) => e.normalizedName));
 
     let seq = existing.length;
@@ -282,7 +283,7 @@ export const upsertMasterProduct = mutation({
       return id;
     }
 
-    const existing = await ctx.db.query("masterProducts").take(5000);
+    const existing = await ctx.db.query("masterProducts").take(LIMITS.INVENTORY_PAGE);
     const seq = existing.length + 1;
     return await ctx.db.insert("masterProducts", {
       code: generateItemCode("PRD", seq),
@@ -322,7 +323,7 @@ export const upsertMasterIngredient = mutation({
       return id;
     }
 
-    const existing = await ctx.db.query("masterIngredients").take(5000);
+    const existing = await ctx.db.query("masterIngredients").take(LIMITS.INVENTORY_PAGE);
     const seq = existing.length + 1;
     return await ctx.db.insert("masterIngredients", {
       code: generateItemCode("ING", seq),

@@ -1,17 +1,15 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { roleValidator, themeValidator, ROLES } from "./_types";
 
-export const ROLE_VALUES = ["super_admin", "owner", "staff"] as const;
-export type Role = (typeof ROLE_VALUES)[number];
+// Back-compat re-export. New code should import from `./_types`.
+export const ROLE_VALUES = ROLES;
+export type { Role } from "./_types";
 
 export const authExtensionTables = {
   userRoles: defineTable({
     userId: v.id("users"),
-    role: v.union(
-      v.literal("super_admin"),
-      v.literal("owner"),
-      v.literal("staff"),
-    ),
+    role: roleValidator,
   }).index("by_user", ["userId"]),
 
   /**
@@ -20,9 +18,7 @@ export const authExtensionTables = {
    */
   userPreferences: defineTable({
     userId: v.id("users"),
-    theme: v.optional(
-      v.union(v.literal("light"), v.literal("dark"), v.literal("system")),
-    ),
+    theme: v.optional(themeValidator),
     defaultBranchId: v.optional(v.id("branches")),
     notifAnomaly: v.optional(v.boolean()),
     notifEmail: v.optional(v.boolean()),

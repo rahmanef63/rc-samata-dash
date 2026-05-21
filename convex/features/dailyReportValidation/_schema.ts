@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { dailyReportKindValidator } from "./_types";
 
 export const dailyReportValidationTables = {
   // Audit trail of WhatsApp daily report submissions that staff paste
@@ -10,11 +11,7 @@ export const dailyReportValidationTables = {
   dailyReportValidations: defineTable({
     branchId: v.id("branches"),
     businessDate: v.string(),       // YYYY-MM-DD
-    kind: v.union(
-      v.literal("transferOnline"),
-      v.literal("dailySummary"),
-      v.literal("monthlyTally"),
-    ),
+    kind: dailyReportKindValidator,
     rawText: v.string(),
     parsedJson: v.string(),         // JSON.stringify of structured parse
     expectedJson: v.string(),       // JSON.stringify of system-side numbers

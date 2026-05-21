@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { etlSourceValidator } from "../../shared/validators";
+import { stockStatusValidator, stockMovementTypeValidator } from "./_types";
 
 export const inventoryTables = {
   stockItems: defineTable({
@@ -8,11 +9,7 @@ export const inventoryTables = {
     currentQty: v.number(),
     unit: v.string(),
     minQty: v.number(),
-    status: v.union(
-      v.literal("Stable"),
-      v.literal("Low"),
-      v.literal("Critical")
-    ),
+    status: stockStatusValidator,
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
   }).index("by_branch", ["branchId"]),
@@ -20,12 +17,7 @@ export const inventoryTables = {
   stockMovements: defineTable({
     itemId: v.id("stockItems"),
     itemName: v.string(),
-    type: v.union(
-      v.literal("stock_in"),
-      v.literal("usage"),
-      v.literal("adjustment"),
-      v.literal("waste")
-    ),
+    type: stockMovementTypeValidator,
     qty: v.number(),
     unit: v.string(),
     date: v.string(),

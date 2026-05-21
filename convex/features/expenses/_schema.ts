@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { etlSourceValidator } from "../../shared/validators";
+import { expensePaymentSourceValidator, expenseStatusValidator } from "./_types";
 
 export const expensesTables = {
   expenses: defineTable({
@@ -11,18 +12,8 @@ export const expensesTables = {
     vendorName: v.optional(v.string()),
     amount: v.number(),
     description: v.string(),
-    paymentSource: v.union(
-      v.literal("owner_direct"),
-      v.literal("petty_cash"),
-      v.literal("payable")
-    ),
-    status: v.union(
-      v.literal("draft"),
-      v.literal("submitted"),
-      v.literal("approved"),
-      v.literal("paid"),
-      v.literal("rejected")
-    ),
+    paymentSource: expensePaymentSourceValidator,
+    status: expenseStatusValidator,
     hasAttachment: v.boolean(),
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,

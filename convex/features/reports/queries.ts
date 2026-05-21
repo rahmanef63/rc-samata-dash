@@ -2,6 +2,7 @@ import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import type { Doc } from "../../_generated/dataModel";
+import { LIMITS } from "../../shared/limits";
 
 function isIsoDateString(value: string | undefined): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -240,7 +241,7 @@ export const getSalesByBranch = query({
       .query("weeklyReports")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
-      .take(52);
+      .take(LIMITS.REPORTS_PAGE);
     const all = [];
     for (const r of reports) {
       const items = await ctx.db
@@ -264,7 +265,7 @@ export const getExpensesByBranch = query({
       .query("expenses")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .order("desc")
-      .take(5000);
+      .take(LIMITS.SALES_PAGE);
     return items.map((e) => ({
       _id: e._id,
       _creationTime: e._creationTime,
@@ -287,7 +288,7 @@ export const getPayablesByBranch = query({
       .query("weeklyReports")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
-      .take(52);
+      .take(LIMITS.REPORTS_PAGE);
     const all: Array<
       Doc<"creditPurchases"> & {
         sourceFile?: string;
@@ -322,7 +323,7 @@ export const getCashFlowByBranch = query({
       .query("weeklyReports")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
-      .take(52);
+      .take(LIMITS.STAGING_PAGE);
     const all = [];
     for (const r of reports) {
       const items = await ctx.db

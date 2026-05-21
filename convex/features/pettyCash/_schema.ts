@@ -1,6 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
-import { pettyCashCategoryValidator } from "../../shared/validators";
+import { pettyCashCategoryValidator, pettyCashStatusValidator } from "./_types";
 
 export const pettyCashTables = {
   pettyCashRequests: defineTable({
@@ -10,13 +10,7 @@ export const pettyCashTables = {
     requestedAmount: v.number(),
     approvedAmount: v.number(),
     actualAmount: v.number(),
-    status: v.union(
-      v.literal("requested"),
-      v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("disbursed"),
-      v.literal("closed")
-    ),
+    status: pettyCashStatusValidator,
     notes: v.string(),
     hasAttachment: v.boolean(),
     branchId: v.id("branches"),

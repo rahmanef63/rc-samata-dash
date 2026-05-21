@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 
 // Returns the system-side numbers for a given (branch, date) so the
 // UI can compare against the WhatsApp paste. Joins dailyCashSummary
@@ -20,7 +21,7 @@ export const getDailyCheckData = query({
 
     const productSalesRows = await ctx.db.query("productSales")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
-      .take(2000);
+      .take(LIMITS.STAGING_PAGE);
 
     const dailyClosing = await ctx.db.query("dailyClosings")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
@@ -28,7 +29,7 @@ export const getDailyCheckData = query({
 
     const bankEntries = await ctx.db.query("bankStatementEntries")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("txDate", businessDate))
-      .take(2000);
+      .take(LIMITS.CLOSINGS_PAGE);
 
     // Per-channel sales rollup from productSales
     const channelTotals: Record<string, number> = {};

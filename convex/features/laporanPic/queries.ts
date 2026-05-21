@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 
 // Riwayat chronological — union of payables + paymentReceipts + ownerTransfers
 // across a given branch. UI groups + filters client-side; we just give the
@@ -33,7 +34,7 @@ export const listAnomalyReceipts = query({
     await requireAuth(ctx);
     const all = await ctx.db.query("paymentReceipts")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.RECEIPTS_PAGE);
     return all.filter((r) => r.anomalyFlag && r.anomalyFlag !== "ok");
   },
 });
@@ -47,10 +48,10 @@ export const listMatchingReport = query({
     await requireAuth(ctx);
     const payables = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.PAYABLES_PAGE);
     const receipts = await ctx.db.query("paymentReceipts")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.RECEIPTS_PAGE);
     const receiptsByPayable = new Map<string, typeof receipts>();
     for (const r of receipts) {
       if (!r.payableId) continue;

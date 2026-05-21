@@ -1,97 +1,35 @@
 /**
- * Shared validators used across multiple feature schemas.
- * SSOT for common enum types and reusable field definitions.
+ * Cross-feature validators. Most enum validators have migrated to
+ * their feature's `_types.ts` module (see e.g.
+ * `convex/features/expenses/_types.ts`). This file keeps:
+ *
+ *  - back-compat re-exports of those validators so existing imports
+ *    keep working;
+ *  - genuinely cross-cutting validators that aren't tied to one
+ *    feature (e.g. `etlSourceValidator`).
  */
 import { v } from "convex/values";
 
-// ─── Common Status Validators ───────────────────────────────
-export const paymentSourceValidator = v.union(
-  v.literal("owner_direct"),
-  v.literal("petty_cash"),
-  v.literal("payable")
-);
+// ─── Re-exports (sourced from per-feature _types) ──────────
+export {
+  expensePaymentSourceValidator as paymentSourceValidator,
+  expenseStatusValidator as approvalStatusValidator,
+} from "../features/expenses/_types";
 
-export const approvalStatusValidator = v.union(
-  v.literal("draft"),
-  v.literal("submitted"),
-  v.literal("approved"),
-  v.literal("paid"),
-  v.literal("rejected")
-);
+export {
+  vendorTypeValidator,
+  incomeChannelTypeValidator,
+  expenseCategoryTypeValidator,
+} from "../features/masterData/_types";
 
-export const paymentMethodValidator = v.union(
-  v.literal("cash"),
-  v.literal("transfer")
-);
+export {
+  stockStatusValidator,
+  stockMovementTypeValidator,
+} from "../features/inventory/_types";
 
-// ─── Vendor Type ────────────────────────────────────────────
-export const vendorTypeValidator = v.union(
-  v.literal("food_supplier"),
-  v.literal("utility"),
-  v.literal("service"),
-  v.literal("payroll"),
-  v.literal("misc")
-);
-
-// ─── Income Channel Type ────────────────────────────────────
-export const incomeChannelTypeValidator = v.union(
-  v.literal("cash"),
-  v.literal("transfer"),
-  v.literal("gofood"),
-  v.literal("grabfood"),
-  v.literal("shopeefood"),
-  v.literal("ovo"),
-  v.literal("dana"),
-  v.literal("qris"),
-  v.literal("dine_in"),
-  v.literal("take_away"),
-  v.literal("other")
-);
-
-// ─── Expense Category Type ──────────────────────────────────
-export const expenseCategoryTypeValidator = v.union(
-  v.literal("cogs"),
-  v.literal("utility"),
-  v.literal("salary_support"),
-  v.literal("bpjs"),
-  v.literal("maintenance"),
-  v.literal("marketing"),
-  v.literal("fee"),
-  v.literal("other")
-);
-
-// ─── Stock Status ───────────────────────────────────────────
-export const stockStatusValidator = v.union(
-  v.literal("Stable"),
-  v.literal("Low"),
-  v.literal("Critical")
-);
-
-export const stockMovementTypeValidator = v.union(
-  v.literal("stock_in"),
-  v.literal("usage"),
-  v.literal("adjustment"),
-  v.literal("waste")
-);
-
-// ─── Petty Cash Category ────────────────────────────────────
-export const pettyCashCategoryValidator = v.union(
-  v.literal("Utilitas"),
-  v.literal("Bahan Baku"),
-  v.literal("Maintenance"),
-  v.literal("Transfer Owner"),
-  v.literal("Lain-lain")
-);
-
-// ─── Audit Action ───────────────────────────────────────────
-export const auditActionValidator = v.union(
-  v.literal("create"),
-  v.literal("update"),
-  v.literal("delete"),
-  v.literal("approve"),
-  v.literal("reject"),
-  v.literal("pay")
-);
+export { pettyCashCategoryValidator } from "../features/pettyCash/_types";
+export { auditActionValidator } from "../features/audit/_types";
+export { paymentMethodValidator } from "./financeEnums";
 
 // ─── ETL Source Provenance ──────────────────────────────────
 /**

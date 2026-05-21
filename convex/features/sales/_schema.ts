@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { etlSourceValidator } from "../../shared/validators";
+import { salesStatusValidator } from "./_types";
 
 export const salesTables = {
   dailySales: defineTable({
@@ -14,11 +15,7 @@ export const salesTables = {
     cashReceivedAmount: v.number(),
     settlementDate: v.optional(v.string()),
     referenceNo: v.string(),
-    status: v.union(
-      v.literal("recorded"),
-      v.literal("settled"),
-      v.literal("pending_settlement")
-    ),
+    status: salesStatusValidator,
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
   })

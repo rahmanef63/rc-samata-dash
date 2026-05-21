@@ -7,21 +7,15 @@
  */
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  aiProviderValidator,
+  aiToolCategoryValidator,
+  chatRoleValidator,
+} from "./_types";
 
-export const aiProviderValidator = v.union(
-  v.literal("openrouter"),
-  v.literal("openai"),
-  v.literal("anthropic"),
-  v.literal("openclaw"),
-  v.literal("custom")
-);
-
-export const aiToolCategoryValidator = v.union(
-  v.literal("data"),
-  v.literal("memory"),
-  v.literal("calculation"),
-  v.literal("utility")
-);
+// Re-export for backwards compatibility with mutations/queries that
+// imported these from this module before the `_types` extraction.
+export { aiProviderValidator, aiToolCategoryValidator };
 
 export const aiTables = {
   aiProviders: defineTable({
@@ -120,7 +114,7 @@ export const aiTables = {
 
   aiChatMessages: defineTable({
     sessionId: v.id("aiChatSessions"),
-    role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
+    role: chatRoleValidator,
     content: v.string(),
     visualsJson: v.optional(v.string()),
     model: v.optional(v.string()),

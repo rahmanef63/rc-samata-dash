@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 
 const kindValidator = v.union(
   v.literal("invoice"),
@@ -39,7 +40,7 @@ export const countTransactions = query({
     await requireAuth(ctx);
     const all = await ctx.db.query("transactions")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(20000);
+      .take(LIMITS.TX_PAGE);
     const counts: Record<string, number> = {
       invoice: 0, payment: 0, receipt: 0, transfer: 0, expense: 0, anomaly: 0,
     };

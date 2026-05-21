@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 
 export const listByBranch = query({
   args: { branchId: v.id("branches") },
@@ -43,13 +44,13 @@ export const listVendorsWithAggregate = query({
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
 
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const payables = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.PAYABLES_PAGE);
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
-      .take(2000);
+      .take(LIMITS.ALIASES_PAGE);
 
     const payablesByVendor = new Map<string, typeof payables>();
     for (const p of payables) {
@@ -94,7 +95,7 @@ export const getVendorDetail = query({
 
     const payables = await ctx.db.query("payables")
       .withIndex("by_vendor", (q) => q.eq("vendorId", vendorId))
-      .take(2000);
+      .take(LIMITS.PAYABLES_PAGE);
     const scopedPayables = payables.filter((p) => p.branchId === branchId);
 
     const payments: Array<{

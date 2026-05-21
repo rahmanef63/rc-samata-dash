@@ -1,6 +1,7 @@
 import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 
 // Unified ledger view — UNION + normalize rows from every cash-flow
 // table into a single shape so the Buku Besar UI can paint one table
@@ -134,13 +135,13 @@ export const countBukuBesar = query({
   handler: async (ctx, { branchId }) => {
     await requireAuth(ctx);
     const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(5000);
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(LIMITS.PAYABLES_PAGE);
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(5000);
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(LIMITS.RECEIPTS_PAGE);
     const transfers = await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(5000);
+      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(LIMITS.OWNER_TRANSFERS_PAGE);
     const closings = await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(5000);
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(LIMITS.CLOSINGS_PAGE);
     const anomalyCount = receipts.filter((r) => r.anomalyFlag && r.anomalyFlag !== "ok").length;
     return {
       tagihan: payables.length,

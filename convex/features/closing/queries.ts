@@ -2,6 +2,7 @@ import { query } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeAlias, looseEqual } from "../../shared/normalize";
+import { LIMITS } from "../../shared/limits";
 
 export const getClosingByDate = query({
   args: { branchId: v.id("branches"), businessDate: v.string() },
@@ -20,7 +21,7 @@ export const listClosings = query({
     return await ctx.db.query("dailyClosings")
       .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId))
       .order("desc")
-      .take(30);
+      .take(LIMITS.CLOSINGS_PAGE);
   },
 });
 
@@ -96,7 +97,7 @@ export const listBankStatementEntries = query({
     await requireAuth(ctx);
     return await ctx.db.query("bankStatementEntries")
       .withIndex("by_batch", (q) => q.eq("batchId", batchId))
-      .take(2000);
+      .take(LIMITS.BANK_ENTRIES_PAGE);
   },
 });
 
@@ -116,17 +117,17 @@ export const listValidationCandidates = query({
     // Bank entries with payable_payment category not yet validated
     const bankAll = await ctx.db.query("bankStatementEntries")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.BANK_ENTRIES_PAGE);
     const bank = bankAll.filter((b) =>
       b.category === "payable_payment" && !b.isValidated
     );
     // Vendor master + aliases — gives AI knowledge of every known vendor,
     // even ones without open payables, so it can correctly skip orphans
     // instead of forcing wrong matches.
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
-      .take(2000);
+      .take(LIMITS.ALIASES_PAGE);
     const aliasByVendor = new Map<string, string[]>();
     for (const a of aliases) {
       const arr = aliasByVendor.get(a.vendorId) ?? [];
@@ -164,7 +165,7 @@ export const listValidationLogs = query({
     if (args.batchId) {
       return await ctx.db.query("validationLogs")
         .withIndex("by_batch", (q) => q.eq("batchId", args.batchId!))
-        .take(2000);
+        .take(LIMITS.AUDIT_PAGE);
     }
     if (args.entryType && args.entryId) {
       return await ctx.db.query("validationLogs")
@@ -190,22 +191,22 @@ export const previewAutoMatch = query({
 
     const allBank = await ctx.db.query("bankStatementEntries")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.BANK_ENTRIES_PAGE);
     const banks = allBank.filter((b) =>
       b.category === "payable_payment" && !b.isValidated && b.debit > 0
     );
 
     const allPay = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(2000);
+      .take(LIMITS.PAYABLES_PAGE);
     const payables = allPay.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated
     );
 
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
-      .take(2000);
-    const vendors = await ctx.db.query("vendors").take(2000);
+      .take(LIMITS.ALIASES_PAGE);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
 
     type AliasIdx = { name: string; vendorId: string };
     const aliasIndex: AliasIdx[] = [];
