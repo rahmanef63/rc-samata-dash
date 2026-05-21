@@ -9,8 +9,25 @@
 import type { ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { TagSelect, MultiTagSelect, TAG_COLORS, type TagOption } from "@/components/ui/tag-select";
 import { cn } from "@/lib/utils";
 import type { Property, PropertyValue, SelectOption } from "../types";
+
+// Map notion-shell color strings → TAG_COLORS entries so colors declared
+// in PROPS (e.g. `color: "purple"`) survive the TagSelect render path.
+const COLOR_INDEX: Record<string, number> = {
+  blue: 0, green: 1, purple: 2, orange: 3, pink: 4,
+  yellow: 5, teal: 6, red: 7, indigo: 8, cyan: 9, gray: 10,
+};
+
+function toTagOption(o: SelectOption): TagOption {
+  const idx = COLOR_INDEX[o.color];
+  return {
+    value: o.id,
+    label: o.name,
+    color: idx !== undefined ? TAG_COLORS[idx] : undefined,
+  };
+}
 
 interface CellArgs {
   prop: Property;
@@ -61,17 +78,24 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
       const id = value as string | null;
       const opt = prop.options?.find((o) => o.id === id);
       if (readOnly) return optChip(opt) ?? <span className="text-muted-foreground/60">—</span>;
+      // TagSelect = colored badge UI + search + opt-in inline "Create [value]"
+      // button when prop.allowCreate AND prop.onCreateOption provided. Replaces
+      // native <select> for consistent Notion-style selects across all tables.
       return (
-        <select
-          value={id ?? ""}
-          onChange={(e) => onChange?.(e.target.value || null)}
-          className="h-7 w-full rounded-md border border-border bg-background px-2 text-sm"
-        >
-          <option value="">—</option>
-          {prop.options?.map((o) => (
-            <option key={o.id} value={o.id}>{o.name}</option>
-          ))}
-        </select>
+        <TagSelect
+          value={id}
+          options={(prop.options ?? []).map(toTagOption)}
+          onChange={(v) => onChange?.(v)}
+          placeholder="Pilih…"
+          onCreate={prop.allowCreate && prop.onCreateOption ? async (label) => {
+            try {
+              const newOpt = await prop.onCreateOption!(label);
+              if (newOpt?.id) onChange?.(newOpt.id);
+            } catch (e) {
+              console.error("create option failed", e);
+            }
+          } : undefined}
+        />
       );
     }
 
@@ -86,27 +110,20 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
         );
       }
       return (
-        <div className="flex flex-wrap items-center gap-1">
-          {(prop.options ?? []).map((o) => {
-            const active = ids.includes(o.id);
-            return (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => {
-                  const next = active ? ids.filter((x) => x !== o.id) : [...ids, o.id];
-                  onChange?.(next);
-                }}
-                className={cn(
-                  "rounded-full border px-2 py-0.5 text-[10px]",
-                  active ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground",
-                )}
-              >
-                {o.name}
-              </button>
-            );
-          })}
-        </div>
+        <MultiTagSelect
+          value={ids}
+          options={(prop.options ?? []).map(toTagOption)}
+          onChange={(v) => onChange?.(v)}
+          placeholder="Pilih…"
+          onCreate={prop.allowCreate && prop.onCreateOption ? async (label) => {
+            try {
+              const newOpt = await prop.onCreateOption!(label);
+              if (newOpt?.id) onChange?.([...ids, newOpt.id]);
+            } catch (e) {
+              console.error("create option failed", e);
+            }
+          } : undefined}
+        />
       );
     }
 

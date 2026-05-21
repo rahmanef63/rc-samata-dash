@@ -69,6 +69,11 @@ export const patch = mutation({
     paymentSource: v.optional(paymentSourceValidator),
     status: v.optional(approvalStatusValidator),
     hasAttachment: v.optional(v.boolean()),
+    // Inline category change from NotionView select cell. When set, also
+    // resolves categoryId from expenseCategories by name (creates a new
+    // row implicitly never — caller should pre-create via
+    // masterData.mutations.createExpenseCategory before patch).
+    categoryName: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
@@ -80,6 +85,16 @@ export const patch = mutation({
     }
     if (typeof patch.amount === "number" && (patch.amount as number) <= 0) {
       throw new Error("amount must be > 0");
+    }
+    // Resolve categoryName → categoryId so FK stays in lockstep with the
+    // denormalized name field. Skip if the name doesn't exist (NotionView's
+    // create-new path will have inserted it via createExpenseCategory first).
+    if (typeof patch.categoryName === "string") {
+      const wanted = patch.categoryName;
+      const cat = await ctx.db.query("expenseCategories")
+        .filter((q) => q.eq(q.field("name"), wanted))
+        .first();
+      if (cat) patch.categoryId = cat._id;
     }
     if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
     await insertAuditLog(ctx, {

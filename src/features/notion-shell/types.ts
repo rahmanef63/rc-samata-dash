@@ -97,6 +97,14 @@ export interface Property {
   hidden?: boolean;
   description?: string;
   options?: SelectOption[];
+  /** When true (and onCreateOption provided), select/multi_select cells
+   *  show inline "Create [value]" button — owner can add new options on
+   *  the fly without leaving the table. Default false (strict enum). */
+  allowCreate?: boolean;
+  /** Persist a new option. Called when user types a value not in options
+   *  and confirms create. Should insert to DB + return the new SelectOption
+   *  so cell selects it immediately. Throw if the value is rejected. */
+  onCreateOption?: (label: string) => Promise<SelectOption>;
   numberFormat?: NumberFormat;
   numberDecimals?: number;
   numberCurrencyCode?: string;

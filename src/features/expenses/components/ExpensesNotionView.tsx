@@ -1,9 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { Page, PropertyValue } from "@/features/notion-shell/types";
+import type { Page, PropertyValue, Property, SelectOption } from "@/features/notion-shell/types";
 import { EntityNotionView } from "@/features/notion-shell-wrapper/EntityNotionView";
 
 type ExpenseRow = {
@@ -19,25 +20,24 @@ type ExpenseRow = {
   hasAttachment: boolean;
 };
 
-const PROPS = [
-  { id: "expenseDate",   name: "Tanggal",   type: "date" as const },
-  { id: "categoryName",  name: "Kategori",  type: "text" as const },
-  { id: "vendorName",    name: "Vendor",    type: "text" as const },
-  { id: "amount",        name: "Nominal",   type: "number" as const, numberFormat: "currency" as const },
-  { id: "description",   name: "Deskripsi", type: "text" as const },
-  { id: "paymentSource", name: "Sumber Bayar", type: "select" as const, options: [
-    { id: "owner_direct", name: "Owner",    color: "purple" as const },
-    { id: "petty_cash",   name: "Kas Kecil", color: "blue" as const },
-    { id: "payable",      name: "Piutang",  color: "orange" as const },
+const STATIC_PROPS: Property[] = [
+  { id: "expenseDate",   name: "Tanggal",   type: "date" },
+  { id: "vendorName",    name: "Vendor",    type: "text" },
+  { id: "amount",        name: "Nominal",   type: "number", numberFormat: "currency" },
+  { id: "description",   name: "Deskripsi", type: "text" },
+  { id: "paymentSource", name: "Sumber Bayar", type: "select", options: [
+    { id: "owner_direct", name: "Owner",    color: "purple" },
+    { id: "petty_cash",   name: "Kas Kecil", color: "blue" },
+    { id: "payable",      name: "Piutang",  color: "orange" },
   ] },
-  { id: "status",        name: "Status",    type: "select" as const, options: [
-    { id: "draft",     name: "Draft",    color: "gray" as const },
-    { id: "submitted", name: "Submitted", color: "yellow" as const },
-    { id: "approved",  name: "Approved", color: "blue" as const },
-    { id: "paid",      name: "Lunas",    color: "green" as const },
-    { id: "rejected",  name: "Ditolak",  color: "red" as const },
+  { id: "status",        name: "Status",    type: "select", options: [
+    { id: "draft",     name: "Draft",    color: "gray" },
+    { id: "submitted", name: "Submitted", color: "yellow" },
+    { id: "approved",  name: "Approved", color: "blue" },
+    { id: "paid",      name: "Lunas",    color: "green" },
+    { id: "rejected",  name: "Ditolak",  color: "red" },
   ] },
-  { id: "hasAttachment", name: "Ada Lampiran", type: "checkbox" as const },
+  { id: "hasAttachment", name: "Ada Lampiran", type: "checkbox" },
 ];
 
 const VIEWS = [
@@ -51,7 +51,7 @@ const VIEWS = [
     sorts: [{ propertyId: "expenseDate", direction: "desc" as const }], filters: [], search: "" },
 ];
 
-const EDITABLE = new Set(["expenseDate", "amount", "description", "paymentSource", "status", "hasAttachment"]);
+const EDITABLE = new Set(["expenseDate", "amount", "description", "paymentSource", "status", "hasAttachment", "categoryName"]);
 
 function expenseToPage(e: ExpenseRow): Page {
   return {
@@ -72,8 +72,31 @@ function expenseToPage(e: ExpenseRow): Page {
 
 export function ExpensesNotionView({ branchId }: { branchId: Id<"branches"> }) {
   const rows = useQuery(api.features.expenses.queries.listByBranch, { branchId }) as ExpenseRow[] | undefined;
+  const expenseCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
   const patch = useMutation(api.features.expenses.mutations.patch);
   const remove = useMutation(api.features.expenses.mutations.remove);
+  const createCategory = useMutation(api.features.masterData.mutations.createExpenseCategory);
+
+  // Dynamic select-with-create for kategori. Options live in expenseCategories
+  // DB table — owner can pick existing OR type a new label and click
+  // "Create [value]" to add a new category inline (mutates DB, refetches).
+  const properties = useMemo<Property[]>(() => {
+    const categoryOptions: SelectOption[] = (expenseCategories ?? []).map((c) => ({
+      id: c.name, name: c.name, color: "gray",
+    }));
+    const categoryProp: Property = {
+      id: "categoryName",
+      name: "Kategori",
+      type: "select",
+      options: categoryOptions,
+      allowCreate: true,
+      onCreateOption: async (label: string) => {
+        await createCategory({ name: label, type: "other" });
+        return { id: label, name: label, color: "gray" };
+      },
+    };
+    return [STATIC_PROPS[0], categoryProp, ...STATIC_PROPS.slice(1)];
+  }, [expenseCategories, createCategory]);
 
   return (
     <EntityNotionView<ExpenseRow>
@@ -81,7 +104,7 @@ export function ExpensesNotionView({ branchId }: { branchId: Id<"branches"> }) {
         databaseId: "db_expenses",
         databaseName: "Pengeluaran",
         databaseIcon: "💳",
-        properties: PROPS,
+        properties,
         views: VIEWS,
         propToColumn: (propId) => EDITABLE.has(propId) ? propId : null,
         toPage: expenseToPage,
