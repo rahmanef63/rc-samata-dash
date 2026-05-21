@@ -48,7 +48,7 @@ export const LEDGER_PROPERTIES: Property[] = [
     { id: "pending",   name: "Pending",  color: "yellow" },
     { id: "completed", name: "Completed", color: "green" },
   ] },
-  { id: "reference",     name: "Reference",    type: "text" },
+  { id: "reference",     name: "Reference",    type: "url" },
   { id: "bankAccount",   name: "No. Rekening", type: "text" },
   { id: "paidBy",        name: "Dibayar Oleh", type: "select", options: [
     { id: "owner",    name: "Owner",    color: "purple" },

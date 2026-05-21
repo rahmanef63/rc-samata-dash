@@ -4,12 +4,22 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { PropertyValue } from "@/features/notion-shell/types";
+import type { Property, PropertyValue, SelectOption } from "@/features/notion-shell/types";
 import { EntityNotionView, RefreshCw } from "@/features/notion-shell-wrapper/EntityNotionView";
 import { LEDGER_CONFIG } from "../lib/config";
 import { txToPage, propToColumn, type TxRow } from "../lib/notionAdapter";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
+
+// Tag colors auto-assigned per unique file/sheet name. Stable rotation
+// keeps the same value the same color across renders.
+const FILE_COLORS = ["blue", "green", "purple", "orange", "pink", "teal", "indigo", "cyan"];
+
+function buildDynamicOptions(values: Set<string>, palette: string[]): SelectOption[] {
+  return [...values].sort().map((v, i) => ({
+    id: v, name: v, color: palette[i % palette.length],
+  }));
+}
 
 // Buku Besar surface — wraps the unified `transactions` SSOT in the
 // generic EntityNotionView. Renders identical to any other entity's
@@ -24,6 +34,29 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
   const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactions);
   const backfill = useMutation(api.features.transactions.mutations.backfillTransactions);
   const [busy, setBusy] = useState(false);
+
+  // Derive options dinamis dari rows untuk kolom file/sheet — supaya owner
+  // bisa filter "tampilkan transaksi dari file X" tanpa harus ketik manual.
+  // Plus visual badge per file (warna stable per nilai).
+  const properties = useMemo<Property[]>(() => {
+    const files = new Set<string>();
+    const sheets = new Set<string>();
+    const proofs = new Set<string>();
+    for (const t of txs ?? []) {
+      if (t.sourceFileName) files.add(t.sourceFileName);
+      if (t.sourceSheetName) sheets.add(t.sourceSheetName);
+      if (t.proofFileName) proofs.add(t.proofFileName);
+    }
+    const fileOptions = buildDynamicOptions(files, FILE_COLORS);
+    const sheetOptions = buildDynamicOptions(sheets, ["green", "teal", "cyan"]);
+    const proofOptions = buildDynamicOptions(proofs, ["purple", "pink", "indigo"]);
+    return LEDGER_CONFIG.properties.map((p) => {
+      if (p.id === "sourceFileName")  return { ...p, type: "select", options: fileOptions  };
+      if (p.id === "sourceSheetName") return { ...p, type: "select", options: sheetOptions };
+      if (p.id === "proofFileName")   return { ...p, type: "select", options: proofOptions };
+      return p;
+    });
+  }, [txs]);
 
   const handleBackfill = async () => {
     if (!confirm("Backfill mirror legacy payables/receipts/transfers/closings ke transactions SSOT. Idempotent (aman re-run). Lanjut?")) return;
@@ -44,7 +77,7 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
         databaseId: LEDGER_CONFIG.databaseId,
         databaseName: LEDGER_CONFIG.databaseName,
         databaseIcon: LEDGER_CONFIG.databaseIcon,
-        properties: LEDGER_CONFIG.properties,
+        properties,
         views: LEDGER_CONFIG.views,
         propToColumn,
         toPage: txToPage,

@@ -7,12 +7,132 @@
  *  `readOnly`. Returns a ReactNode the host slots inline. */
 
 import type { ReactNode } from "react";
+import { useState } from "react";
+import { ExternalLink, Copy } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { TagSelect, MultiTagSelect, TAG_COLORS, type TagOption } from "@/components/ui/tag-select";
 import { DatePickerCell } from "./DatePickerCell";
 import { cn } from "@/lib/utils";
 import type { Property, PropertyValue, SelectOption } from "../types";
+
+function formatNumber(n: number, format?: string, currencyCode?: string, decimals?: number): string {
+  if (format === "currency") {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: currencyCode ?? "IDR",
+      maximumFractionDigits: 0,
+    }).format(n);
+  }
+  if (format === "percent") {
+    return new Intl.NumberFormat("id-ID", { style: "percent", maximumFractionDigits: decimals ?? 1 }).format(n);
+  }
+  if (format === "decimal") {
+    return new Intl.NumberFormat("id-ID", { maximumFractionDigits: decimals ?? 2, minimumFractionDigits: decimals ?? 2 }).format(n);
+  }
+  return new Intl.NumberFormat("id-ID").format(n);
+}
+
+function NumberEditableCell({ value, prop, onChange }: {
+  value: number | null;
+  prop: Property;
+  onChange?: (next: PropertyValue) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(value == null ? "" : String(value));
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          const trimmed = draft.replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
+          const n = trimmed === "" ? null : Number(trimmed);
+          if (n !== value) onChange?.(n == null || Number.isNaN(n) ? null : n);
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditing(false); }}
+        className="h-7 text-sm text-right tabular-nums"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(value == null ? "" : String(value)); setEditing(true); }}
+      className="h-7 w-full text-right text-xs tabular-nums px-2 rounded hover:bg-accent/50"
+    >
+      {value == null ? (
+        <span className="text-muted-foreground/60">—</span>
+      ) : (
+        <span className={prop.numberFormat === "currency" ? "font-mono" : ""}>
+          {formatNumber(value, prop.numberFormat, prop.numberCurrencyCode, prop.numberDecimals)}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function LinkCell({ value, readOnly, onChange }: {
+  value: string;
+  readOnly: boolean;
+  onChange?: (next: PropertyValue) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const isHttp = /^https?:\/\//i.test(value);
+
+  if (readOnly || !editing) {
+    if (!value) {
+      if (readOnly) return <span className="text-muted-foreground/60">—</span>;
+      return (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="h-7 w-full text-left px-2 text-xs text-muted-foreground/60 rounded hover:bg-accent/50"
+        >
+          (kosong)
+        </button>
+      );
+    }
+    const truncated = value.length > 40 ? value.slice(0, 37) + "…" : value;
+    return (
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isHttp) {
+            window.open(value, "_blank", "noopener");
+          } else {
+            navigator.clipboard?.writeText(value).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }
+        }}
+        onDoubleClick={() => !readOnly && setEditing(true)}
+        className="inline-flex items-center gap-1 text-xs font-mono text-primary hover:underline cursor-pointer max-w-full"
+        title={isHttp ? `Buka ${value}` : `Klik salin: ${value} (dobel-klik untuk edit)`}
+      >
+        <span className="truncate">{truncated}</span>
+        {isHttp ? <ExternalLink className="h-3 w-3 shrink-0" /> : copied ? <span className="text-green-600 text-[10px] shrink-0">✓</span> : <Copy className="h-3 w-3 shrink-0 opacity-50" />}
+      </span>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      type="text"
+      defaultValue={value}
+      onBlur={(e) => { setEditing(false); onChange?.(e.currentTarget.value); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditing(false); }}
+      className="h-7 text-sm font-mono"
+      placeholder="https://… atau referensi"
+    />
+  );
+}
 
 // Map notion-shell color strings → TAG_COLORS entries so colors declared
 // in PROPS (e.g. `color: "purple"`) survive the TagSelect render path.
@@ -63,16 +183,19 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
         />
       );
 
-    case "number":
-      return (
-        <Input
-          type="number"
-          value={(value as number | null) ?? ""}
-          disabled={readOnly}
-          onChange={(e) => onChange?.(e.target.value === "" ? null : Number(e.target.value))}
-          className="h-7 text-sm"
-        />
-      );
+    case "number": {
+      const n = typeof value === "number" ? value : value == null || value === "" ? null : Number(value);
+      const safeN = n != null && !Number.isNaN(n) ? n : null;
+      if (readOnly) {
+        if (safeN == null) return <span className="text-muted-foreground/60">—</span>;
+        return (
+          <span className={cn("text-xs tabular-nums", prop.numberFormat === "currency" && "font-mono")}>
+            {formatNumber(safeN, prop.numberFormat, prop.numberCurrencyCode, prop.numberDecimals)}
+          </span>
+        );
+      }
+      return <NumberEditableCell value={safeN} prop={prop} onChange={onChange} />;
+    }
 
     case "select":
     case "status": {
@@ -132,17 +255,7 @@ export function renderPropertyCell({ prop, value, readOnly, onChange }: CellArgs
       return <DatePickerCell value={value} onChange={onChange} readOnly={readOnly} />;
 
     case "url":
-      return (
-        <Input
-          type="url"
-          inputMode="url"
-          value={String(value ?? "")}
-          disabled={readOnly}
-          onChange={(e) => onChange?.(e.target.value)}
-          placeholder="https://…"
-          className="h-7 text-sm"
-        />
-      );
+      return <LinkCell value={String(value ?? "")} readOnly={readOnly} onChange={onChange} />;
 
     case "email":
       return (
