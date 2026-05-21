@@ -5,6 +5,15 @@ import { insertAuditLog } from "../../shared/helpers";
 import { inferTxKind } from "../../shared/txClassify";
 import { buildVendorIndex } from "../../shared/vendorResolver";
 import { normalizeAlias, looseEqual } from "../../shared/normalize";
+import { computePayableStatus, applyPayment } from "../../shared/payableStatus";
+import { LIMITS } from "../../shared/limits";
+import {
+  closingStatusValidator,
+  transferDirectionValidator,
+  transferPurposeValidator,
+  transferStatusValidator,
+  bankCategoryValidator,
+} from "./_types";
 import { mirrorTx } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
@@ -18,7 +27,7 @@ export const createClosing = mutation({
     expectedCash: v.number(),
     actualCash: v.number(),
     difference: v.number(),
-    status: v.union(v.literal("open"), v.literal("submitted"), v.literal("verified")),
+    status: closingStatusValidator,
     submittedBy: v.string(),
     submittedAt: v.string(),
     branchId: v.id("branches"),
@@ -120,7 +129,7 @@ export const updateClosing = mutation({
     id: v.id("dailyClosings"),
     actualCash: v.optional(v.number()),
     difference: v.optional(v.number()),
-    status: v.optional(v.union(v.literal("open"), v.literal("submitted"), v.literal("verified"))),
+    status: v.optional(closingStatusValidator),
   },
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
@@ -144,11 +153,11 @@ export const createTransfer = mutation({
   args: {
     closingId: v.optional(v.id("dailyClosings")),
     transferDate: v.string(),
-    direction: v.union(v.literal("branch_to_owner"), v.literal("owner_to_branch")),
-    purpose: v.union(v.literal("night_transfer"), v.literal("petty_cash_topup"), v.literal("payable_payment_fund"), v.literal("adjustment")),
+    direction: transferDirectionValidator,
+    purpose: transferPurposeValidator,
     amount: v.number(),
     referenceNo: v.string(),
-    status: v.union(v.literal("pending"), v.literal("completed")),
+    status: transferStatusValidator,
     branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
@@ -168,11 +177,11 @@ export const updateTransfer = mutation({
   args: {
     id: v.id("ownerTransfers"),
     transferDate: v.optional(v.string()),
-    direction: v.optional(v.union(v.literal("branch_to_owner"), v.literal("owner_to_branch"))),
-    purpose: v.optional(v.union(v.literal("night_transfer"), v.literal("petty_cash_topup"), v.literal("payable_payment_fund"), v.literal("adjustment"))),
+    direction: v.optional(transferDirectionValidator),
+    purpose: v.optional(transferPurposeValidator),
     amount: v.optional(v.number()),
     referenceNo: v.optional(v.string()),
-    status: v.optional(v.union(v.literal("pending"), v.literal("completed"))),
+    status: v.optional(transferStatusValidator),
   },
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
@@ -244,9 +253,7 @@ export const createPaymentReceipt = mutation({
       const payable = await ctx.db.get(args.payableId);
       if (payable) {
         const newPaid = payable.paidAmount + args.amount;
-        const status = newPaid >= payable.amount ? "paid" as const
-          : newPaid > 0 ? "partial" as const
-          : payable.status;
+        const status = applyPayment(payable.amount, newPaid, payable.status);
         await ctx.db.patch(args.payableId, { paidAmount: newPaid, status });
       }
     }
@@ -282,11 +289,11 @@ export const importPaymentReceiptsBulk = mutation({
     const userId = await requireAuth(ctx);
 
     // Cache: vendor name → vendorId, latest open payable per vendor.
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
     const allPayables = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.PAYABLES_PAGE);
     const openPayables = allPayables.filter((p) =>
       p.status === "open" || p.status === "partial" || p.status === "overdue",
     );
@@ -330,10 +337,7 @@ export const importPaymentReceiptsBulk = mutation({
           const p = await ctx.db.get(payableId);
           if (p) {
             const newPaid = Math.min(p.amount, p.paidAmount + r.amount);
-            const newStatus: "open" | "partial" | "paid" | "overdue" =
-              newPaid >= p.amount && p.amount > 0 ? "paid"
-              : newPaid > 0 ? "partial"
-              : p.status;
+            const newStatus = applyPayment(p.amount, newPaid, p.status);
             await ctx.db.patch(payableId, { paidAmount: newPaid, status: newStatus });
             // Refresh cache for subsequent rows
             const refIdx = openPayables.findIndex((x) => x._id === payableId);
@@ -371,9 +375,7 @@ export const removePaymentReceipt = mutation({
       const payable = await ctx.db.get(r.payableId);
       if (payable) {
         const newPaid = Math.max(0, payable.paidAmount - r.amount);
-        const status = newPaid >= payable.amount ? "paid" as const
-          : newPaid > 0 ? "partial" as const
-          : "open" as const;
+        const status = computePayableStatus(payable.amount, newPaid, payable.dueDate);
         await ctx.db.patch(r.payableId, { paidAmount: newPaid, status });
       }
     }
@@ -434,7 +436,7 @@ export const removeBankStatementBatch = mutation({
     for (const pidStr of linkedPayableIds) {
       const pid = pidStr as Id<"payables">;
       const p = await ctx.db.get(pid) as {
-        amount?: number; paidAmount?: number;
+        amount?: number; paidAmount?: number; dueDate?: string;
         status?: "open" | "partial" | "paid" | "overdue";
       } | null;
       if (!p) continue;
@@ -443,10 +445,7 @@ export const removeBankStatementBatch = mutation({
         .collect();
       const bankSum = remaining.reduce((s, x) => s + (x.debit ?? 0), 0);
       const newPaid = Math.min(p.amount ?? 0, bankSum);
-      const newStatus: "open" | "partial" | "paid" | "overdue" =
-        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
-        : newPaid > 0 ? "partial"
-        : "open";
+      const newStatus = computePayableStatus(p.amount ?? 0, newPaid, p.dueDate);
       if (newPaid !== (p.paidAmount ?? 0) || newStatus !== p.status) {
         await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
       }
@@ -467,15 +466,7 @@ export const removeBankStatementBatch = mutation({
 
 // ─── Import bank statement entries (parsed rows) ─────────
 
-const bankStatementCategoryUnion = v.union(
-  v.literal("sales_inflow"),
-  v.literal("expense_outflow"),
-  v.literal("topup_pic"),
-  v.literal("payable_payment"),
-  v.literal("owner_capital"),
-  v.literal("transfer_internal"),
-  v.literal("other"),
-);
+const bankStatementCategoryUnion = bankCategoryValidator;
 
 const bankStatementRowValidator = v.object({
   txDate: v.string(),
@@ -510,7 +501,7 @@ export const importBankStatementEntries = mutation({
     let closing = opening;
 
     // Pre-load vendor list once for opportunistic alias seeding.
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
     const aliasesSeeded: Record<string, number> = {};
 
@@ -681,13 +672,13 @@ export const importBankStatementEntries = mutation({
     const TOL = 1500;
     const openPayablesAll = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", batch.branchId))
-      .take(5000);
+      .take(LIMITS.PAYABLES_PAGE);
     const openPayables = openPayablesAll.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated,
     );
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId))
-      .take(2000);
+      .take(LIMITS.ALIASES_PAGE);
     type AliasIdx = { name: string; vendorId: string };
     const aliasIndex: AliasIdx[] = [];
     for (const a of aliases) aliasIndex.push({ name: normalizeAlias(a.alias), vendorId: a.vendorId });
@@ -748,7 +739,7 @@ export const importBankStatementEntries = mutation({
     for (const pidStr of touchedPayableIds) {
       const pid = pidStr as Id<"payables">;
       const p = await ctx.db.get(pid) as {
-        amount?: number; paidAmount?: number;
+        amount?: number; paidAmount?: number; dueDate?: string;
         status?: "open" | "partial" | "paid" | "overdue";
       } | null;
       if (!p) continue;
@@ -758,10 +749,7 @@ export const importBankStatementEntries = mutation({
       const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
       const oldPaid = p.paidAmount ?? 0;
       const newPaid = Math.min(p.amount ?? 0, bankSum);
-      const newStatus: "open" | "partial" | "paid" | "overdue" =
-        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
-        : newPaid > 0 ? "partial"
-        : (p.status ?? "open");
+      const newStatus = applyPayment(p.amount ?? 0, newPaid, p.status ?? "open");
       if (newPaid !== oldPaid && linkBatchId) {
         await ctx.db.insert("validationLogs", {
           entryType: "payable", entryId: pidStr, batchId: linkBatchId,
@@ -953,10 +941,7 @@ export const applyValidationBatch = mutation({
       const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
       const oldPaid = p.paidAmount ?? 0;
       const newPaid = Math.min(p.amount ?? 0, bankSum);  // authoritative: bank-entry sum
-      const newStatus: "open" | "partial" | "paid" | "overdue" =
-        newPaid >= (p.amount ?? 0) ? "paid"
-        : newPaid > 0 ? "partial"
-        : (p.status ?? "open");
+      const newStatus = applyPayment(p.amount ?? 0, newPaid, p.status ?? "open");
       if (newPaid !== oldPaid) {
         await ctx.db.insert("validationLogs", {
           entryType: "payable", entryId: pidStr, batchId,
@@ -1010,13 +995,13 @@ export const autoMatchPayables = mutation({
     // 1. Load unvalidated bank entries (payable_payment category)
     const allBank = await ctx.db.query("bankStatementEntries")
       .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .take(5000);
+      .take(LIMITS.BANK_ENTRIES_PAGE);
     const banks = allBank.filter((b) => b.category === "payable_payment" && !b.isValidated && b.debit > 0);
 
     // 2. Load open/partial/overdue payables
     const allPay = await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(2000);
+      .take(LIMITS.PAYABLES_PAGE);
     const payables = allPay.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated
     );
@@ -1024,8 +1009,8 @@ export const autoMatchPayables = mutation({
     // 3. Build vendor lookup: alias → vendorId, vendor name → vendorId
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
-      .take(2000);
-    const vendors = await ctx.db.query("vendors").take(2000);
+      .take(LIMITS.ALIASES_PAGE);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const aliasMap = new Map<string, string>();
     for (const a of aliases) aliasMap.set(normalizeAlias(a.alias), a.vendorId);
     for (const v of vendors) aliasMap.set(normalizeAlias(v.name), v._id);
@@ -1354,10 +1339,7 @@ export const commitAutoMatchSuggestions = mutation({
 
         const oldPaid = payable.paidAmount ?? 0;
         const newPaid = Math.min(payable.amount ?? 0, oldPaid + matchSum);
-        const newStatus: "open" | "partial" | "paid" | "overdue" =
-          newPaid >= (payable.amount ?? 0) ? "paid"
-          : newPaid > 0 ? "partial"
-          : (payable.status ?? "open");
+        const newStatus = applyPayment(payable.amount ?? 0, newPaid, payable.status ?? "open");
 
         if (newPaid !== oldPaid) {
           await ctx.db.insert("validationLogs", {
@@ -1491,7 +1473,7 @@ export const deleteValidationBatch = mutation({
     for (const pidStr of touchedPayableIds) {
       const pid = pidStr as Id<"payables">;
       const p = await ctx.db.get(pid) as {
-        amount?: number; paidAmount?: number;
+        amount?: number; paidAmount?: number; dueDate?: string;
         status?: "open" | "partial" | "paid" | "overdue";
       } | null;
       if (!p) continue;
@@ -1500,10 +1482,7 @@ export const deleteValidationBatch = mutation({
         .collect();
       const bankSum = linkedBanks.reduce((s, b) => s + (b.debit ?? 0), 0);
       const newPaid = Math.min(p.amount ?? 0, bankSum);
-      const newStatus: "open" | "partial" | "paid" | "overdue" =
-        newPaid >= (p.amount ?? 0) && (p.amount ?? 0) > 0 ? "paid"
-        : newPaid > 0 ? "partial"
-        : "open";
+      const newStatus = computePayableStatus(p.amount ?? 0, newPaid, p.dueDate);
       if (newPaid !== (p.paidAmount ?? 0) || newStatus !== p.status) {
         await ctx.db.patch(pid, { paidAmount: newPaid, status: newStatus });
       }

@@ -4,6 +4,8 @@ import { paymentMethodValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
+import { computePayableStatus } from "../../shared/payableStatus";
+import { LIMITS } from "../../shared/limits";
 import type { Id } from "../../_generated/dataModel";
 
 export const create = mutation({
@@ -66,9 +68,7 @@ export const update = mutation({
     } else if (data.amount !== undefined || data.paidAmount !== undefined) {
       const newAmount = data.amount ?? existing.amount;
       const newPaid = data.paidAmount ?? existing.paidAmount;
-      patch.status = newPaid >= newAmount && newAmount > 0 ? "paid"
-        : newPaid > 0 ? "partial"
-        : "open";
+      patch.status = computePayableStatus(newAmount, newPaid, existing.dueDate);
     }
 
     await ctx.db.patch(id, patch);
@@ -157,7 +157,7 @@ export const importPayablesBulk = mutation({
   handler: async (ctx, { branchId, rows }) => {
     const userId = await requireAuth(ctx);
 
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
 
     let inserted = 0;
@@ -174,10 +174,7 @@ export const importPayablesBulk = mutation({
           continue;
         }
 
-        const status: "open" | "partial" | "paid" | "overdue" =
-          r.paidAmount >= r.amount && r.amount > 0 ? "paid"
-          : r.paidAmount > 0 ? "partial"
-          : "open";
+        const status = computePayableStatus(r.amount, r.paidAmount, r.dueDate);
 
         const descriptionWithRef = [
           r.description,

@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { computePayableStatus } from "../../shared/payableStatus";
 import type { Id } from "../../_generated/dataModel";
 
 const sourceTableValidator = v.union(
@@ -57,9 +58,7 @@ export const bulkPatch = mutation({
           if ((patch.amount !== undefined || patch.paidAmount !== undefined) && patch.status === undefined) {
             const newAmount = (patch.amount as number) ?? existing.amount;
             const newPaid = (patch.paidAmount as number) ?? existing.paidAmount;
-            patch.status = newPaid >= newAmount && newAmount > 0 ? "paid"
-              : newPaid > 0 ? "partial"
-              : "open";
+            patch.status = computePayableStatus(newAmount, newPaid, existing.dueDate);
           }
           await ctx.db.patch(id, patch);
           updated++;

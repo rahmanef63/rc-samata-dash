@@ -1,6 +1,19 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { etlSourceValidator } from "../../shared/validators";
+import {
+  closingStatusValidator,
+  transferDirectionValidator,
+  transferPurposeValidator,
+  transferStatusValidator,
+  accountKindValidator,
+  bankCategoryValidator,
+  aliasSourceValidator,
+  logEntryTypeValidator,
+  batchStatusValidator,
+  anomalyFlagValidator,
+  paidByValidator,
+} from "./_types";
 
 export const closingTables = {
   dailyClosings: defineTable({
@@ -12,11 +25,7 @@ export const closingTables = {
     expectedCash: v.number(),
     actualCash: v.number(),
     difference: v.number(),
-    status: v.union(
-      v.literal("open"),
-      v.literal("submitted"),
-      v.literal("verified")
-    ),
+    status: closingStatusValidator,
     submittedBy: v.string(),
     submittedAt: v.string(),
     branchId: v.id("branches"),
@@ -30,19 +39,11 @@ export const closingTables = {
   ownerTransfers: defineTable({
     closingId: v.optional(v.id("dailyClosings")),
     transferDate: v.string(),
-    direction: v.union(
-      v.literal("branch_to_owner"),
-      v.literal("owner_to_branch")
-    ),
-    purpose: v.union(
-      v.literal("night_transfer"),
-      v.literal("petty_cash_topup"),
-      v.literal("payable_payment_fund"),
-      v.literal("adjustment")
-    ),
+    direction: transferDirectionValidator,
+    purpose: transferPurposeValidator,
     amount: v.number(),
     referenceNo: v.string(),
-    status: v.union(v.literal("pending"), v.literal("completed")),
+    status: transferStatusValidator,
     branchId: v.id("branches"),
     // ETL provenance — when row imported from a weekly report's
     // LAP. CF "Penerimaan lain-lain" section.
@@ -64,7 +65,7 @@ export const closingTables = {
     payableId: v.optional(v.id("payables")),
     amount: v.number(),
     paidDate: v.string(),
-    paidBy: v.union(v.literal("owner"), v.literal("pic")),
+    paidBy: paidByValidator,
     channel: v.optional(v.string()),    // bank, cash, ewallet, transfer, atm
     reference: v.optional(v.string()),  // no transaksi / nota / VA
     bankAccount: v.optional(v.string()), // e.g. "BCA 5425105687"
@@ -79,13 +80,7 @@ export const closingTables = {
     transactionId: v.optional(v.id("transactions")),
     // Anomaly flag captured by laporan-pic import (CSV 2 has rows for
     // mislabel screenshots, duplicates, "not actually a transfer" etc).
-    anomalyFlag: v.optional(v.union(
-      v.literal("ok"),
-      v.literal("mislabel"),
-      v.literal("duplicate"),
-      v.literal("not_transfer"),
-      v.literal("partial"),
-    )),
+    anomalyFlag: v.optional(anomalyFlagValidator),
     branchId: v.id("branches"),
     uploadedAt: v.number(),
     uploadedBy: v.string(),
@@ -99,7 +94,7 @@ export const closingTables = {
   // Used to reconcile sales channels (gofood/grab/ovo/shopee/cash) +
   // payable payments + topup transfers between owner ↔ PIC.
   bankStatementEntries: defineTable({
-    accountKind: v.union(v.literal("owner"), v.literal("pic")),
+    accountKind: accountKindValidator,
     txDate: v.string(),
     description: v.string(),
     debit: v.number(),          // out / pengeluaran
@@ -107,15 +102,7 @@ export const closingTables = {
     balance: v.number(),        // saldo setelah tx
     counterparty: v.optional(v.string()), // "Pihak" column — vendor / person name
     channel: v.optional(v.string()), // cash | transfer | gofood | grabfood | shopeefood | ovo | dana | qris | other
-    category: v.optional(v.union(
-      v.literal("sales_inflow"),
-      v.literal("expense_outflow"),
-      v.literal("topup_pic"),
-      v.literal("payable_payment"),
-      v.literal("owner_capital"),
-      v.literal("transfer_internal"),
-      v.literal("other")
-    )),
+    category: v.optional(bankCategoryValidator),
     payableId: v.optional(v.id("payables")),
     reportId: v.optional(v.id("weeklyReports")),
     // Unified payment reference — same value across multiple entries
@@ -156,11 +143,7 @@ export const closingTables = {
     vendorId: v.id("vendors"),
     alias: v.string(),         // normalized UPPERCASE
     accountNo: v.optional(v.string()),
-    source: v.union(
-      v.literal("validation"),
-      v.literal("manual"),
-      v.literal("statement"),
-    ),
+    source: aliasSourceValidator,
     branchId: v.id("branches"),
     lastSeenAt: v.number(),
     seenCount: v.number(),
@@ -170,11 +153,7 @@ export const closingTables = {
     .index("by_branch_alias", ["branchId", "alias"]),
 
   validationLogs: defineTable({
-    entryType: v.union(
-      v.literal("bank_entry"),
-      v.literal("payable"),
-      v.literal("receipt"),
-    ),
+    entryType: logEntryTypeValidator,
     entryId: v.string(),   // doc id as string (avoid cross-table id types)
     batchId: v.id("validationBatches"),
     field: v.string(),     // paymentReference | matchedPayableId | isValidated
@@ -189,7 +168,7 @@ export const closingTables = {
 
   // Each statement file upload = one batch (so we can re-import).
   bankStatementBatches: defineTable({
-    accountKind: v.union(v.literal("owner"), v.literal("pic")),
+    accountKind: accountKindValidator,
     periodStart: v.string(),
     periodEnd: v.string(),
     fileName: v.string(),
@@ -197,11 +176,7 @@ export const closingTables = {
     openingBalance: v.optional(v.number()),
     closingBalance: v.optional(v.number()),
     rowCount: v.number(),
-    status: v.union(
-      v.literal("uploaded"),  // file saved, not parsed yet
-      v.literal("parsed"),    // entries inserted
-      v.literal("reconciled") // matched against payables / reports
-    ),
+    status: batchStatusValidator,
     branchId: v.id("branches"),
     uploadedAt: v.number(),
     uploadedBy: v.string(),

@@ -4,24 +4,14 @@ import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
 import { CSV_SHEET } from "../../shared/sheetNames";
+import { computePayableStatus, applyPayment } from "../../shared/payableStatus";
+import { LIMITS } from "../../shared/limits";
 import { mirrorTx } from "../transactions/_helpers";
+import {
+  classificationValidator as classifyValidator,
+  anomalyFlagValidator,
+} from "./_types";
 import type { Id } from "../../_generated/dataModel";
-
-const classifyValidator = v.union(
-  v.literal("payable"),
-  v.literal("receipt"),
-  v.literal("owner_transfer_to"),
-  v.literal("owner_transfer_from"),
-  v.literal("anomaly"),
-);
-
-const anomalyFlagValidator = v.union(
-  v.literal("ok"),
-  v.literal("mislabel"),
-  v.literal("duplicate"),
-  v.literal("not_transfer"),
-  v.literal("partial"),
-);
 
 // ─── Import laporan-pic LONG CSV (TRANSAKSI format) ─────────
 // Caller classifies each row client-side (UI shows preview) and we
@@ -50,13 +40,13 @@ export const importLaporanPicLong = mutation({
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
     const resolveVendor = vendorIdx.resolve;
 
     const openPayables = (await ctx.db.query("payables")
       .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(5000))
+      .take(LIMITS.PAYABLES_PAGE))
       .filter((p) => p.status === "open" || p.status === "partial" || p.status === "overdue");
 
     let payablesCreated = 0;
@@ -151,10 +141,7 @@ export const importLaporanPicLong = mutation({
             const p = await ctx.db.get(payableId);
             if (p) {
               const newPaid = Math.min(p.amount, p.paidAmount + r.amount);
-              const newStatus: "open" | "partial" | "paid" | "overdue" =
-                newPaid >= p.amount && p.amount > 0 ? "paid"
-                : newPaid > 0 ? "partial"
-                : p.status;
+              const newStatus = applyPayment(p.amount, newPaid, p.status);
               await ctx.db.patch(payableId, { paidAmount: newPaid, status: newStatus });
               const refIdx = openPayables.findIndex((x) => x._id === payableId);
               if (refIdx >= 0) openPayables[refIdx] = { ...openPayables[refIdx], paidAmount: newPaid, status: newStatus };
@@ -270,7 +257,7 @@ export const importLaporanPicPivot = mutation({
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
-    const vendors = await ctx.db.query("vendors").take(2000);
+    const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
     const resolveVendor = vendorIdx.resolve;
 
@@ -292,10 +279,7 @@ export const importLaporanPicPivot = mutation({
 
         const isMatched = r.matchStatus === "MATCH_EXACT";
         const paidAmount = isMatched && r.paymentAmount ? r.paymentAmount : 0;
-        const status: "open" | "partial" | "paid" | "overdue" =
-          paidAmount >= r.amount && r.amount > 0 ? "paid"
-          : paidAmount > 0 ? "partial"
-          : "open";
+        const status = computePayableStatus(r.amount, paidAmount, r.invoiceDate);
 
         const description = [
           r.keterangan,

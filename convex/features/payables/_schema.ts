@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { etlSourceValidator } from "../../shared/validators";
+import { payableStatusValidator, paymentMethodValidator } from "./_types";
 
 export const payablesTables = {
   payables: defineTable({
@@ -11,12 +12,7 @@ export const payablesTables = {
     dueDate: v.string(),
     amount: v.number(),
     paidAmount: v.number(),
-    status: v.union(
-      v.literal("open"),
-      v.literal("partial"),
-      v.literal("paid"),
-      v.literal("overdue")
-    ),
+    status: payableStatusValidator,
     description: v.string(),
     // Unified payment reference filled after AI reconciliation —
     // multiple bank statement entries sharing the same paymentReference
@@ -44,7 +40,7 @@ export const payablesTables = {
     payableId: v.id("payables"),
     paymentDate: v.string(),
     amount: v.number(),
-    method: v.union(v.literal("cash"), v.literal("transfer")),
+    method: paymentMethodValidator,
     referenceNo: v.string(),
   }).index("by_payable", ["payableId"]),
 };

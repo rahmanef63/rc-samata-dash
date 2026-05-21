@@ -66,6 +66,7 @@ import type * as features_sales_mutations from "../features/sales/mutations.js";
 import type * as features_sales_queries from "../features/sales/queries.js";
 import type * as features_transactions__helpers from "../features/transactions/_helpers.js";
 import type * as features_transactions__schema from "../features/transactions/_schema.js";
+import type * as features_transactions__types from "../features/transactions/_types.js";
 import type * as features_transactions_mutations from "../features/transactions/mutations.js";
 import type * as features_transactions_queries from "../features/transactions/queries.js";
 import type * as http from "../http.js";
@@ -73,8 +74,12 @@ import type * as shared_auth from "../shared/auth.js";
 import type * as shared_categoryInference from "../shared/categoryInference.js";
 import type * as shared_helpers from "../shared/helpers.js";
 import type * as shared_index from "../shared/index.js";
+import type * as shared_normalize from "../shared/normalize.js";
+import type * as shared_sheetNames from "../shared/sheetNames.js";
+import type * as shared_txClassify from "../shared/txClassify.js";
 import type * as shared_uploadSchemas from "../shared/uploadSchemas.js";
 import type * as shared_validators from "../shared/validators.js";
+import type * as shared_vendorResolver from "../shared/vendorResolver.js";
 import type * as users from "../users.js";
 
 import type {
@@ -142,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   "features/sales/queries": typeof features_sales_queries;
   "features/transactions/_helpers": typeof features_transactions__helpers;
   "features/transactions/_schema": typeof features_transactions__schema;
+  "features/transactions/_types": typeof features_transactions__types;
   "features/transactions/mutations": typeof features_transactions_mutations;
   "features/transactions/queries": typeof features_transactions_queries;
   http: typeof http;
@@ -149,8 +155,12 @@ declare const fullApi: ApiFromModules<{
   "shared/categoryInference": typeof shared_categoryInference;
   "shared/helpers": typeof shared_helpers;
   "shared/index": typeof shared_index;
+  "shared/normalize": typeof shared_normalize;
+  "shared/sheetNames": typeof shared_sheetNames;
+  "shared/txClassify": typeof shared_txClassify;
   "shared/uploadSchemas": typeof shared_uploadSchemas;
   "shared/validators": typeof shared_validators;
+  "shared/vendorResolver": typeof shared_vendorResolver;
   users: typeof users;
 }>;
 

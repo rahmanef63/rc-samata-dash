@@ -21,6 +21,8 @@ import { v } from "convex/values";
 import { internal } from "../../_generated/api";
 import { requireAuth } from "../../shared/auth";
 import { SHEET, SHEET_BY_CHANNEL } from "../../shared/sheetNames";
+import { computePayableStatus } from "../../shared/payableStatus";
+import { LIMITS } from "../../shared/limits";
 import { mirrorTx } from "../transactions/_helpers";
 
 // ─── Master-data seeds ──────────────────────────────────────
@@ -333,10 +335,7 @@ export const bridgeCreditPurchasesToPayables = mutation({
       const vendorId = await vendorIdByName(ctx, g.supplier);
       if (!vendorId) continue; // skip if vendor not in master
       const paidAmount = g.paidDate ? g.amount : 0;
-      const status =
-        paidAmount >= g.amount ? "paid" as const
-        : paidAmount > 0 ? "partial" as const
-        : (g.dueDate && Date.parse(g.dueDate) < Date.now() ? "overdue" as const : "open" as const);
+      const status = computePayableStatus(g.amount, paidAmount, g.dueDate);
 
       const description = `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`;
       const payableId = await ctx.db.insert("payables", {
@@ -760,10 +759,7 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
       const vendorId = await vendorIdByName(ctx, g.supplier);
       if (!vendorId) continue;
       const paidAmount = g.paidDate ? g.amount : 0;
-      const status =
-        paidAmount >= g.amount ? "paid"
-        : paidAmount > 0 ? "partial"
-        : (g.dueDate && Date.parse(g.dueDate) < Date.now() ? "overdue" : "open");
+      const status = computePayableStatus(g.amount, paidAmount, g.dueDate);
       const description = `${g.items.slice(0, 3).join(", ")}${g.items.length > 3 ? " +" + (g.items.length - 3) : ""}`;
       const payableId = await ctx.db.insert("payables", {
         vendorId, vendorName: g.supplier, invoiceDate: g.invoiceDate, dueDate: g.dueDate,
