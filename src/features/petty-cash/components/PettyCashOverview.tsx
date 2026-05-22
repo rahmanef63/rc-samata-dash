@@ -14,27 +14,25 @@ import { usePettyCashRequests, useCreatePettyCashRequest, useUpdatePettyCashRequ
 import { useQuery } from "convex/react";
 import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
+import { PETTY_CASH_CATEGORIES, PETTY_CASH_STATUSES } from "../../../../convex/features/pettyCash/_types";
+
+// SSOT: opsi diturunkan dari validator enum di convex/_types.
+// Tambah kategori petty cash = edit array di convex/_types saja
+// (validator + UI sync otomatis). DRY.
+const purposeCategoryOptions = PETTY_CASH_CATEGORIES.map((c) => ({ label: c, value: c }));
+const statusOptions = PETTY_CASH_STATUSES.map((s) => ({
+  label: s.charAt(0).toUpperCase() + s.slice(1),
+  value: s,
+}));
 
 const fields: FieldConfig[] = [
   { key: "requestedBy", label: "Diminta Oleh", required: true },
-  { key: "purposeCategory", label: "Kategori", type: "select", options: [
-    { label: "Utilitas", value: "Utilitas" },
-    { label: "Bahan Baku", value: "Bahan Baku" },
-    { label: "Maintenance", value: "Maintenance" },
-    { label: "Transfer Owner", value: "Transfer Owner" },
-    { label: "Lain-lain", value: "Lain-lain" },
-  ]},
+  { key: "purposeCategory", label: "Kategori", type: "select", options: purposeCategoryOptions },
   { key: "requestedAmount", label: "Jumlah Request (Rp)", type: "number", required: true },
   { key: "approvedAmount", label: "Jumlah Approved (Rp)", type: "number" },
   { key: "actualAmount", label: "Realisasi (Rp)", type: "number" },
   { key: "notes", label: "Catatan" },
-  { key: "status", label: "Status", type: "select", options: [
-    { label: "Requested", value: "requested" },
-    { label: "Approved", value: "approved" },
-    { label: "Rejected", value: "rejected" },
-    { label: "Disbursed", value: "disbursed" },
-    { label: "Closed", value: "closed" },
-  ]},
+  { key: "status", label: "Status", type: "select", options: statusOptions },
   { key: "requestDate", label: "Tanggal", type: "date" },
 ];
 

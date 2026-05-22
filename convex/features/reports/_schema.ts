@@ -93,12 +93,16 @@ export const reportsTables = {
     .index("by_report", ["reportId"])
     .index("by_branch_week", ["branchId", "weekStart"]),
 
-  /** Valuasi inventory / food cost — dari sheet WEEKLY FC. */
+  /** Valuasi inventory / food cost — dari sheet WEEKLY FC.
+   *  `category` (string) di-keep buat back-compat + display, `categoryId`
+   *  (FK) di-set oleh ETL via lookup ke expenseCategories master. SSOT:
+   *  FK adalah truth; string adalah cache. */
   inventoryValuation: defineTable({
     reportId: v.id("weeklyReports"),
     branchId: v.id("branches"),
     valuationDate: v.string(),
     category: v.string(),
+    categoryId: v.optional(v.id("expenseCategories")),
     itemName: v.string(),
     qty: v.number(),
     unit: v.string(),
@@ -106,7 +110,8 @@ export const reportsTables = {
     totalValue: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "valuationDate"]),
+    .index("by_branch_date", ["branchId", "valuationDate"])
+    .index("by_category", ["categoryId"]),
 
   /**
    * Left over / spoilage harian per item — dari sheet LEFT OVER.
@@ -188,6 +193,7 @@ export const reportsTables = {
     branchId: v.id("branches"),
     periodStart: v.string(),
     category: v.string(),
+    categoryId: v.optional(v.id("expenseCategories")),
     openingValue: v.number(),
     purchaseValue: v.number(),
     transferOutValue: v.number(),
@@ -198,7 +204,8 @@ export const reportsTables = {
     foodCostPct: v.optional(v.number()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"]),
+    .index("by_branch_period", ["branchId", "periodStart"])
+    .index("by_category", ["categoryId"]),
 
   /**
    * Transfer Out / Transfer In — dari sheet TO - TI.
@@ -210,13 +217,15 @@ export const reportsTables = {
     periodStart: v.string(),
     direction: v.union(v.literal("out"), v.literal("in")),
     category: v.string(),
+    categoryId: v.optional(v.id("expenseCategories")),
     itemName: v.string(),
     qty: v.number(),
     unit: v.optional(v.string()),
     totalValue: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"]),
+    .index("by_branch_period", ["branchId", "periodStart"])
+    .index("by_category", ["categoryId"]),
 
   /**
    * HPP per produk — dari sheet HITUNGAN HPP PRODUK + FOOD COST ITEM KELAS.

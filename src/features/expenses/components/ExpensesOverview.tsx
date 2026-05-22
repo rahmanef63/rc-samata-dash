@@ -72,13 +72,7 @@ export function ExpensesOverview() {
 
   const fields: FieldConfig[] = [
     { key: "description", label: "Deskripsi", required: true },
-    { key: "categoryName", label: "Kategori", type: "select", options: categoryOptions.length > 0 ? categoryOptions : [
-      { label: "Bahan Baku", value: "Bahan Baku" },
-      { label: "Utilitas", value: "Utilitas" },
-      { label: "BPJS", value: "BPJS" },
-      { label: "Maintenance", value: "Maintenance" },
-      { label: "Lain-lain", value: "Lain-lain" },
-    ]},
+    { key: "categoryName", label: "Kategori", type: "select", options: categoryOptions },
     { key: "amount", label: "Jumlah (Rp)", type: "number", required: true },
     { key: "vendorName", label: "Vendor", type: "select", options: vendorOptions.length > 0 ? vendorOptions : [] },
     { key: "paymentSource", label: "Sumber Pembayaran", type: "select", options: [

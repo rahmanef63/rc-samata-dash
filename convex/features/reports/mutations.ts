@@ -1,7 +1,33 @@
 import { mutation } from "../../_generated/server";
+import type { MutationCtx } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { inferFromRules, isUncategorized } from "../../shared/categoryInference";
+
+/**
+ * Build a {name-lower → categoryId} Map from expenseCategories master.
+ * Pakai sekali per mutation call — load 1x, lookup O(1) per row.
+ * Staging tables (inventoryValuation/foodCostSummary/transferItems)
+ * pakai ini supaya SSOT: FK ke master, bukan free-text.
+ */
+async function buildCategoryLookup(
+  ctx: MutationCtx,
+): Promise<Map<string, Id<"expenseCategories">>> {
+  const cats = await ctx.db.query("expenseCategories").collect();
+  const m = new Map<string, Id<"expenseCategories">>();
+  for (const c of cats) {
+    m.set(c.name.toLowerCase().trim(), c._id);
+  }
+  return m;
+}
+
+function resolveCategoryId(
+  m: Map<string, Id<"expenseCategories">>,
+  name: string,
+): Id<"expenseCategories"> | undefined {
+  return m.get(name.toLowerCase().trim());
+}
 
 // ─── Validators ──────────────────────────────────────────────
 
@@ -233,10 +259,18 @@ export const importInventoryValuationBatch = mutation({
   },
   handler: async (ctx, { reportId, branchId, valuationDate, items }) => {
     await requireAuth(ctx);
+    const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
     for (const item of items) {
       if (item.totalValue <= 0) continue;
-      await ctx.db.insert("inventoryValuation", { ...item, valuationDate, reportId, branchId });
+      const categoryId = resolveCategoryId(catLookup, item.category);
+      await ctx.db.insert("inventoryValuation", {
+        ...item,
+        categoryId,
+        valuationDate,
+        reportId,
+        branchId,
+      });
       count++;
     }
     return count;
@@ -395,9 +429,17 @@ export const importFoodCostSummaryBatch = mutation({
   },
   handler: async (ctx, { reportId, branchId, periodStart, items }) => {
     await requireAuth(ctx);
+    const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
     for (const item of items) {
-      await ctx.db.insert("foodCostSummary", { ...item, periodStart, reportId, branchId });
+      const categoryId = resolveCategoryId(catLookup, item.category);
+      await ctx.db.insert("foodCostSummary", {
+        ...item,
+        categoryId,
+        periodStart,
+        reportId,
+        branchId,
+      });
       count++;
     }
     return count;
@@ -424,10 +466,18 @@ export const importTransferItemsBatch = mutation({
   },
   handler: async (ctx, { reportId, branchId, periodStart, items }) => {
     await requireAuth(ctx);
+    const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
     for (const item of items) {
       if (item.qty <= 0 && item.totalValue <= 0) continue;
-      await ctx.db.insert("transferItems", { ...item, periodStart, reportId, branchId });
+      const categoryId = resolveCategoryId(catLookup, item.category);
+      await ctx.db.insert("transferItems", {
+        ...item,
+        categoryId,
+        periodStart,
+        reportId,
+        branchId,
+      });
       count++;
     }
     return count;

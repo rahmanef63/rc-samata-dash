@@ -1326,3 +1326,81 @@ export const stripEtlPrefixes = action({
     return await ctx.runMutation(internal.features.reports.bridges.stripEtlPrefixesInternal);
   },
 });
+
+// ─── Backfill: categoryId FK on staging tables ─────────────────
+//
+// Staging tables (inventoryValuation/foodCostSummary/transferItems) sebelumnya
+// cuma simpan `category` string tanpa FK. ETL baru auto-resolve FK saat import,
+// tapi data lama orphan. Action ini walk tiap row + patch categoryId via
+// match name di expenseCategories master. Idempotent — skip row yang sudah punya
+// categoryId.
+
+export const backfillStagingCategoryIdsInternal = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{
+    inventoryFixed: number;
+    foodCostFixed: number;
+    transferFixed: number;
+    unmatchedNames: string[];
+  }> => {
+    const cats = await ctx.db.query("expenseCategories").collect();
+    const m = new Map<string, any>();
+    for (const c of cats) m.set(c.name.toLowerCase().trim(), c._id);
+
+    const unmatched = new Set<string>();
+    const resolve = (name: string): any | null => {
+      const id = m.get(name.toLowerCase().trim());
+      if (!id) unmatched.add(name);
+      return id ?? null;
+    };
+
+    let inventoryFixed = 0;
+    const inv = await ctx.db.query("inventoryValuation").take(LIMITS.STAGING_PAGE);
+    for (const row of inv) {
+      if (row.categoryId) continue;
+      const id = resolve(row.category);
+      if (id) {
+        await ctx.db.patch(row._id, { categoryId: id });
+        inventoryFixed++;
+      }
+    }
+
+    let foodCostFixed = 0;
+    const fc = await ctx.db.query("foodCostSummary").take(LIMITS.STAGING_PAGE);
+    for (const row of fc) {
+      if (row.categoryId) continue;
+      const id = resolve(row.category);
+      if (id) {
+        await ctx.db.patch(row._id, { categoryId: id });
+        foodCostFixed++;
+      }
+    }
+
+    let transferFixed = 0;
+    const tr = await ctx.db.query("transferItems").take(LIMITS.STAGING_PAGE);
+    for (const row of tr) {
+      if (row.categoryId) continue;
+      const id = resolve(row.category);
+      if (id) {
+        await ctx.db.patch(row._id, { categoryId: id });
+        transferFixed++;
+      }
+    }
+
+    return {
+      inventoryFixed,
+      foodCostFixed,
+      transferFixed,
+      unmatchedNames: Array.from(unmatched).slice(0, 50),
+    };
+  },
+});
+
+export const backfillStagingCategoryIds = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    return await ctx.runMutation(
+      internal.features.reports.bridges.backfillStagingCategoryIdsInternal,
+    );
+  },
+});
