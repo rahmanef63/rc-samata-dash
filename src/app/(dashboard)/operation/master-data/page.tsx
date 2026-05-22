@@ -3,6 +3,7 @@
 import { Database } from "lucide-react";
 import { MasterDataPanel } from "@/features/master-data";
 import { PageHeader } from "@/shared/components";
+import { ImportLinkButton } from "@/features/universal-import/components/ImportLinkButton";
 
 export default function Page() {
   return (
@@ -11,6 +12,7 @@ export default function Page() {
         icon={Database}
         title="Master Data"
         description="Vendor, channel pendapatan, kategori pengeluaran — referensi yang dipakai semua transaksi."
+        action={<ImportLinkButton />}
       />
       <MasterDataPanel />
     </div>

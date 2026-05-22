@@ -93,6 +93,62 @@ export const patchVendor = mutation({
   },
 });
 
+// ─── Bulk vendor import ─────────────────────────────────────
+// Universal import dispatcher reads vendor master rows from xlsx/csv
+// and bulk-creates skipping duplicates by case-insensitive name match.
+// Type maps from free-form string → enum (food_supplier / utility / dst.)
+// via simple keyword heuristics.
+const VENDOR_TYPE_MAP: Array<[RegExp, "food_supplier" | "utility" | "service" | "payroll" | "misc"]> = [
+  [/bahan|food|ayam|beras|minyak|saos|tepung|supplier/i, "food_supplier"],
+  [/listrik|air|pdam|pln|wifi|internet|telkom|gas/i, "utility"],
+  [/gaji|salary|tunjangan|payroll|sv|spv|insent/i, "payroll"],
+  [/service|jasa|maintenance|repair/i, "service"],
+];
+function inferVendorType(raw: string): "food_supplier" | "utility" | "service" | "payroll" | "misc" {
+  for (const [pat, t] of VENDOR_TYPE_MAP) if (pat.test(raw)) return t;
+  return "misc";
+}
+
+export const importVendorsBulk = mutation({
+  args: {
+    rows: v.array(v.object({
+      name: v.string(),
+      type: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { rows }) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.query("vendors").take(2000);
+    const existingNames = new Set(existing.map((v) => v.name.trim().toLowerCase()));
+    let inserted = 0, skipped = 0;
+    const errors: { line: number; message: string }[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      try {
+        const name = (r.name ?? "").trim();
+        if (!name) { errors.push({ line: i + 2, message: "name kosong" }); continue; }
+        if (existingNames.has(name.toLowerCase())) { skipped++; continue; }
+        const type = r.type ? inferVendorType(r.type) : inferVendorType(name);
+        await ctx.db.insert("vendors", {
+          name,
+          type,
+          phone: (r.phone ?? "").trim(),
+          notes: (r.notes ?? "").trim(),
+          isActive: true,
+          uploadedBy: userId,
+        });
+        existingNames.add(name.toLowerCase());
+        inserted++;
+      } catch (e) {
+        errors.push({ line: i + 2, message: e instanceof Error ? e.message : "row failed" });
+      }
+    }
+    return { inserted, skipped, errors };
+  },
+});
+
 // ─── Income Channels ────────────────────────────────────────
 export const createIncomeChannel = mutation({
   args: { name: v.string(), type: incomeChannelTypeValidator, isSettlementDelayed: v.boolean() },

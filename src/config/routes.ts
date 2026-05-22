@@ -37,6 +37,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
       { title: "Ringkasan Laporan", url: "/report", icon: BarChart3 },
       { title: "Semua Laporan", url: "/laporan", icon: Folder },
+      { title: "Import Universal", url: "/import", icon: UploadCloud, roles: ADMIN_ROLES },
       { title: "Upload Laporan Mingguan", url: "/laporan/upload", icon: UploadCloud, roles: ADMIN_ROLES },
       { title: "Chat AI", url: "/chat", icon: Bot },
       { title: "Profil", url: "/profile", icon: User },

@@ -13,6 +13,7 @@ import {
   VENDOR_TYPE_LABELS, VENDOR_TYPE_BADGE_CLS, VENDOR_TYPE_FILTER_OPTIONS,
   type VendorType,
 } from "@/features/vendors/constants/types";
+import { ImportLinkButton } from "@/features/universal-import/components/ImportLinkButton";
 
 export default function VendorsListPage() {
   const branches = useQuery(api.features.masterData.queries.listBranches);
@@ -51,14 +52,17 @@ export default function VendorsListPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Users className="h-6 w-6 text-primary" />
-          Vendor
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Daftar vendor + sinkronisasi piutang. Klik vendor untuk lihat riwayat utang, pembayaran, dan alias bank.
-        </p>
+      <header className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Users className="h-6 w-6 text-primary" />
+            Vendor
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Daftar vendor + sinkronisasi piutang. Klik vendor untuk lihat riwayat utang, pembayaran, dan alias bank.
+          </p>
+        </div>
+        <ImportLinkButton hint="Import vendor master / piutang dari xlsx" />
       </header>
 
       {/* Summary cards */}

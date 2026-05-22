@@ -47,6 +47,26 @@ Buku Besar = `transactions` table di `convex/features/transactions/`. Semua proy
 - Enum fix: `TX_KINDS` cuma `invoice|payment|receipt|transfer|expense|anomaly`. Drop salah pakai `"closing"`/`"payable"`/`"receipt"` (kas keluar).
 - Commit: `626d7c2`.
 
+### Ship I — Universal `/import` page + xlsx support + per-table import buttons
+User request: "bisa di buat 1 jenis upload saja? upload docs akan lihat files apa yang di upload dan menyesuaikan, semua table database harusnya ada tombol importnya, aku tidak bisa upload yang csv".
+
+- **Page baru** `/import` (sidebar MENU UTAMA) — single drop zone. Pakai `XLSX.read` di browser → `detectFileKind` → switch ke parser yang sesuai.
+- **Detector** (`src/features/universal-import/lib/detector.ts`):
+  - `zia_multi` — sheets `_panduan` + `transaksi` + `vendor_register` (highest priority, auto-split ke 4 sub-imports).
+  - `weekly_sv` — ≥2 sheet signature (`LAP. C-F`, `PEMBELIAN KREDIT`, dll) → redirect ke `/laporan/upload`.
+  - `pergantian` / `tunjangan` — row 0-12 first sheet match keyword.
+  - `bank_statement` — REKENING + SALDO/MUTASI.
+  - `payables_table` / `receipts_table` / `vendors_table` — header-row schema match (auto-recognize column names case-insensitive).
+- **CSV → xlsx in-memory** — `csvToWorkbook()` di `UniversalImport` parse quoted CSV jadi single-sheet workbook, lewatin ke detector. User upload xlsx ATAU csv, dua-duanya jalan (fix "aku tidak bisa upload yang csv" — sekarang accepts both).
+- **ZIA Group split** (`ziaSplit.ts`) — server-side parser jalan langsung di browser, ekstrak pergantian + tunjangan + payables (filter expense+bahan_baku, vendor name resolved) + vendors dari single workbook. Sub-cards preview per target, commit semua sekaligus.
+- **Backend baru**: `importVendorsBulk` di `masterData/mutations.ts` — dedupe by case-insensitive name, infer `type` via regex keyword (food_supplier/utility/payroll/service/misc).
+- **Reuse**: existing `importProductChangesBatch`, `importAllowancesBatch`, `importPayablesBulk` — single commit dispatch.
+- **Per-table buttons**: `ImportLinkButton` shared component. Pasang di PageHeader.action atau header inline di:
+  - `/operation/master-data`
+  - `/finance/payables`
+  - `/finance/expenses`
+  - `/finance/vendors`
+
 ### Ship H — Fill SSOT cascade + bulk import mirror gaps (audit-driven)
 Audit `remove*` + `import*Bulk` paths nemu 6 gap:
 - `sales.remove` → cascade tx mirror.
@@ -180,7 +200,8 @@ UI smoke test:
 ## Commit Trail (chronological)
 
 ```
-(this commit) feat(ssot): Ship H — fill cascade + bulk import mirror gaps
+(this commit) feat(import): Ship I — universal /import + xlsx CSV + per-table buttons
+378b550  feat(ssot): Ship H — fill cascade + bulk import mirror gaps
 180253f  feat(ssot): Ship G — update sync + backfill extend sales/expenses
 d0df88b  docs(ssot): add SSOT-STATUS — done/pending matrix
 ab78c40  chore(audit): drop checklist, add Clean All + per-row delete on Log Audit  (Ship F)
