@@ -159,6 +159,30 @@ export const updateClosing = mutation({
   },
 });
 
+/**
+ * Hapus 1 dailyClosing + cascade ke transactionId di Buku Besar (SSOT 2-way).
+ * Sengaja tidak cascade ke linked ownerTransfers — user mungkin masih butuh
+ * transfer history terpisah. Audit log entry created untuk trail.
+ */
+export const removeClosing = mutation({
+  args: { id: v.id("dailyClosings") },
+  handler: async (ctx, { id }) => {
+    const userId = await requireAuth(ctx);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Closing not found");
+    if (existing.transactionId) {
+      try { await ctx.db.delete(existing.transactionId); } catch { /* tx mungkin sudah hilang */ }
+    }
+    await ctx.db.delete(id);
+    await insertAuditLog(ctx, {
+      entityType: "dailyClosings", entityId: id, action: "delete",
+      description: `Deleted closing ${existing.businessDate}`,
+      actedBy: userId, branchId: existing.branchId,
+    });
+    return null;
+  },
+});
+
 export const createTransfer = mutation({
   args: {
     closingId: v.optional(v.id("dailyClosings")),

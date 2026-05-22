@@ -120,10 +120,15 @@ export const remove = mutation({
     for (const li of lineItems) {
       await ctx.db.delete(li._id);
     }
+    // Cascade ke Buku Besar (transactions) — SSOT 2-way relation
+    let txDeleted = 0;
+    if (existing.transactionId) {
+      try { await ctx.db.delete(existing.transactionId); txDeleted = 1; } catch { /* tx mungkin sudah hilang */ }
+    }
     await ctx.db.delete(args.id);
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: args.id, action: "delete",
-      description: `Deleted expense ${existing.categoryName} (${lineItems.length} line items)`,
+      description: `Deleted expense ${existing.categoryName} (${lineItems.length} line items, ${txDeleted} tx)`,
       actedBy: userId, branchId: existing.branchId,
     });
     return null;

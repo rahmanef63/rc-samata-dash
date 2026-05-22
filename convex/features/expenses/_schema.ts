@@ -21,6 +21,9 @@ export const expensesTables = {
     // Lets `deleteWeeklyReport` cascade-purge derived expenses cheaply
     // via an index instead of scanning every row's nested etlSource.
     sourceReportId: v.optional(v.id("weeklyReports")),
+    // Bridge FK ke Buku Besar (transactions) — mirror row di SSOT.
+    // Cascade delete pakai field ini supaya tx ikut terhapus saat expense dihapus.
+    transactionId: v.optional(v.id("transactions")),
   })
     .index("by_branch_date", ["branchId", "expenseDate"])
     .index("by_status", ["status"])

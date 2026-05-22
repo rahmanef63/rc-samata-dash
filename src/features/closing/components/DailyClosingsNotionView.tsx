@@ -53,6 +53,7 @@ function toPage(r: Row): Page {
 export function DailyClosingsNotionView({ branchId }: { branchId: Id<"branches"> }) {
   const rows = useQuery(api.features.closing.queries.listClosings, { branchId }) as Row[] | undefined;
   const patch = useMutation(api.features.closing.mutations.updateClosing);
+  const removeClosing = useMutation(api.features.closing.mutations.removeClosing);
 
   return (
     <EntityNotionView<Row>
@@ -73,6 +74,14 @@ export function DailyClosingsNotionView({ branchId }: { branchId: Id<"branches">
           catch (e) { errors.push({ id: p.id, message: e instanceof Error ? e.message : "patch failed" }); }
         }
         return { updated, errors };
+      }}
+      onBulkDelete={async (ids) => {
+        let deleted = 0;
+        for (const id of ids) {
+          try { await removeClosing({ id: id as Id<"dailyClosings"> }); deleted++; }
+          catch { /* skip, surface lewat toast caller */ }
+        }
+        return { deleted };
       }}
     />
   );

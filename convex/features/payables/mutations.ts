@@ -121,15 +121,18 @@ export const remove = mutation({
     for (const b of linkedBanks) {
       await ctx.db.patch(b._id, { payableId: undefined });
     }
-    // transactions.payableId — bridge-FK from SSOT to this legacy row.
+    // transactions — cascade delete linked tx untuk SSOT 2-way (user request:
+    // "buku besar seharusnya jadi SSOT, semua sync 2 way relation"). Sebelumnya
+    // hanya null FK. Sekarang tx baris ikut terhapus supaya Buku Besar nggak
+    // jadi orphan record yang gak punya proyeksi.
+    let txDeleted = 0;
     if (existing.transactionId) {
-      const tx = await ctx.db.get(existing.transactionId);
-      if (tx) await ctx.db.patch(existing.transactionId, { payableId: undefined });
+      try { await ctx.db.delete(existing.transactionId); txDeleted = 1; } catch { /* tx mungkin sudah hilang */ }
     }
     await ctx.db.delete(args.id);
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: args.id, action: "delete",
-      description: `Deleted payable ${existing.vendorName} (${payments.length} payments, ${linkedReceipts.length + linkedBanks.length} bridge FKs cleared)`,
+      description: `Deleted payable ${existing.vendorName} (${payments.length} payments, ${linkedReceipts.length + linkedBanks.length} bridge FKs cleared, ${txDeleted} tx deleted)`,
       actedBy: userId, branchId: existing.branchId,
     });
     return null;

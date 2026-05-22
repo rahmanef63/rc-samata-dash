@@ -690,7 +690,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       const netAmount = Math.max(0, g.gross - platformFee - promoCost);
       const cashReceivedAmount = g.channel === "all" ? netAmount : 0;
       const sheetName = SHEET_BY_CHANNEL[g.channel] ?? SHEET.LAP_PENJUALAN;
-      await ctx.db.insert("dailySales", {
+      const saleId = await ctx.db.insert("dailySales", {
         businessDate: g.date, channelId: chan.id, channelName: chan.name,
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
         settlementDate: undefined, referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
@@ -709,7 +709,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       });
       // Mirror to transactions (SSOT for Buku Besar) — kind=receipt (income), direction=in.
       // Idempotent via (sourceKind+sourceFileName+sourceSheetName+sourceRowNumber).
-      await mirrorTx(ctx, {
+      const saleTxId = await mirrorTx(ctx, {
         branchId: report.branchId,
         kind: "receipt",
         direction: "in",
@@ -727,6 +727,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
         sourceReportId: reportId,
         userId: "system",
       });
+      if (saleTxId) await ctx.db.patch(saleId, { transactionId: saleTxId });
       inserted++;
       rowIdx++;
     }
@@ -904,7 +905,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
       const breakdown = f.otherOutflow > 0
         ? `Kas Kecil Rp ${f.expenseOutflow.toLocaleString("id-ID")} + Lain-lain Rp ${f.otherOutflow.toLocaleString("id-ID")}`
         : `Kas Kecil Rp ${f.expenseOutflow.toLocaleString("id-ID")}`;
-      await ctx.db.insert("expenses", {
+      const expId = await ctx.db.insert("expenses", {
         expenseDate: f.businessDate, categoryId: cat._id, categoryName: cat.name,
         amount: totalOut,
         description: `Pengeluaran harian · ${breakdown}`,
@@ -917,7 +918,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         },
       });
       // Mirror ke transactions (SSOT Buku Besar) — kind=expense, direction=out.
-      await mirrorTx(ctx, {
+      const expTxId = await mirrorTx(ctx, {
         branchId: report.branchId,
         kind: "expense",
         direction: "out",
@@ -933,6 +934,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         sourceReportId: reportId,
         userId: "system",
       });
+      if (expTxId) await ctx.db.patch(expId, { transactionId: expTxId });
       inserted++;
       rowIdx++;
     }
@@ -1401,6 +1403,81 @@ export const backfillStagingCategoryIds = action({
   handler: async (ctx): Promise<any> => {
     return await ctx.runMutation(
       internal.features.reports.bridges.backfillStagingCategoryIdsInternal,
+    );
+  },
+});
+
+// ─── Repair: sourceReportId FK on legacy derived rows ──────────
+//
+// Sebelum Ship A (commit e7a5486) bridges nggak set sourceReportId. Akibatnya
+// row legacy (dailySales/dailyClosings/payables/expenses) gak ter-cascade
+// pas user hapus weeklyReport — cascade pakai by_source_report index, dan
+// undefined gak match index entry. Action ini walk ke-4 tabel + isi
+// sourceReportId dari etlSource.reportId. Idempotent — skip row yang sudah
+// punya FK. After repair, next delete tinggal pakai index (cheap).
+
+export const repairLegacySourceReportIdInternal = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{
+    expensesFixed: number;
+    payablesFixed: number;
+    salesFixed: number;
+    closingsFixed: number;
+  }> => {
+    let expensesFixed = 0;
+    let payablesFixed = 0;
+    let salesFixed = 0;
+    let closingsFixed = 0;
+
+    const exps = await ctx.db.query("expenses").take(LIMITS.STAGING_PAGE);
+    for (const e of exps) {
+      if (e.sourceReportId) continue;
+      const rid = e.etlSource?.reportId;
+      if (rid) {
+        await ctx.db.patch(e._id, { sourceReportId: rid });
+        expensesFixed++;
+      }
+    }
+
+    const pays = await ctx.db.query("payables").take(LIMITS.STAGING_PAGE);
+    for (const p of pays) {
+      if (p.sourceReportId) continue;
+      const rid = p.etlSource?.reportId;
+      if (rid) {
+        await ctx.db.patch(p._id, { sourceReportId: rid });
+        payablesFixed++;
+      }
+    }
+
+    const sales = await ctx.db.query("dailySales").take(LIMITS.STAGING_PAGE);
+    for (const s of sales) {
+      if (s.sourceReportId) continue;
+      const rid = s.etlSource?.reportId;
+      if (rid) {
+        await ctx.db.patch(s._id, { sourceReportId: rid });
+        salesFixed++;
+      }
+    }
+
+    const cls = await ctx.db.query("dailyClosings").take(LIMITS.STAGING_PAGE);
+    for (const c of cls) {
+      if (c.sourceReportId) continue;
+      const rid = c.etlSource?.reportId;
+      if (rid) {
+        await ctx.db.patch(c._id, { sourceReportId: rid });
+        closingsFixed++;
+      }
+    }
+
+    return { expensesFixed, payablesFixed, salesFixed, closingsFixed };
+  },
+});
+
+export const repairLegacySourceReportId = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    return await ctx.runMutation(
+      internal.features.reports.bridges.repairLegacySourceReportIdInternal,
     );
   },
 });

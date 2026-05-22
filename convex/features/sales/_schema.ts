@@ -19,6 +19,8 @@ export const salesTables = {
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
     sourceReportId: v.optional(v.id("weeklyReports")),
+    // Bridge FK ke Buku Besar (transactions). Cascade delete via field ini.
+    transactionId: v.optional(v.id("transactions")),
   })
     .index("by_branch_date", ["branchId", "businessDate"])
     .index("by_status", ["status"])

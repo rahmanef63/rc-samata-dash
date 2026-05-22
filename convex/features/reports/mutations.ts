@@ -837,22 +837,30 @@ export const deleteWeeklyReport = mutation({
       derivedDeleted += rows.length;
     }
 
-    // Legacy fallback: rows bridged BEFORE the sourceReportId field existed
-    // only carry the link inside the nested etlSource object. Scan + filter.
+    // Legacy fallback: rows bridged BEFORE sourceReportId field existed only
+    // carry the link inside nested etlSource object (or — in case of dailySales
+    // public bridge — only via the `referenceNo: etl:${reportId}:*` prefix).
+    // Scan branch-scoped index + filter. Bounded by single branch + report's
+    // typical period (≤ 31 dates × dozens of rows), tetap cheap.
     const report = await ctx.db.get(reportId);
     if (report?.branchId) {
       let legacyDeleted = 0;
+      const expectedRefPrefix = `etl:${reportId}:`;
+
+      // expenses (by_branch_date — iterate all dates on branch, filter etlSource)
       const legacyExpenses = await ctx.db
         .query("expenses")
         .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
         .collect();
       for (const e of legacyExpenses) {
-        if (e.sourceReportId) continue; // already handled above
+        if (e.sourceReportId) continue;
         if (e.etlSource?.reportId === reportId) {
           await ctx.db.delete(e._id);
           legacyDeleted++;
         }
       }
+
+      // payables (by_branch)
       const legacyPayables = await ctx.db
         .query("payables")
         .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
@@ -864,6 +872,41 @@ export const deleteWeeklyReport = mutation({
           legacyDeleted++;
         }
       }
+
+      // dailySales (by_branch_date). Two legacy markers possible — etlSource
+      // (internal bridge) atau referenceNo `etl:${reportId}:*` (public bridge).
+      const legacySales = await ctx.db
+        .query("dailySales")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
+        .collect();
+      for (const s of legacySales) {
+        if (s.sourceReportId) continue;
+        const matchEtl = s.etlSource?.reportId === reportId;
+        const matchRef = s.referenceNo?.startsWith(expectedRefPrefix);
+        if (matchEtl || matchRef) {
+          await ctx.db.delete(s._id);
+          legacyDeleted++;
+        }
+      }
+
+      // dailyClosings (by_branch_date). User complaint: "Setoran Harian tidak
+      // ter-hapus" — gap utama. Legacy rows hanya punya etlSource.reportId.
+      const legacyClosings = await ctx.db
+        .query("dailyClosings")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
+        .collect();
+      for (const c of legacyClosings) {
+        if (c.sourceReportId) continue;
+        if (c.etlSource?.reportId === reportId) {
+          // Cascade ke linked transaction kalau ada (SSOT 2-way).
+          if (c.transactionId) {
+            try { await ctx.db.delete(c.transactionId); } catch { /* tx mungkin sudah ter-delete via by_source_report */ }
+          }
+          await ctx.db.delete(c._id);
+          legacyDeleted++;
+        }
+      }
+
       derivedDeleted += legacyDeleted;
     }
 
