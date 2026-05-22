@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useQuery, useConvex } from "convex/react";
+import { useQuery, useConvex, useMutation } from "convex/react";
 import { toast } from "sonner";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useBranchScope } from "@/features/dashboard";
@@ -21,7 +21,18 @@ import {
   Upload,
   Download,
   FileSpreadsheet,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { downloadReportAsXlsx } from "../lib/exportReport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,7 +64,35 @@ const STATUS_BADGE: Record<string, string> = {
 export default function ReportHub() {
   const router = useRouter();
   const convex = useConvex();
-  const isOwner = useUserRole() === "owner";
+  const role = useUserRole();
+  const isOwner = role === "owner";
+  const canDelete = role === "super_admin";
+  const deleteReport = useMutation(api.features.reports.mutations.deleteWeeklyReport);
+  const [pendingDelete, setPendingDelete] = useState<
+    { id: Id<"weeklyReports">; fileName: string } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const res = await deleteReport({ reportId: pendingDelete.id });
+      const counts = res as { stagingDeleted?: number; derivedDeleted?: number } | null;
+      const staging = counts?.stagingDeleted ?? 0;
+      const derived = counts?.derivedDeleted ?? 0;
+      toast.success(
+        `Laporan dihapus · ${staging} staging + ${derived} CRUD/SSOT rows`,
+      );
+      setPendingDelete(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Gagal menghapus laporan",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleDownload(
     e: React.MouseEvent,
@@ -347,6 +386,20 @@ export default function ReportHub() {
                 >
                   <Download className="h-4 w-4" />
                 </Button>
+                {canDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDelete({ id: r._id, fileName: r.fileName });
+                    }}
+                    title="Hapus laporan + semua data turunan (staging, dailySales, payables, expenses, transactions)"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
                     STATUS_BADGE[r.status] ?? STATUS_BADGE.uploaded
@@ -359,6 +412,51 @@ export default function ReportHub() {
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus laporan ini?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  <span className="font-medium text-foreground">
+                    {pendingDelete?.fileName}
+                  </span>{" "}
+                  akan dihapus permanen, termasuk:
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                  <li>File xlsx asli</li>
+                  <li>14 staging tables (productSales, vendorPurchases, dst)</li>
+                  <li>Penjualan harian (dailySales)</li>
+                  <li>Closing harian (dailyClosings)</li>
+                  <li>Piutang vendor dari report ini (payables)</li>
+                  <li>Expenses dari LPKK + kas kecil report ini</li>
+                  <li>Entry buku besar (transactions)</li>
+                </ul>
+                <p className="text-destructive font-medium">
+                  Aksi ini tidak bisa di-undo. Data inventaris (stockItems) tidak ikut terhapus — running totals, jalankan re-bridge untuk refresh.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Menghapus..." : "Hapus laporan + semua data turunan"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

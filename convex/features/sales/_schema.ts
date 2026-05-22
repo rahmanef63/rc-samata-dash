@@ -18,7 +18,9 @@ export const salesTables = {
     status: salesStatusValidator,
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
+    sourceReportId: v.optional(v.id("weeklyReports")),
   })
     .index("by_branch_date", ["branchId", "businessDate"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_source_report", ["sourceReportId"]),
 };

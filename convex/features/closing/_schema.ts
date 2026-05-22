@@ -34,7 +34,10 @@ export const closingTables = {
     sourceSheetName: v.optional(v.string()),
     sourceRowNumber: v.optional(v.number()),
     transactionId: v.optional(v.id("transactions")),
-  }).index("by_branch_date", ["branchId", "businessDate"]),
+    sourceReportId: v.optional(v.id("weeklyReports")),
+  })
+    .index("by_branch_date", ["branchId", "businessDate"])
+    .index("by_source_report", ["sourceReportId"]),
 
   ownerTransfers: defineTable({
     closingId: v.optional(v.id("dailyClosings")),

@@ -168,6 +168,7 @@ export const importLPKKBatch = mutation({
         status: "draft",
         hasAttachment: false,
         branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "lpkk", tabLabel: "Kas Kecil",
           rowIndex: rowIdx, sheetName: "LPKK",
@@ -728,30 +729,99 @@ export const deleteAllowances = mutation({
 
 // ─── 11. Hapus report + semua data terkait ───────────────────
 
+/**
+ * Cascade delete a weekly report. Hapus staging tables (by_report index),
+ * lalu hapus semua CRUD/SSOT yang di-bridge dari report ini (by_source_report
+ * index untuk yang sudah punya FK; etlSource.reportId fallback untuk legacy).
+ *
+ * Yang DI-CASCADE:
+ *  - staging:   productSales, vendorPurchases, inventoryValuation,
+ *               leftoverItems, dailyCashSummary, salesControl, creditPurchases,
+ *               foodCostSummary, transferItems, productHPP, costAnalysis,
+ *               dailyCashFlow, employeeIncentives, ownerTransfers
+ *  - SSOT:      transactions (by_source_report)
+ *  - derived:   dailySales, dailyClosings, payables, expenses
+ *               (new rows via by_source_report; legacy fallback scan etlSource)
+ *  - storage:   the original xlsx file
+ *
+ * Yang TIDAK DI-CASCADE (intentionally):
+ *  - stockItems   — running totals (upserted), tidak terikat 1-1 ke report.
+ *                   User mau bersihin → run backfillAllReports atau manual reset.
+ *  - stockMovements — derived from cross-report deltas; bisa stale tapi
+ *                   tidak orphan dangerous. Re-bridge meng-refresh.
+ *  - bankStatementEntries / paymentReceipts / validationBatches — bukan
+ *                   dari weeklyReports source.
+ */
 export const deleteWeeklyReport = mutation({
   args: { reportId: v.id("weeklyReports") },
   handler: async (ctx, { reportId }) => {
     await requireAuth(ctx);
-    const tables = [
+    let stagingDeleted = 0;
+    const stagingTables = [
       "productSales", "vendorPurchases", "inventoryValuation",
       "leftoverItems", "dailyCashSummary", "salesControl", "creditPurchases",
       "foodCostSummary", "transferItems", "productHPP",
       "costAnalysis", "dailyCashFlow", "employeeIncentives",
       "ownerTransfers",
     ] as const;
-    for (const table of tables) {
+    for (const table of stagingTables) {
       const rows = await ctx.db
         .query(table)
         .withIndex("by_report", (q) => q.eq("reportId", reportId))
         .collect();
       for (const row of rows) await ctx.db.delete(row._id);
+      stagingDeleted += rows.length;
     }
+
+    // Derived/SSOT cascade via by_source_report index (cheap, no scan).
+    let derivedDeleted = 0;
+    const derivedTables = [
+      "transactions", "dailySales", "dailyClosings", "payables", "expenses",
+    ] as const;
+    for (const table of derivedTables) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId))
+        .collect();
+      for (const row of rows) await ctx.db.delete(row._id);
+      derivedDeleted += rows.length;
+    }
+
+    // Legacy fallback: rows bridged BEFORE the sourceReportId field existed
+    // only carry the link inside the nested etlSource object. Scan + filter.
     const report = await ctx.db.get(reportId);
+    if (report?.branchId) {
+      let legacyDeleted = 0;
+      const legacyExpenses = await ctx.db
+        .query("expenses")
+        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
+        .collect();
+      for (const e of legacyExpenses) {
+        if (e.sourceReportId) continue; // already handled above
+        if (e.etlSource?.reportId === reportId) {
+          await ctx.db.delete(e._id);
+          legacyDeleted++;
+        }
+      }
+      const legacyPayables = await ctx.db
+        .query("payables")
+        .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
+        .collect();
+      for (const p of legacyPayables) {
+        if (p.sourceReportId) continue;
+        if (p.etlSource?.reportId === reportId) {
+          await ctx.db.delete(p._id);
+          legacyDeleted++;
+        }
+      }
+      derivedDeleted += legacyDeleted;
+    }
+
     if (report?.fileStorageId) {
       try { await ctx.storage.delete(report.fileStorageId); } catch { /* file may be gone */ }
     }
     await ctx.db.delete(reportId);
-    return null;
+    return { stagingDeleted, derivedDeleted };
   },
 });
 

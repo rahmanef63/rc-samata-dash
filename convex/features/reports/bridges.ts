@@ -189,6 +189,7 @@ export const bridgeProductSalesToDailySales = mutation({
         referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
         status: "recorded" as const,
         branchId: report.branchId,
+        sourceReportId: reportId,
       });
       inserted++;
     }
@@ -239,6 +240,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
         sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: inserted + 2,
         branchId: report.branchId,
+        sourceReportId: reportId,
       });
       const txId = await mirrorTx(ctx, {
         branchId: report.branchId,
@@ -326,6 +328,7 @@ export const bridgeCreditPurchasesToPayables = mutation({
         sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
           rowIndex: rowIdx, sheetName: SHEET.PEMBELIAN_KREDIT,
@@ -459,6 +462,7 @@ export const bridgeCashFlowToExpenses = mutation({
         status: "approved" as const,
         hasAttachment: false,
         branchId: report.branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
           rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
@@ -691,6 +695,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
         settlementDate: undefined, referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
         status: "recorded", branchId: report.branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId,
           stagingTable: "productSales",
@@ -750,6 +755,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         sourceFileName: report.fileName,
         sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: rowIdx + 2,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
           rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
@@ -813,6 +819,7 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
         branchId: report.branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
           rowIndex: rowIdx, sheetName: SHEET.PEMBELIAN_KREDIT,
@@ -902,6 +909,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         amount: totalOut,
         description: `Pengeluaran harian · ${breakdown}`,
         paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
+        sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
           rowIndex: rowIdx, sheetName: SHEET.LAP_CF,
@@ -1114,6 +1122,7 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
       status: "approved" as const,
       hasAttachment: false,
       branchId: report.branchId,
+      sourceReportId: reportId,
       etlSource: {
         reportId, stagingTable: "employeeIncentives", tabLabel: "Insentif",
         rowIndex: 0, sheetName: "INSENTIF",

@@ -17,9 +17,14 @@ export const expensesTables = {
     hasAttachment: v.boolean(),
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
+    // Direct FK to the weekly report that produced this row.
+    // Lets `deleteWeeklyReport` cascade-purge derived expenses cheaply
+    // via an index instead of scanning every row's nested etlSource.
+    sourceReportId: v.optional(v.id("weeklyReports")),
   })
     .index("by_branch_date", ["branchId", "expenseDate"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_source_report", ["sourceReportId"]),
 
   expenseLineItems: defineTable({
     expenseId: v.id("expenses"),

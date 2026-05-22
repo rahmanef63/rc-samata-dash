@@ -32,9 +32,13 @@ export const payablesTables = {
     transactionId: v.optional(v.id("transactions")),  // bridge FK
     branchId: v.id("branches"),
     etlSource: etlSourceValidator,
+    // Direct FK to the weekly report that produced this row, for cheap
+    // cascade-delete via index.
+    sourceReportId: v.optional(v.id("weeklyReports")),
   })
     .index("by_branch", ["branchId"])
-    .index("by_vendor", ["vendorId"]),
+    .index("by_vendor", ["vendorId"])
+    .index("by_source_report", ["sourceReportId"]),
 
   payablePayments: defineTable({
     payableId: v.id("payables"),
