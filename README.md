@@ -62,3 +62,4 @@ pnpm run lint
 - [docs/deployment.md](docs/deployment.md)
 - [docs/developer.md](docs/developer.md)
 - [docs/onboarding.md](docs/onboarding.md)
+- [docs/SSOT-STATUS.md](docs/SSOT-STATUS.md) — Buku Besar SSOT done/pending matrix
