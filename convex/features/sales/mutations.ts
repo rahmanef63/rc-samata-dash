@@ -136,10 +136,15 @@ export const remove = mutation({
     const userId = await requireAuth(ctx);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Record not found");
+    // Cascade ke Buku Besar SSOT — hapus tx mirror.
+    let txDeleted = 0;
+    if (existing.transactionId) {
+      try { await ctx.db.delete(existing.transactionId); txDeleted = 1; } catch { /* tx mungkin sudah hilang */ }
+    }
     await ctx.db.delete(args.id);
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: args.id, action: "delete",
-      description: `Deleted sale ${existing.businessDate}`,
+      description: `Deleted sale ${existing.businessDate} (${txDeleted} tx)`,
       actedBy: userId, branchId: existing.branchId,
     });
     return null;

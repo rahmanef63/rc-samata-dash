@@ -294,10 +294,15 @@ export const removeTransfer = mutation({
     const userId = await requireAuth(ctx);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Transfer not found");
+    // Cascade tx mirror SSOT.
+    let txDeleted = 0;
+    if (existing.transactionId) {
+      try { await ctx.db.delete(existing.transactionId); txDeleted = 1; } catch { /* tx mungkin sudah hilang */ }
+    }
     await ctx.db.delete(args.id);
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: args.id, action: "delete",
-      description: `Deleted transfer ${existing.transferDate} Rp${existing.amount}`,
+      description: `Deleted transfer ${existing.transferDate} Rp${existing.amount} (${txDeleted} tx)`,
       actedBy: userId, branchId: existing.branchId,
     });
     return null;
@@ -435,6 +440,26 @@ export const importPaymentReceiptsBulk = mutation({
           uploadedAt: now,
           uploadedBy: userId,
         });
+        // Mirror ke Buku Besar SSOT — payment kind, direction=out.
+        const txId = await mirrorTx(ctx, {
+          branchId,
+          kind: "payment",
+          direction: "out",
+          date: r.paidDate,
+          amount: r.amount,
+          status: payableId ? "linked" : "unlinked",
+          payableId,
+          paidBy: r.paidBy,
+          channelName: r.channel,
+          reference: r.reference,
+          description: `Bukti bayar ${r.paidBy}${r.vendorName ? ` (${r.vendorName})` : ""} Rp${r.amount}`,
+          notes: r.notes,
+          proofFileName: r.fileName,
+          sourceKind: "bulk_import_csv",
+          sourceFileName: r.fileName,
+          userId,
+        });
+        if (txId) await ctx.db.patch(id, { transactionId: txId });
 
         if (payableId) {
           const p = await ctx.db.get(payableId);
@@ -449,7 +474,6 @@ export const importPaymentReceiptsBulk = mutation({
           linked++;
         }
 
-        void id;
         inserted++;
       } catch (e) {
         errors.push({ line: i + 2, message: e instanceof Error ? e.message : "row failed" });
@@ -524,10 +548,15 @@ export const removePaymentReceipt = mutation({
       }
     }
     if (r.proofStorageId) await ctx.storage.delete(r.proofStorageId);
+    // Cascade tx mirror SSOT.
+    let txDeleted = 0;
+    if (r.transactionId) {
+      try { await ctx.db.delete(r.transactionId); txDeleted = 1; } catch { /* tx mungkin sudah hilang */ }
+    }
     await ctx.db.delete(id);
     await insertAuditLog(ctx, {
       entityType: "paymentReceipts", entityId: id, action: "delete",
-      description: `Hapus bukti bayar Rp${r.amount}`, actedBy: userId, branchId: r.branchId,
+      description: `Hapus bukti bayar Rp${r.amount} (${txDeleted} tx)`, actedBy: userId, branchId: r.branchId,
     });
     return null;
   },
@@ -568,12 +597,17 @@ export const removeBankStatementBatch = mutation({
     // validationLogs that point to these bank entries (otherwise the
     // log table holds orphan rows pointing to deleted ids).
     const linkedPayableIds = new Set<string>();
+    let txDeleted = 0;
     for (const e of entries) {
       if (e.payableId) linkedPayableIds.add(e.payableId);
       const orphanLogs = await ctx.db.query("validationLogs")
         .withIndex("by_entry", (q) => q.eq("entryType", "bank_entry").eq("entryId", e._id))
         .collect();
       for (const l of orphanLogs) await ctx.db.delete(l._id);
+      // Cascade tx mirror SSOT — tiap entry punya FK ke transactions.
+      if (e.transactionId) {
+        try { await ctx.db.delete(e.transactionId); txDeleted++; } catch { /* skip */ }
+      }
       await ctx.db.delete(e._id);
     }
 
@@ -601,10 +635,10 @@ export const removeBankStatementBatch = mutation({
     await ctx.db.delete(id);
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: id, action: "delete",
-      description: `Hapus batch statement ${b.accountKind} ${b.fileName} — ${entries.length} tx, ${linkedPayableIds.size} payable direkomputasi`,
+      description: `Hapus batch statement ${b.accountKind} ${b.fileName} — ${entries.length} entry + ${txDeleted} tx mirror, ${linkedPayableIds.size} payable direkomputasi`,
       actedBy: userId, branchId: b.branchId,
     });
-    return { entriesDeleted: entries.length, payablesRecomputed: linkedPayableIds.size };
+    return { entriesDeleted: entries.length, txDeleted, payablesRecomputed: linkedPayableIds.size };
   },
 });
 

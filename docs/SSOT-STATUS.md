@@ -47,6 +47,17 @@ Buku Besar = `transactions` table di `convex/features/transactions/`. Semua proy
 - Enum fix: `TX_KINDS` cuma `invoice|payment|receipt|transfer|expense|anomaly`. Drop salah pakai `"closing"`/`"payable"`/`"receipt"` (kas keluar).
 - Commit: `626d7c2`.
 
+### Ship H — Fill SSOT cascade + bulk import mirror gaps (audit-driven)
+Audit `remove*` + `import*Bulk` paths nemu 6 gap:
+- `sales.remove` → cascade tx mirror.
+- `closing.removeTransfer` → cascade tx mirror.
+- `closing.removePaymentReceipt` → cascade tx mirror.
+- `closing.removeBankStatementBatch` → loop entries.transactionId, hapus per-entry mirror.
+- `payables.importPayablesBulk` → mirrorTx per row (sourceKind=`bulk_import_csv`, kind=`invoice`).
+- `closing.importPaymentReceiptsBulk` → mirrorTx per row (kind=`payment`, dir=`out`).
+
+Sebelumnya gap ini bikin Buku Besar punya orphan tx rows kalau user hapus receipt/transfer/batch via UI individual atau bulk-import payables/receipts dari CSV.
+
 ### Ship G — Update sync + legacy backfill extension
 - Tambah aliases `syncTxFromSales` + `syncTxFromExpense` di `_helpers.ts`.
 - Wire `syncTxFromSales` ke `sales.update` + `sales.patch` — mirror perubahan date/amount/status/channelName/reference ke tx.
@@ -111,10 +122,9 @@ Audit per 2026-05-22 sehabis Ship G — ternyata plan udah ke-implement di seque
 
 ## ⏳ BELUM (truly remaining)
 
-### Update/patch sync untuk write paths lain
-Sudah cover create + delete + update untuk sales/expenses/closing/payable/transfer/receipt. Belum cek:
-- `bankStatementEntries` patch (kalau ada update per-cell ke description/amount setelah import).
-- `payablePayments` patch (kalau ada UI edit individual installment).
+### Per-cell patch sync untuk tables tanpa UI patch
+- `bankStatementEntries` — gak ada `patchBankEntry` mutation, gak ada UI per-cell edit. Skip kecuali UI ditambah.
+- `payablePayments` — gak ada patch mutation per installment row. Skip kecuali UI ditambah.
 
 ### Non-financial out of scope
 - `pettyCash` — tipped ke owner via closing.
@@ -170,7 +180,8 @@ UI smoke test:
 ## Commit Trail (chronological)
 
 ```
-(this commit) feat(ssot): Ship G — update sync + backfill extend sales/expenses
+(this commit) feat(ssot): Ship H — fill cascade + bulk import mirror gaps
+180253f  feat(ssot): Ship G — update sync + backfill extend sales/expenses
 d0df88b  docs(ssot): add SSOT-STATUS — done/pending matrix
 ab78c40  chore(audit): drop checklist, add Clean All + per-row delete on Log Audit  (Ship F)
 626d7c2  feat(ssot): manual create mutations mirror to Buku Besar — full coverage    (Ship E)

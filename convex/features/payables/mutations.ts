@@ -264,7 +264,25 @@ export const importPayablesBulk = mutation({
           description: descriptionWithRef,
           branchId,
         });
-        void id;
+        // Mirror ke Buku Besar SSOT — kind=invoice direction=out.
+        const txId = await mirrorTx(ctx, {
+          branchId,
+          kind: "invoice",
+          direction: "out",
+          date: r.invoiceDate,
+          amount: r.amount,
+          paidAmount: r.paidAmount,
+          status,
+          vendorId: vendor._id,
+          counterparty: vendor.name,
+          description: descriptionWithRef,
+          payableId: id,
+          reference: r.reference,
+          sourceKind: "bulk_import_csv",
+          sourceFileName: r.fileName,
+          userId,
+        });
+        if (txId) await ctx.db.patch(id, { transactionId: txId });
         inserted++;
       } catch (e) {
         errors.push({ line: i + 2, message: e instanceof Error ? e.message : "row failed" });
