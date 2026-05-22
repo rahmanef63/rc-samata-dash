@@ -2,6 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { mirrorTx } from "../transactions/_helpers";
 
 export const create = mutation({
   args: {
@@ -25,6 +26,22 @@ export const create = mutation({
     if (args.promoCost < 0) throw new Error("promoCost must be >= 0");
     if (args.netAmount < 0) throw new Error("netAmount must be >= 0");
     const id = await ctx.db.insert("dailySales", args);
+    // Mirror ke Buku Besar SSOT — receipt kind (sales = income), direction=in.
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "receipt",
+      direction: "in",
+      date: args.businessDate,
+      amount: args.netAmount,
+      status: args.status,
+      channelId: args.channelId,
+      channelName: args.channelName,
+      reference: args.referenceNo,
+      description: `Penjualan ${args.channelName} ${args.businessDate}`,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: id, action: "create",
       description: `Created sale ${args.businessDate} - ${args.channelName}`,

@@ -6,7 +6,7 @@ import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
 import { computePayableStatus } from "../../shared/payableStatus";
 import { LIMITS } from "../../shared/limits";
-import { syncTxFromPayable } from "../transactions/_helpers";
+import { mirrorTx, syncTxFromPayable } from "../transactions/_helpers";
 import type { Id } from "../../_generated/dataModel";
 
 export const create = mutation({
@@ -27,6 +27,23 @@ export const create = mutation({
     if (args.amount <= 0) throw new Error("amount must be > 0");
     if (args.paidAmount < 0) throw new Error("paidAmount must be >= 0");
     const id = await ctx.db.insert("payables", args);
+    // Mirror ke Buku Besar SSOT — payable kind, direction=out (utang vendor).
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "invoice",
+      direction: "out",
+      date: args.invoiceDate,
+      amount: args.amount,
+      paidAmount: args.paidAmount,
+      status: args.status,
+      vendorId: args.vendorId,
+      counterparty: args.vendorName,
+      description: args.description,
+      payableId: id,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: id, action: "create",
       description: `Created payable ${args.vendorName} - Rp${args.amount}`,
@@ -100,12 +117,15 @@ export const remove = mutation({
     const userId = await requireAuth(ctx);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Record not found");
-    // Cascade delete payments
+    // Cascade delete payments + each payment's mirrored tx
     const payments = await ctx.db
       .query("payablePayments")
       .withIndex("by_payable", (q) => q.eq("payableId", args.id))
       .collect();
     for (const p of payments) {
+      if (p.transactionId) {
+        try { await ctx.db.delete(p.transactionId); } catch { /* skip */ }
+      }
       await ctx.db.delete(p._id);
     }
     // Cascade: null out incoming FKs so no orphan refs survive.
@@ -156,10 +176,27 @@ export const addPayment = mutation({
     if (payable.paidAmount + args.amount > payable.amount) {
       throw new Error("Payment would exceed total payable amount");
     }
-    const paymentId = await ctx.db.insert("payablePayments", args);
+    const paymentId = await ctx.db.insert("payablePayments", { ...args, branchId: payable.branchId });
     const newPaidAmount = payable.paidAmount + args.amount;
     const newStatus = newPaidAmount >= payable.amount ? "paid" as const : "partial" as const;
     await ctx.db.patch(args.payableId, { paidAmount: newPaidAmount, status: newStatus });
+    // Mirror payment ke Buku Besar SSOT — receipt kind (kas keluar bayar utang).
+    const txId = await mirrorTx(ctx, {
+      branchId: payable.branchId,
+      kind: "payment",
+      direction: "out",
+      date: args.paymentDate,
+      amount: args.amount,
+      method: args.method,
+      reference: args.referenceNo,
+      vendorId: payable.vendorId,
+      counterparty: payable.vendorName,
+      description: `Bayar utang ${payable.vendorName}`,
+      payableId: args.payableId,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(paymentId, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "payablePayments", entityId: paymentId, action: "pay",
       description: `Payment Rp${args.amount} for ${payable.vendorName}`,

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { paymentSourceValidator, approvalStatusValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
+import { mirrorTx } from "../transactions/_helpers";
 
 export const create = mutation({
   args: {
@@ -22,6 +23,22 @@ export const create = mutation({
     const userId = await requireAuth(ctx);
     if (args.amount <= 0) throw new Error("amount must be > 0");
     const id = await ctx.db.insert("expenses", args);
+    // Mirror ke Buku Besar SSOT — expense kind, direction=out.
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "expense",
+      direction: "out",
+      date: args.expenseDate,
+      amount: args.amount,
+      status: args.status,
+      categoryId: args.categoryId,
+      vendorId: args.vendorId,
+      counterparty: args.vendorName,
+      description: args.description,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "create",
       description: `Created expense ${args.categoryName} - Rp${args.amount}`,

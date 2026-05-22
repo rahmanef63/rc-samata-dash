@@ -294,6 +294,11 @@ export const bulkDeleteTransactionsCascade = mutation({
           .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
         for (const be of bankEntries) { await ctx.db.delete(be._id); projDeleted++; }
 
+        // payablePayments — installment payment rows, FK newly added.
+        const payments = await ctx.db.query("payablePayments")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const pay of payments) { await ctx.db.delete(pay._id); projDeleted++; }
+
         // Self-FK: null parent/linked pointers from sibling txs.
         const linked = await ctx.db.query("transactions")
           .withIndex("by_linked", (q) => q.eq("linkedTxId", id)).collect();

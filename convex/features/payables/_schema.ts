@@ -47,5 +47,10 @@ export const payablesTables = {
     amount: v.number(),
     method: paymentMethodValidator,
     referenceNo: v.string(),
-  }).index("by_payable", ["payableId"]),
+    // Bridge FK ke Buku Besar SSOT (transactions). Set by addPayment mirror.
+    transactionId: v.optional(v.id("transactions")),
+    branchId: v.optional(v.id("branches")),
+  })
+    .index("by_payable", ["payableId"])
+    .index("by_transaction", ["transactionId"]),
 };

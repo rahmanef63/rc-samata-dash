@@ -36,6 +36,19 @@ export const createClosing = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     const id = await ctx.db.insert("dailyClosings", args);
+    // Mirror ke Buku Besar SSOT — direction in (cash deposit ke kas).
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "receipt",
+      direction: "in",
+      date: args.businessDate,
+      amount: args.actualCash + args.nonCashSales,
+      status: args.status,
+      description: `Setoran harian ${args.businessDate}`,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "dailyClosings", entityId: id, action: "create",
       description: `Created closing ${args.businessDate} - diff Rp${args.difference}`,
@@ -95,7 +108,7 @@ export const importDailyClosings = mutation({
         });
         updated++;
       } else {
-        await ctx.db.insert("dailyClosings", {
+        const newId = await ctx.db.insert("dailyClosings", {
           businessDate: r.businessDate,
           openingCash: r.openingCash,
           cashSales: r.cashSales,
@@ -109,6 +122,19 @@ export const importDailyClosings = mutation({
           submittedAt: now,
           branchId,
         });
+        // Mirror bulk import row ke Buku Besar SSOT.
+        const txId = await mirrorTx(ctx, {
+          branchId,
+          kind: "receipt",
+          direction: "in",
+          date: r.businessDate,
+          amount: r.actualCash + r.nonCashSales,
+          status: "submitted",
+          description: `Setoran harian ${r.businessDate} (bulk CSV)`,
+          sourceKind: "manual",
+          userId,
+        });
+        if (txId) await ctx.db.patch(newId, { transactionId: txId });
         inserted++;
       }
     }
@@ -198,6 +224,20 @@ export const createTransfer = mutation({
     const userId = await requireAuth(ctx);
     if (args.amount <= 0) throw new Error("Transfer amount must be > 0");
     const id = await ctx.db.insert("ownerTransfers", args);
+    // Mirror ke Buku Besar SSOT — transfer kind, direction follows arg.
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "transfer",
+      direction: args.direction === "owner_to_branch" ? "in" : "out",
+      date: args.transferDate,
+      amount: args.amount,
+      status: args.status,
+      reference: args.referenceNo,
+      description: `Transfer ${args.direction} ${args.purpose}`,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: id, action: "create",
       description: `Transfer ${args.direction} Rp${args.amount}`,
@@ -301,6 +341,25 @@ export const createPaymentReceipt = mutation({
         await ctx.db.patch(args.payableId, { paidAmount: newPaid, status });
       }
     }
+    // Mirror ke Buku Besar SSOT — receipt kind, direction=out (kas keluar bayar).
+    const txId = await mirrorTx(ctx, {
+      branchId: args.branchId,
+      kind: "payment",
+      direction: "out",
+      date: args.paidDate,
+      amount: args.amount,
+      paidBy: args.paidBy,
+      channelName: args.channel,
+      reference: args.reference,
+      description: `Bukti bayar ${args.paidBy} Rp${args.amount}`,
+      payableId: args.payableId,
+      proofFileName: args.proofFileName,
+      proofStorageId: args.proofStorageId,
+      proofMimeType: args.proofMimeType,
+      sourceKind: "manual",
+      userId,
+    });
+    if (txId) await ctx.db.patch(id, { transactionId: txId });
     await insertAuditLog(ctx, {
       entityType: "paymentReceipts", entityId: id, action: "create",
       description: `Bukti bayar Rp${args.amount} (${args.paidBy}) ${args.paidDate}`,
