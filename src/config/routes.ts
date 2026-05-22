@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench, CreditCard, ShoppingCart } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -29,18 +29,26 @@ export type RouteGroup = {
 const ADMIN_ROLES: Role[] = ["super_admin", "staff"];
 const SUPER_ADMIN_ONLY: Role[] = ["super_admin"];
 
+// Sidebar — collapsed dengan submenu groups. Setiap item children = parent
+// klik untuk expand/collapse (parent URL gak navigate). Lihat AppSidebar
+// renderer untuk behavior. Target: ≤20 top-level entry biar gak rame.
 export const ROUTE_GROUPS: RouteGroup[] = [
   {
     label: "MENU UTAMA",
     items: [
       { title: "Dashboard", url: "/", icon: Home },
-      { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
-      { title: "Ringkasan Laporan", url: "/report", icon: BarChart3 },
-      { title: "Semua Laporan", url: "/laporan", icon: Folder },
       { title: "Import Universal", url: "/import", icon: UploadCloud, roles: ADMIN_ROLES },
-      { title: "Upload Laporan Mingguan", url: "/laporan/upload", icon: UploadCloud, roles: ADMIN_ROLES },
+      { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
       { title: "Chat AI", url: "/chat", icon: Bot },
       { title: "Profil", url: "/profile", icon: User },
+    ],
+  },
+  {
+    label: "LAPORAN",
+    items: [
+      { title: "Ringkasan", url: "/report", icon: BarChart3 },
+      { title: "Semua Laporan", url: "/laporan", icon: Folder },
+      { title: "Upload Mingguan", url: "/laporan/upload", icon: UploadCloud, roles: ADMIN_ROLES },
     ],
   },
   {
@@ -48,37 +56,56 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     basePath: "/finance",
     roles: ADMIN_ROLES,
     items: [
-      { title: "Penjualan", url: "/finance", icon: FileText },
-      { title: "Penjualan Log", url: "/finance/penjualan-log", icon: TrendingUp },
-      { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
-      { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
-      { title: "Bukti Bayar", url: "/finance/bukti-bayar", icon: ClipboardList },
-      { title: "Vendor", url: "/finance/vendors", icon: Users },
-      { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
-      { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
-      { title: "Setoran Harian", url: "/finance/setoran", icon: Landmark },
-      { title: "Transfer Owner", url: "/finance/transfer-owner-list", icon: RefreshCw },
-      { title: "Bank Batches", url: "/finance/bank-batches", icon: Landmark },
-      { title: "Riwayat Validasi", url: "/finance/validation-batches", icon: ClipboardCheck },
-      { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
-    ],
-  },
-  {
-    label: "LANJUTAN",
-    roles: ADMIN_ROLES,
-    items: [
       {
-        title: "Tools",
+        title: "Transaksi",
+        url: "/finance",
+        icon: ShoppingCart,
+        children: [
+          { title: "Penjualan", url: "/finance", icon: FileText },
+          { title: "Pengeluaran", url: "/finance/expenses", icon: DollarSign },
+          { title: "Petty Cash", url: "/finance/petty-cash", icon: Wallet },
+        ],
+      },
+      {
+        title: "Piutang & Vendor",
+        url: "/finance/payables",
+        icon: CreditCard,
+        children: [
+          { title: "Piutang Vendor", url: "/finance/payables", icon: Receipt },
+          { title: "Bukti Bayar", url: "/finance/bukti-bayar", icon: ClipboardList },
+          { title: "Vendor", url: "/finance/vendors", icon: Users },
+        ],
+      },
+      {
+        title: "Setoran & Transfer",
+        url: "/finance/closing",
+        icon: Landmark,
+        children: [
+          { title: "Closing & Setoran", url: "/finance/closing", icon: Moon },
+          { title: "Setoran Harian", url: "/finance/setoran", icon: Landmark },
+          { title: "Transfer Owner", url: "/finance/transfer-owner-list", icon: RefreshCw },
+          { title: "Bank Batches", url: "/finance/bank-batches", icon: Landmark },
+        ],
+      },
+      {
+        title: "Analisis",
+        url: "/finance/cashflow",
+        icon: TrendingUp,
+        children: [
+          { title: "Cashflow", url: "/finance/cashflow", icon: TrendingUp },
+          { title: "Penjualan Log", url: "/finance/penjualan-log", icon: TrendingUp },
+          { title: "Riwayat Validasi", url: "/finance/validation-batches", icon: ClipboardCheck },
+        ],
+      },
+      {
+        title: "ETL Tools",
         url: "/finance/owner-transfer",
         icon: Wrench,
-        roles: ADMIN_ROLES,
         children: [
           { title: "Laporan PIC (CSV)", url: "/finance/laporan-pic", icon: ClipboardList },
-          { title: "Statement Bank (xlsx)", url: "/finance/owner-transfer", icon: Landmark },
+          { title: "Statement Bank", url: "/finance/owner-transfer", icon: Landmark },
           { title: "Bulk Import Chat", url: "/laporan/bulk-import", icon: Upload },
           { title: "Validasi Harian WA", url: "/laporan/validasi-harian", icon: MessageSquareText },
-          { title: "Pergantian Produk", url: "/laporan/upload-pergantian", icon: RefreshCw },
-          { title: "Tunjangan Karyawan", url: "/laporan/upload-tunjangan", icon: Users },
         ],
       },
     ],
@@ -88,22 +115,50 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     basePath: "/operation",
     roles: ADMIN_ROLES,
     items: [
-      { title: "Inventaris", url: "/operation", icon: Package },
-      { title: "Mutasi Stok", url: "/operation/stock-movements", icon: History },
-      { title: "Master Produk", url: "/operation/master-products", icon: Database },
-      { title: "Master Bahan", url: "/operation/master-ingredients", icon: Database },
-      { title: "Channel Pendapatan", url: "/operation/income-channels", icon: TrendingUp },
-      { title: "Kategori Pengeluaran", url: "/operation/expense-categories", icon: DollarSign },
-      { title: "Alias Bank Vendor", url: "/operation/vendor-aliases", icon: Database },
-      { title: "Audit Log Notion", url: "/operation/audit-log", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
-      { title: "Validasi Laporan", url: "/operation/report-validations", icon: ClipboardCheck },
-      { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
-      { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
-      { title: "Master Data", url: "/operation/master-data", icon: Database },
-      { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot, roles: SUPER_ADMIN_ONLY },
-      { title: "Schema Graph", url: "/operation/schema-graph", icon: Database, roles: SUPER_ADMIN_ONLY },
-      { title: "Manajemen User", url: "/operation/users", icon: Users, roles: SUPER_ADMIN_ONLY },
-      { title: "Pengaturan", url: "/operation/settings", icon: Settings },
+      {
+        title: "Inventaris",
+        url: "/operation",
+        icon: Package,
+        children: [
+          { title: "Stok Saat Ini", url: "/operation", icon: Package },
+          { title: "Mutasi Stok", url: "/operation/stock-movements", icon: History },
+        ],
+      },
+      {
+        title: "Master Data",
+        url: "/operation/master-data",
+        icon: Database,
+        children: [
+          { title: "Master Data (umum)", url: "/operation/master-data", icon: Database },
+          { title: "Master Produk", url: "/operation/master-products", icon: Database },
+          { title: "Master Bahan", url: "/operation/master-ingredients", icon: Database },
+          { title: "Channel Pendapatan", url: "/operation/income-channels", icon: TrendingUp },
+          { title: "Kategori Pengeluaran", url: "/operation/expense-categories", icon: DollarSign },
+          { title: "Alias Bank Vendor", url: "/operation/vendor-aliases", icon: Database },
+        ],
+      },
+      {
+        title: "Audit & KPI",
+        url: "/operation/kpi-targets",
+        icon: ClipboardCheck,
+        children: [
+          { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
+          { title: "Validasi Laporan", url: "/operation/report-validations", icon: ClipboardCheck },
+          { title: "Audit Log Notion", url: "/operation/audit-log", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
+          { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
+        ],
+      },
+      {
+        title: "Sistem",
+        url: "/operation/settings",
+        icon: Settings,
+        children: [
+          { title: "Pengaturan", url: "/operation/settings", icon: Settings },
+          { title: "Konfigurasi AI", url: "/operation/ai-config", icon: Bot, roles: SUPER_ADMIN_ONLY },
+          { title: "Manajemen User", url: "/operation/users", icon: Users, roles: SUPER_ADMIN_ONLY },
+          { title: "Schema Graph", url: "/operation/schema-graph", icon: Database, roles: SUPER_ADMIN_ONLY },
+        ],
+      },
     ],
   },
 ];
