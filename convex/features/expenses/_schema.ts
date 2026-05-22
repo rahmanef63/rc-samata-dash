@@ -27,7 +27,8 @@ export const expensesTables = {
   })
     .index("by_branch_date", ["branchId", "expenseDate"])
     .index("by_status", ["status"])
-    .index("by_source_report", ["sourceReportId"]),
+    .index("by_source_report", ["sourceReportId"])
+    .index("by_transaction", ["transactionId"]),
 
   expenseLineItems: defineTable({
     expenseId: v.id("expenses"),

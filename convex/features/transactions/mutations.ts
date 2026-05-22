@@ -218,6 +218,106 @@ export const bulkDeleteTransactions = mutation({
   },
 });
 
+/**
+ * SSOT 2-way: hapus tx + cascade DELETE proyeksi (bukan null FK).
+ *
+ * Bedanya sama `bulkDeleteTransactions`:
+ *   - `bulkDeleteTransactions` = null FK pada proyeksi, keep row (mode "tx
+ *     mirror" — proyeksi tetap SSOT lokal).
+ *   - `bulkDeleteTransactionsCascade` = DELETE proyeksi, true Buku Besar SSOT
+ *     (user request: "buku besar seharusnya jadi SSOT, sync 2 way relation").
+ *
+ * Pakai by_transaction index (no scan). Direct ctx.db.delete pada proyeksi —
+ * skip cascade-back-to-tx supaya nggak infinite recursion.
+ */
+export const bulkDeleteTransactionsCascade = mutation({
+  args: {
+    branchId: v.id("branches"),
+    ids: v.array(v.id("transactions")),
+  },
+  handler: async (ctx, { branchId, ids }) => {
+    const userId = await requireAuth(ctx);
+    let txDeleted = 0;
+    let projDeleted = 0;
+
+    for (const id of ids) {
+      try {
+        const tx = await ctx.db.get(id);
+        if (!tx) continue;
+
+        // 6 proyeksi tables — lookup by_transaction index + direct delete.
+        const closings = await ctx.db.query("dailyClosings")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const c of closings) { await ctx.db.delete(c._id); projDeleted++; }
+
+        const expenses = await ctx.db.query("expenses")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const e of expenses) {
+          // Cascade ke expenseLineItems
+          const lis = await ctx.db.query("expenseLineItems")
+            .withIndex("by_expense", (q) => q.eq("expenseId", e._id)).collect();
+          for (const li of lis) await ctx.db.delete(li._id);
+          await ctx.db.delete(e._id);
+          projDeleted++;
+        }
+
+        const sales = await ctx.db.query("dailySales")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const s of sales) { await ctx.db.delete(s._id); projDeleted++; }
+
+        const payables = await ctx.db.query("payables")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const p of payables) {
+          // Cascade payments + null bridge FKs (receipts/banks)
+          const payments = await ctx.db.query("payablePayments")
+            .withIndex("by_payable", (q) => q.eq("payableId", p._id)).collect();
+          for (const pay of payments) await ctx.db.delete(pay._id);
+          const linkedReceipts = await ctx.db.query("paymentReceipts")
+            .withIndex("by_payable", (q) => q.eq("payableId", p._id)).collect();
+          for (const r of linkedReceipts) await ctx.db.patch(r._id, { payableId: undefined });
+          const linkedBanks = await ctx.db.query("bankStatementEntries")
+            .withIndex("by_payable", (q) => q.eq("payableId", p._id)).collect();
+          for (const b of linkedBanks) await ctx.db.patch(b._id, { payableId: undefined });
+          await ctx.db.delete(p._id);
+          projDeleted++;
+        }
+
+        const transfers = await ctx.db.query("ownerTransfers")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const t of transfers) { await ctx.db.delete(t._id); projDeleted++; }
+
+        const receipts = await ctx.db.query("paymentReceipts")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const r of receipts) { await ctx.db.delete(r._id); projDeleted++; }
+
+        const bankEntries = await ctx.db.query("bankStatementEntries")
+          .withIndex("by_transaction", (q) => q.eq("transactionId", id)).collect();
+        for (const be of bankEntries) { await ctx.db.delete(be._id); projDeleted++; }
+
+        // Self-FK: null parent/linked pointers from sibling txs.
+        const linked = await ctx.db.query("transactions")
+          .withIndex("by_linked", (q) => q.eq("linkedTxId", id)).collect();
+        for (const l of linked) await ctx.db.patch(l._id, { linkedTxId: undefined });
+        const parented = await ctx.db.query("transactions")
+          .withIndex("by_parent", (q) => q.eq("parentTxId", id)).collect();
+        for (const p of parented) await ctx.db.patch(p._id, { parentTxId: undefined });
+
+        await ctx.db.delete(id);
+        txDeleted++;
+      } catch { /* skip per row */ }
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "transactions",
+      entityId: "" as Id<"transactions">,
+      action: "delete",
+      description: `Cascade delete tx — ${txDeleted}/${ids.length} tx + ${projDeleted} proyeksi rows`,
+      actedBy: userId, branchId,
+    });
+    return { txDeleted, projDeleted };
+  },
+});
+
 // ─── Bridge: backfill from existing tables ──────────────────
 // One-shot pour over payables + paymentReceipts + ownerTransfers +
 // dailyClosings, writing each into transactions if not already

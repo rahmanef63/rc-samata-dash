@@ -37,7 +37,8 @@ export const closingTables = {
     sourceReportId: v.optional(v.id("weeklyReports")),
   })
     .index("by_branch_date", ["branchId", "businessDate"])
-    .index("by_source_report", ["sourceReportId"]),
+    .index("by_source_report", ["sourceReportId"])
+    .index("by_transaction", ["transactionId"]),
 
   ownerTransfers: defineTable({
     closingId: v.optional(v.id("dailyClosings")),
@@ -59,7 +60,8 @@ export const closingTables = {
     transactionId: v.optional(v.id("transactions")),
   })
     .index("by_branch", ["branchId"])
-    .index("by_report", ["reportId"]),
+    .index("by_report", ["reportId"])
+    .index("by_transaction", ["transactionId"]),
 
   // ─── Bukti bayar piutang (proof of payable payment) ─────
   // Owner / PIC upload struk / transfer screenshot. Linked to a payable
@@ -90,7 +92,8 @@ export const closingTables = {
   })
     .index("by_branch_date", ["branchId", "paidDate"])
     .index("by_payable", ["payableId"])
-    .index("by_anomaly", ["branchId", "anomalyFlag"]),
+    .index("by_anomaly", ["branchId", "anomalyFlag"])
+    .index("by_transaction", ["transactionId"]),
 
   // ─── Bank/account statement entries (kredit / debit / saldo) ──
   // Per-row line from owner or PIC bank/account statement xlsx.
@@ -121,7 +124,8 @@ export const closingTables = {
     .index("by_branch_date", ["branchId", "txDate"])
     .index("by_batch", ["batchId"])
     .index("by_account_date", ["accountKind", "txDate"])
-    .index("by_payable", ["payableId"]),
+    .index("by_payable", ["payableId"])
+    .index("by_transaction", ["transactionId"]),
 
   // ─── Reconciliation: validation batches + log ─────────────
   // Owner downloads CSV of unvalidated rows, sends to AI, uploads

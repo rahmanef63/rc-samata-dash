@@ -24,5 +24,6 @@ export const salesTables = {
   })
     .index("by_branch_date", ["branchId", "businessDate"])
     .index("by_status", ["status"])
-    .index("by_source_report", ["sourceReportId"]),
+    .index("by_source_report", ["sourceReportId"])
+    .index("by_transaction", ["transactionId"]),
 };

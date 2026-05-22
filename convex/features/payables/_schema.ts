@@ -38,7 +38,8 @@ export const payablesTables = {
   })
     .index("by_branch", ["branchId"])
     .index("by_vendor", ["vendorId"])
-    .index("by_source_report", ["sourceReportId"]),
+    .index("by_source_report", ["sourceReportId"])
+    .index("by_transaction", ["transactionId"]),
 
   payablePayments: defineTable({
     payableId: v.id("payables"),

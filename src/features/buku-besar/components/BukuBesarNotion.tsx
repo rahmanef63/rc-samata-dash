@@ -31,7 +31,7 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
     branchId, limit: 5000,
   }) as TxRow[] | undefined;
   const bulkPatch = useMutation(api.features.transactions.mutations.bulkPatchTransactions);
-  const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactions);
+  const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactionsCascade);
   const backfill = useMutation(api.features.transactions.mutations.backfillTransactions);
   const [busy, setBusy] = useState(false);
 
@@ -102,7 +102,9 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
           branchId,
           ids: ids as Id<"transactions">[],
         });
-        return { deleted: res.deleted };
+        // Cascade also wiped proyeksi (closings/expenses/sales/payables/etc).
+        toast.success(`${res.txDeleted} tx + ${res.projDeleted} proyeksi rows dihapus`);
+        return { deleted: res.txDeleted };
       }}
       toolbarExtras={
         <button
