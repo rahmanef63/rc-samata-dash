@@ -96,7 +96,6 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       { title: "Alias Bank Vendor", url: "/operation/vendor-aliases", icon: Database },
       { title: "Audit Log Notion", url: "/operation/audit-log", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
       { title: "Validasi Laporan", url: "/operation/report-validations", icon: ClipboardCheck },
-      { title: "Audit", url: "/operation/audit", icon: ClipboardCheck },
       { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
       { title: "Target KPI", url: "/operation/kpi-targets", icon: Target },
       { title: "Master Data", url: "/operation/master-data", icon: Database },

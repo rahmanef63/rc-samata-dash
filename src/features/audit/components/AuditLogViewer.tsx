@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { Filter } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { Filter, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 import { Card } from "@/components/ui/card";
@@ -46,9 +48,40 @@ export function AuditLogViewer() {
     api.features.audit.queries.listByBranch,
     effectiveBranchId ? { branchId: effectiveBranchId } : "skip",
   );
+  const removeOne = useMutation(api.features.audit.mutations.remove);
+  const clearAll = useMutation(api.features.audit.mutations.clearByBranch);
 
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [purging, setPurging] = useState(false);
+
+  async function handleClear() {
+    if (!effectiveBranchId) return;
+    const n = logs?.length ?? 0;
+    if (n === 0) {
+      toast.info("Tidak ada log untuk dihapus");
+      return;
+    }
+    if (!confirm(`Hapus SEMUA ${n} log audit untuk cabang ini? Tidak bisa di-undo.`)) return;
+    setPurging(true);
+    try {
+      const res = await clearAll({ branchId: effectiveBranchId });
+      toast.success(`${res.deleted} log audit dihapus`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal hapus log");
+    } finally {
+      setPurging(false);
+    }
+  }
+
+  async function handleRowDelete(id: Id<"auditLogs">) {
+    try {
+      await removeOne({ id });
+      toast.success("Log dihapus");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal hapus");
+    }
+  }
 
   const typed = (logs ?? []) as Array<{
     _id: unknown;
@@ -98,6 +131,16 @@ export function AuditLogViewer() {
               ))}
             </SelectContent>
           </Select>
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={purging || !effectiveBranchId || (logs?.length ?? 0) === 0}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-rose-600 hover:bg-rose-700 text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Hapus semua log audit untuk cabang ini"
+          >
+            {purging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {purging ? "Menghapus..." : "Clean All"}
+          </button>
         </div>
       </Card>
 
@@ -117,9 +160,9 @@ export function AuditLogViewer() {
         <Card>
           <div className="divide-y">
             {filtered.map((log) => (
-              <div key={String(log._id)} className="p-3 hover:bg-muted/40 transition-colors">
+              <div key={String(log._id)} className="p-3 hover:bg-muted/40 transition-colors group">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2 min-w-0">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
                     <Badge className={`${ACTION_COLORS[log.action] ?? ""} text-[10px] uppercase shrink-0`}>
                       {log.action}
                     </Badge>
@@ -132,8 +175,18 @@ export function AuditLogViewer() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right text-xs text-muted-foreground shrink-0">
-                    {formatRelativeTime(log.actedAt ?? new Date(log._creationTime).toISOString())}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-right text-xs text-muted-foreground">
+                      {formatRelativeTime(log.actedAt ?? new Date(log._creationTime).toISOString())}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRowDelete(log._id as Id<"auditLogs">)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400"
+                      title="Hapus log ini"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>

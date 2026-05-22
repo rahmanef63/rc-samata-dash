@@ -1,2 +1,1 @@
-export { AuditChecklist, AuditLogViewer } from "./components";
-export * from "./types";
+export { AuditLogViewer } from "./components";
