@@ -81,6 +81,7 @@ const branches: TableSpec = {
     { from: "auditLogs", field: "branchId" },
     { from: "userPreferences", field: "defaultBranchId" },
     { from: "dailyReportValidations", field: "branchId" },
+    { from: "aiEmbeddings", field: "branchId" },
   ],
 };
 
@@ -330,6 +331,7 @@ const weeklyReports: TableSpec = {
     { from: "transactions", field: "sourceReportId" },
     { from: "ownerTransfers", field: "reportId" },
     { from: "bankStatementEntries", field: "reportId" },
+    { from: "aiEmbeddings", field: "reportId" },
   ],
   loose: [{ field: "uploadedBy", reason: "user id string" }],
 };
@@ -373,6 +375,18 @@ const dailyReportValidations: TableSpec = {
 };
 
 // ─── Auth + AI ─────────────────────────────────
+// `users` table comes from @convex-dev/auth — not defined in our schema
+// but every userId FK from app tables points here. Stub it so the graph
+// has a sink node + collects all the incoming refs.
+const users: TableSpec = {
+  name: "users", feature: "auth", fk: [],
+  incoming: [
+    { from: "userRoles", field: "userId" },
+    { from: "userPreferences", field: "userId" },
+    { from: "aiChatSessions", field: "userId" },
+  ],
+};
+
 const userRoles: TableSpec = {
   name: "userRoles", feature: "auth",
   fk: [{ field: "userId", target: "users", typed: true }],
@@ -390,29 +404,41 @@ const userPreferences: TableSpec = {
 
 const aiProviders: TableSpec = {
   name: "aiProviders", feature: "ai", fk: [],
-  incoming: [],
+  incoming: [{ from: "aiChatSessions", field: "providerId" }],
 };
 
 const aiTools: TableSpec = {
   name: "aiTools", feature: "ai", fk: [], incoming: [],
-  loose: [{ field: "toolId", reason: "semantic id like 'laporan_query'" }],
+  // Loose semantic-id ref. `toolId` is the semantic key (e.g. "laporan_query")
+  // referenced by aiAgents.allowedToolIds + aiChatSessions.enabledToolIds —
+  // those arrays are v.array(v.string()), not v.id(), so the graph can't
+  // typed-edge them. Listed under loose so the audit still surfaces them.
+  loose: [{ field: "toolId", reason: "semantic id like 'laporan_query' — referenced by aiAgents.allowedToolIds + aiChatSessions.enabledToolIds (array<string>)" }],
 };
 
 const aiAgents: TableSpec = {
   name: "aiAgents", feature: "ai", fk: [], incoming: [],
-  loose: [{ field: "agentId", reason: "semantic id like 'business_analyst'" }],
+  loose: [
+    { field: "agentId", reason: "semantic id like 'business_analyst'" },
+    { field: "allowedToolIds", reason: "array<string> of aiTools.toolId — loose by design" },
+  ],
 };
 
 const aiCustomInstructions: TableSpec = {
   name: "aiCustomInstructions", feature: "ai",
   fk: [],
-  incoming: [],
+  incoming: [{ from: "aiChatSessions", field: "customInstructionId" }],
 };
 
 const aiChatSessions: TableSpec = {
   name: "aiChatSessions", feature: "ai",
-  fk: [],
+  fk: [
+    { field: "userId", target: "users", typed: true, note: "optional" },
+    { field: "providerId", target: "aiProviders", typed: true, note: "optional" },
+    { field: "customInstructionId", target: "aiCustomInstructions", typed: true, note: "optional" },
+  ],
   incoming: [{ from: "aiChatMessages", field: "sessionId" }],
+  loose: [{ field: "enabledToolIds", reason: "array<string> of aiTools.toolId — loose by design" }],
 };
 
 const aiChatMessages: TableSpec = {
@@ -422,8 +448,16 @@ const aiChatMessages: TableSpec = {
 };
 
 const aiEmbeddings: TableSpec = {
-  name: "aiEmbeddings", feature: "ai", fk: [], incoming: [],
-  loose: [{ field: "sourceId", reason: "polymorphic semantic id" }],
+  name: "aiEmbeddings", feature: "ai",
+  fk: [
+    { field: "branchId", target: "branches", typed: true },
+    { field: "reportId", target: "weeklyReports", typed: true, note: "optional" },
+  ],
+  incoming: [],
+  loose: [
+    { field: "sourceTable", reason: "polymorphic — names target table (productSales/costAnalysis/etc.)" },
+    { field: "sourceId", reason: "polymorphic id paired with sourceTable" },
+  ],
 };
 
 // ─── Aggregate ─────────────────────────────────────────
@@ -449,7 +483,7 @@ export const SCHEMA_GRAPH: TableSpec[] = [
   // audit / validation
   auditLogs, dailyReportValidations,
   // auth / ai
-  userRoles, userPreferences,
+  users, userRoles, userPreferences,
   aiProviders, aiTools, aiAgents, aiCustomInstructions,
   aiChatSessions, aiChatMessages, aiEmbeddings,
 ];

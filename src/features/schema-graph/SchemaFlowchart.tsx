@@ -22,7 +22,7 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import dagre from "dagre";
-import { Database, ArrowRight, AlertTriangle, Layers2, Maximize2, RotateCcw } from "lucide-react";
+import { Database, ArrowRight, AlertTriangle, Layers2, Maximize2, RotateCcw, Download, Copy, Check } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 
@@ -147,6 +147,7 @@ export function SchemaFlowchart() {
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [features, setFeatures] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
 
   const allFeatures = useMemo(() => {
     const s = new Set<string>();
@@ -275,6 +276,84 @@ export function SchemaFlowchart() {
     setFocusedId(null);
   };
 
+  // ── Build dynamic JSON snapshot reflecting current view state ──
+  // Includes: applied filter, focused node, current node positions
+  // (after user drag), full table specs, derived edges + neighbors.
+  const buildSnapshot = useCallback(() => {
+    const tableByName = Object.fromEntries(tables.map((t) => [t.name, t]));
+    const visibleNames = new Set(nodes.map((n) => n.id));
+    const visibleNodes = nodes.map((n) => {
+      const t = tableByName[n.id];
+      return {
+        name: n.id,
+        feature: t?.feature ?? "unknown",
+        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        fkOut: t?.fk ?? [],
+        fkIn: t?.incoming ?? [],
+        denormalized: t?.denormalized ?? [],
+        loose: t?.loose ?? [],
+      };
+    });
+    const visibleEdges = edges.map((e) => ({
+      id: e.id,
+      from: e.source,
+      to: e.target,
+      field: e.label,
+    }));
+    const neighborsOfFocused = focusedId
+      ? edges.reduce<{ outgoing: string[]; incoming: string[] }>((acc, e) => {
+          if (e.source === focusedId) acc.outgoing.push(e.target);
+          if (e.target === focusedId) acc.incoming.push(e.source);
+          return acc;
+        }, { outgoing: [], incoming: [] })
+      : null;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      stats: {
+        visibleTables: visibleNodes.length,
+        totalTables: tables.length,
+        visibleEdges: visibleEdges.length,
+        looseRefs: visibleNodes.reduce((s, n) => s + n.loose.length, 0),
+      },
+      view: {
+        focused: focusedId,
+        featuresFilter: Array.from(features),
+        featuresAvailable: allFeatures,
+        ...(neighborsOfFocused && { neighborsOfFocused }),
+      },
+      nodes: visibleNodes,
+      edges: visibleEdges,
+      // Tables NOT rendered (filtered out) — useful for debugging filters.
+      omitted: tables.filter((t) => !visibleNames.has(t.name)).map((t) => ({ name: t.name, feature: t.feature })),
+    };
+  }, [tables, nodes, edges, focusedId, features, allFeatures]);
+
+  const exportJson = () => {
+    const snap = buildSnapshot();
+    const json = JSON.stringify(snap, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    a.href = url;
+    a.download = `schema-graph-${stamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyJson = async () => {
+    try {
+      const json = JSON.stringify(buildSnapshot(), null, 2);
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard API blocked — fallback to download
+      exportJson();
+    }
+  };
+
   const focusedTable = useMemo(
     () => tables.find((t) => t.name === focusedId) ?? null,
     [tables, focusedId],
@@ -320,10 +399,28 @@ export function SchemaFlowchart() {
               <RotateCcw className="h-3 w-3" /> Reset
             </button>
           )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={copyJson}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold border border-border hover:bg-muted/50"
+              title="Copy snapshot JSON ke clipboard (dynamic — ikuti filter + focus + posisi node)"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              {copied ? "Copied" : "Copy JSON"}
+            </button>
+            <button
+              onClick={exportJson}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+              title="Download snapshot JSON sebagai file"
+            >
+              <Download className="h-3 w-3" />
+              Export JSON
+            </button>
+          </div>
         </div>
         <p className="text-[10px] text-muted-foreground flex items-center gap-1">
           <ArrowRight className="h-3 w-3" />
-          Klik node = focus + highlight neighbors. Drag = atur posisi. Scroll = zoom. Garis ber-animasi = FK relationship.
+          Klik node = focus + highlight neighbors. Drag = atur posisi. Scroll = zoom. Garis ber-animasi = FK relationship. Export JSON = snapshot dinamis (view state + posisi + filter + focused neighbors).
         </p>
       </div>
 
