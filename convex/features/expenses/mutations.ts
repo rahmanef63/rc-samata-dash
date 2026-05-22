@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { paymentSourceValidator, approvalStatusValidator } from "../../shared/validators";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
-import { mirrorTx } from "../transactions/_helpers";
+import { mirrorTx, syncTxFromExpense } from "../transactions/_helpers";
 
 export const create = mutation({
   args: {
@@ -66,7 +66,17 @@ export const update = mutation({
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
     if (data.amount <= 0) throw new Error("amount must be > 0");
+    const existing = await ctx.db.get(id);
     await ctx.db.patch(id, data);
+    if (existing?.transactionId) {
+      await syncTxFromExpense(ctx, existing.transactionId, {
+        date: data.expenseDate,
+        amount: data.amount,
+        status: data.status,
+        counterparty: data.vendorName,
+        description: data.description,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "update",
       description: `Updated expense ${data.categoryName}`,
@@ -114,6 +124,15 @@ export const patch = mutation({
       if (cat) patch.categoryId = cat._id;
     }
     if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    // Sync ke tx mirror SSOT
+    if (existing.transactionId && Object.keys(patch).length > 0) {
+      await syncTxFromExpense(ctx, existing.transactionId, {
+        date: typeof patch.expenseDate === "string" ? patch.expenseDate : undefined,
+        amount: typeof patch.amount === "number" ? patch.amount : undefined,
+        status: typeof patch.status === "string" ? patch.status : undefined,
+        description: typeof patch.description === "string" ? patch.description : undefined,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "update",
       description: `Patched expense ${existing.categoryName}`,

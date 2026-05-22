@@ -2,7 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
-import { mirrorTx } from "../transactions/_helpers";
+import { mirrorTx, syncTxFromSales } from "../transactions/_helpers";
 
 export const create = mutation({
   args: {
@@ -73,7 +73,18 @@ export const update = mutation({
     if (data.platformFee < 0) throw new Error("platformFee must be >= 0");
     if (data.promoCost < 0) throw new Error("promoCost must be >= 0");
     if (data.netAmount < 0) throw new Error("netAmount must be >= 0");
+    const existing = await ctx.db.get(id);
     await ctx.db.patch(id, data);
+    if (existing?.transactionId) {
+      await syncTxFromSales(ctx, existing.transactionId, {
+        date: data.businessDate,
+        amount: data.netAmount,
+        status: data.status,
+        channelName: data.channelName,
+        reference: data.referenceNo,
+        description: `Penjualan ${data.channelName} ${data.businessDate}`,
+      });
+    }
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: id, action: "update",
       description: `Updated sale ${data.businessDate}`,
@@ -106,6 +117,15 @@ export const patch = mutation({
       if (v !== undefined && v !== null) patch[k] = v;
     }
     if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
+    // Sync ke tx mirror — kalau ada FK. Pakai field yg berubah saja.
+    if (existing.transactionId && Object.keys(patch).length > 0) {
+      await syncTxFromSales(ctx, existing.transactionId, {
+        date: typeof patch.businessDate === "string" ? patch.businessDate : undefined,
+        amount: typeof patch.netAmount === "number" ? patch.netAmount : undefined,
+        status: typeof patch.status === "string" ? patch.status : undefined,
+        reference: typeof patch.referenceNo === "string" ? patch.referenceNo : undefined,
+      });
+    }
     return id;
   },
 });

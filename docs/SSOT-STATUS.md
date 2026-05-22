@@ -47,6 +47,13 @@ Buku Besar = `transactions` table di `convex/features/transactions/`. Semua proy
 - Enum fix: `TX_KINDS` cuma `invoice|payment|receipt|transfer|expense|anomaly`. Drop salah pakai `"closing"`/`"payable"`/`"receipt"` (kas keluar).
 - Commit: `626d7c2`.
 
+### Ship G — Update sync + legacy backfill extension
+- Tambah aliases `syncTxFromSales` + `syncTxFromExpense` di `_helpers.ts`.
+- Wire `syncTxFromSales` ke `sales.update` + `sales.patch` — mirror perubahan date/amount/status/channelName/reference ke tx.
+- Wire `syncTxFromExpense` ke `expenses.update` + `expenses.patch` — mirror date/amount/status/counterparty/description.
+- Extend `backfillTransactions`: tambah step 5 (`dailySales`) + step 6 (`expenses`). Idempotent via `if (transactionId) continue`.
+- Resolusi pending "repairLegacyTransactionId": dipake pendekatan re-run `backfillTransactions` daripada pair-match by amount (simpler + safer, gak ambiguity untuk amount duplikat).
+
 ### Ship F — Audit checklist dropped, Log Audit Clean All
 - **Hapus**: `/operation/audit` page + `AuditChecklist` component + frontend QSR template (lib/types/hooks).
 - **Hapus**: sidebar entry "Audit" di `routes.ts:99`.
@@ -80,42 +87,40 @@ Legend:
 
 ---
 
-## ⏳ BELUM (pending / out of scope)
+## ✅ Plan `lazy-booping-glacier.md` — Statement Validator UI + Vendor Hub (DONE di commits prior)
+Audit per 2026-05-22 sehabis Ship G — ternyata plan udah ke-implement di sequence commit sebelumnya:
 
-### Backfill legacy data
-- **`repairLegacyTransactionId` action** (deferred dari Ship E).
-  - Untuk rows pre-Ship E yang `transactionId == undefined`.
-  - Strategy: pair-match per branch+date+amount → patch FK ke tx existing.
-  - Risk: ambiguity kalau 2 tx amount sama di tanggal sama.
-  - Lokasi rencana: `convex/features/transactions/repair.ts` (belum dibuat).
+**Phase 1 — Backend:** ✅
+- `importBankStatementEntries` accept `payableId` + `learnAlias` per row (closing/mutations.ts:625).
+- Auto-link pass + recompute paidAmount/status (closing/mutations.ts:802).
+- `listVendorsWithAggregate` (payables/queries.ts:42) — returns vendor + payable counters + alias count.
+- `getVendorDetail` (payables/queries.ts:88) — vendor + payables + payments + bankStatementEntries + aliases.
 
-### Update/patch sync
-- Saat ini sync cuma 1-way di create + delete.
-- **Update mutation** untuk `sales` + `expenses` belum mirror perubahan amount/category ke tx. Kalau user edit sales row, tx mirror stale.
-- Sudah ada `syncTx` di closing/payable/transfer/receipt — pattern bisa di-copy.
-- Risk medium: untuk now user delete + recreate biasa pakai.
+**Phase 2 — Statement Preview UI:** ✅
+- `StatementImportPreview.tsx` ada di `src/features/bank-statement/components/`.
+- `PayableLinkCombo.tsx` ada.
+- `StatementSection` di `finance/owner-transfer/page.tsx` refactored.
 
-### Plan `lazy-booping-glacier.md` — Statement Validator UI + Vendor Hub
-File plan: `/home/rahman/.claude/plans/lazy-booping-glacier.md`. Belum mulai sama sekali.
+**Phase 3 — Vendor Hub `/finance/vendors`:** ✅
+- `src/app/(dashboard)/finance/vendors/page.tsx` (185 LOC) — list page.
+- `src/app/(dashboard)/finance/vendors/[vendorId]/page.tsx` (542 LOC) — detail page.
+- Sidebar entry `routes.ts:55` — "Vendor" KEUANGAN group.
 
-**Phase 1 — Backend:**
-- `importBankStatementEntries` extend dengan `payableId` + `learnAlias`.
-- Query baru `listVendorsWithAggregate` + `getVendorDetail` di `convex/features/payables/queries.ts`.
+**Phase 4 — Universal table tooling:** partial
+- Lihat `DataTable` migrations sudah di banyak tempat.
 
-**Phase 2 — Statement Preview UI:**
-- `StatementImportPreview` komponen baru pola `ImportPreview.tsx` (tabs per kategori, inline edit TagCell, link payable combobox).
-- `PayableLinkCombo` komponen baru dengan auto-match by amount ± Rp 1500.
-- Refactor `StatementSection` di `finance/owner-transfer/page.tsx`.
+## ⏳ BELUM (truly remaining)
 
-**Phase 3 — Vendor Hub `/finance/vendors`:**
-- List page + detail page (4 tabs: Info, Piutang, Pembayaran, Alias Bank).
-- Cross-link dari `PayablesOverview` + validator + master data.
+### Update/patch sync untuk write paths lain
+Sudah cover create + delete + update untuk sales/expenses/closing/payable/transfer/receipt. Belum cek:
+- `bankStatementEntries` patch (kalau ada update per-cell ke description/amount setelah import).
+- `payablePayments` patch (kalau ada UI edit individual installment).
 
-**Phase 4 — Universal table tooling:**
-- Migrate 3 Riwayat lists (Bukti Bayar, Statement, Validasi) ke `DataTable` + `useTableState`.
-- `DateRangeFilter` reusable component.
-
-Estimasi: 2000-2500 LOC new.
+### Non-financial out of scope
+- `pettyCash` — tipped ke owner via closing.
+- `stockMovements` — inventory bukan financial flow.
+- `productSales` — staging bridge ke `dailySales` sudah link via transactionId.
+- Master data + audit trail — bukan transaksi.
 
 ### Tabel non-financial yang belum SSOT
 - `pettyCash` — physically tipped ke owner sebagai cash, secara akuntansi udah masuk closing. Skip.
@@ -165,6 +170,8 @@ UI smoke test:
 ## Commit Trail (chronological)
 
 ```
+(this commit) feat(ssot): Ship G — update sync + backfill extend sales/expenses
+d0df88b  docs(ssot): add SSOT-STATUS — done/pending matrix
 ab78c40  chore(audit): drop checklist, add Clean All + per-row delete on Log Audit  (Ship F)
 626d7c2  feat(ssot): manual create mutations mirror to Buku Besar — full coverage    (Ship E)
 5f0a19f  feat(ssot): tx → proyeksi cascade — true 2-way Buku Besar SSOT              (Ship D)

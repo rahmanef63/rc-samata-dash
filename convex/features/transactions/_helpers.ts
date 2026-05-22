@@ -123,3 +123,5 @@ export const syncTxFromReceipt = syncTxRow;
 export const syncTxFromTransfer = syncTxRow;
 export const syncTxFromClosing = syncTxRow;
 export const syncTxFromBankEntry = syncTxRow;
+export const syncTxFromSales = syncTxRow;
+export const syncTxFromExpense = syncTxRow;

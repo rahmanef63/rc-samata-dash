@@ -448,6 +448,56 @@ export const backfillTransactions = mutation({
       inserted++;
     }
 
+    // 5. dailySales → kind=receipt direction=in
+    const sales = await ctx.db.query("dailySales")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .take(cap);
+    for (const s of sales) {
+      if (s.transactionId) continue;
+      const txId = await ctx.db.insert("transactions", {
+        kind: "receipt" as const,
+        direction: "in" as const,
+        branchId,
+        date: s.businessDate,
+        amount: s.netAmount,
+        status: s.status,
+        channelId: s.channelId,
+        channelName: s.channelName,
+        reference: s.referenceNo,
+        description: `Penjualan ${s.channelName} ${s.businessDate}`,
+        sourceKind: "system" as const,
+        createdBy: userId,
+        createdAt: now,
+      });
+      await ctx.db.patch(s._id, { transactionId: txId });
+      inserted++;
+    }
+
+    // 6. expenses → kind=expense direction=out
+    const expenses = await ctx.db.query("expenses")
+      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .take(cap);
+    for (const e of expenses) {
+      if (e.transactionId) continue;
+      const txId = await ctx.db.insert("transactions", {
+        kind: "expense" as const,
+        direction: "out" as const,
+        branchId,
+        date: e.expenseDate,
+        amount: e.amount,
+        status: e.status,
+        categoryId: e.categoryId,
+        vendorId: e.vendorId,
+        counterparty: e.vendorName,
+        description: e.description,
+        sourceKind: "system" as const,
+        createdBy: userId,
+        createdAt: now,
+      });
+      await ctx.db.patch(e._id, { transactionId: txId });
+      inserted++;
+    }
+
     await insertAuditLog(ctx, {
       entityType: "transactions",
       entityId: "" as Id<"transactions">,
