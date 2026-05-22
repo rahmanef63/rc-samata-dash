@@ -1,3 +1,5 @@
+"use client";
+
 import { Suspense } from "react";
 import { UniversalImport } from "@/features/universal-import/components/UniversalImport";
 import { PageHeader } from "@/shared/components/PageHeader";
