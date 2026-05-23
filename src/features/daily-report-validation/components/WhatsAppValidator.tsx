@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { CheckCircle, AlertTriangle, FileText, ClipboardPaste, Save, Loader2, X } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useDailyCheckData, useSaveValidation } from "../api";
 import { parseWhatsAppReport, type WhatsAppReport } from "../parsers";
 import { compareReport, type DiffRow } from "../lib/compare";
@@ -39,7 +38,7 @@ const KIND_LABELS: Record<WhatsAppReport["kind"], string> = {
   monthlyTally: "Tally Bulanan",
 };
 
-export function WhatsAppValidator({ branchId }: { branchId: Id<"branches"> }) {
+export function WhatsAppValidator() {
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
   const [parsed, setParsed] = useState<WhatsAppReport | null>(null);
@@ -54,7 +53,7 @@ export function WhatsAppValidator({ branchId }: { branchId: Id<"branches"> }) {
     return undefined;
   }, [parsed]);
 
-  const snapshot = useDailyCheckData(branchId, businessDate);
+  const snapshot = useDailyCheckData(businessDate);
 
   const diff = useMemo(() => {
     if (!parsed) return null;
@@ -92,7 +91,6 @@ export function WhatsAppValidator({ branchId }: { branchId: Id<"branches"> }) {
     setSaving(true);
     try {
       await saveValidation({
-        branchId,
         businessDate,
         kind: parsed.kind,
         rawText: text,

@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { useFilteredByDate } from "@/shared/hooks";
 import { api } from "../../../../convex/_generated/api";
 import { FileText, Upload, Calendar } from "lucide-react";
@@ -18,25 +17,10 @@ export function ReportOverview() {
   const router = useRouter();
   const role = useUserRole();
   const isOwner = role === "owner";
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
-
-  const rawMonthlySales = useQuery(
-    api.features.reports.dashboardQueries.getMonthlySalesTrend,
-    branchId ? { branchId } : "skip",
-  );
-  const expenseData = useQuery(
-    api.features.reports.dashboardQueries.getExpenseBreakdown,
-    branchId ? { branchId } : "skip",
-  );
-  const waterfallData = useQuery(
-    api.features.reports.dashboardQueries.getCashflowWaterfall,
-    branchId ? { branchId } : "skip",
-  );
-  const rawReports = useQuery(
-    api.features.reports.queries.listWeeklyReports,
-    branchId ? { branchId } : "skip",
-  );
+  const rawMonthlySales = useQuery(api.features.reports.dashboardQueries.getMonthlySalesTrend, {});
+  const expenseData = useQuery(api.features.reports.dashboardQueries.getExpenseBreakdown, {});
+  const waterfallData = useQuery(api.features.reports.dashboardQueries.getCashflowWaterfall, {});
+  const rawReports = useQuery(api.features.reports.queries.listWeeklyReports, {});
   const monthlySales = useFilteredByDate(rawMonthlySales, "date");
   const reports = useFilteredByDate(rawReports, "periodStart");
 

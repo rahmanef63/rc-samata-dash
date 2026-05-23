@@ -19,7 +19,6 @@ export const authExtensionTables = {
   userPreferences: defineTable({
     userId: v.id("users"),
     theme: v.optional(themeValidator),
-    defaultBranchId: v.optional(v.id("branches")),
     notifAnomaly: v.optional(v.boolean()),
     notifEmail: v.optional(v.boolean()),
     updatedAt: v.optional(v.string()),

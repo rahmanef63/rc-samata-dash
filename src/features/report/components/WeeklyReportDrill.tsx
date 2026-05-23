@@ -296,11 +296,9 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
   const rawProductHPP = useQuery(api.features.reports.queries.getProductHPP, { reportId });
   const rawLeftoverItems = useQuery(api.features.reports.queries.listLeftoverItems, { reportId });
   const rawTransferItems = useQuery(api.features.reports.queries.getTransferItems, { reportId });
-  const rawProductChanges = useQuery(api.features.reports.queries.listProductChanges,
-    report?.branchId ? { branchId: report.branchId } : "skip");
+  const rawProductChanges = useQuery(api.features.reports.queries.listProductChanges, {});
   const rawEmployeeIncentives = useQuery(api.features.reports.queries.getEmployeeIncentives, { reportId });
-  const employeeAllowances = useQuery(api.features.reports.queries.listEmployeeAllowances,
-    report?.branchId ? { branchId: report.branchId } : "skip");
+  const employeeAllowances = useQuery(api.features.reports.queries.listEmployeeAllowances, {});
 
   // DRY date scope filter — driven by header DateRangePicker.
   const productSales = useFilteredByDate(rawProductSales, "businessDate");

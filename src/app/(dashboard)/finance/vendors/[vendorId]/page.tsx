@@ -25,15 +25,13 @@ export default function VendorDetailPage({
   params: Promise<{ vendorId: string }>;
 }) {
   const { vendorId } = use(params);
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
 
   const detail = useQuery(
     api.features.payables.queries.getVendorDetail,
-    branchId ? { vendorId: vendorId as Id<"vendors">, branchId } : "skip",
+    { vendorId: vendorId as Id<"vendors"> },
   );
 
-  if (!branchId || !detail) {
+  if (!detail) {
     return <p className="p-8 text-center text-muted-foreground">Memuat detail vendor...</p>;
   }
 

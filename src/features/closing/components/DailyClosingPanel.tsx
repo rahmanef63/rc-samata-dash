@@ -16,7 +16,6 @@ import { useListClosings, useListTransfers, useCreateClosing, useUpdateClosing, 
 import { ClosingImportPreview } from "./ClosingImportPreview";
 import { DailyClosingsNotionView } from "./DailyClosingsNotionView";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const closingFields: FieldConfig[] = [
@@ -88,11 +87,8 @@ export function DailyClosingPanel() {
   const [closingSourceRow, setClosingSourceRow] = useState<DailyClosing | null>(null);
   const [transferSourceRow, setTransferSourceRow] = useState<OwnerTransfer | null>(null);
 
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
-
-  const rawClosings = useListClosings(currentBranchId || "");
-  const reportCashFlow = useQuery(api.features.reports.queries.getCashFlowByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  const rawClosings = useListClosings();
+  const reportCashFlow = useQuery(api.features.reports.queries.getCashFlowByBranch, {});
 
   const manualClosings = (rawClosings || []).map(c => ({ ...c, id: c._id })) as unknown as DailyClosing[];
   const reportClosings: DailyClosing[] = (reportCashFlow || []).map((cf: any) => ({
@@ -107,13 +103,12 @@ export function DailyClosingPanel() {
     actualCash: cf.closingBalance ?? 0,
     difference: 0,
     status: "verified" as const,
-    branchId: cf.branchId,
     _creationTime: cf._creationTime,
   })) as unknown as DailyClosing[];
   const closingsAll = manualClosings.length > 0 ? manualClosings : reportClosings;
   const closingsData = useFilteredByDate(closingsAll, "businessDate");
 
-  const rawTransfers = useListTransfers(currentBranchId || "");
+  const rawTransfers = useListTransfers();
   const transfersAll = (rawTransfers || []).map(t => ({ ...t, id: t._id })) as unknown as OwnerTransfer[];
   const transfersData = useFilteredByDate(transfersAll, "transferDate");
 
@@ -123,7 +118,6 @@ export function DailyClosingPanel() {
     deleteMutation: async () => {},
   };
   const closingCrud = useConvexCrudState<DailyClosing>(closingMutations as any);
-  const closingTable = useTableState(closingsData, ["businessDate", "status"]);
 
   const transferMutations = {
     createMutation: useCreateTransfer(),
@@ -139,7 +133,6 @@ export function DailyClosingPanel() {
   const totalTransferFromOwner = transfersData.filter(t => t.direction === "owner_to_branch").reduce((s, t) => s + t.amount, 0);
 
   const customCreateClosing = async (data: any) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const openingCash = Number(data.openingCash) || 0;
     const cashSales = Number(data.cashSales) || 0;
     const nonCashSales = Number(data.nonCashSales) || 0;
@@ -149,7 +142,6 @@ export function DailyClosingPanel() {
     const difference = actualCash - expectedCash;
     await closingCrud.onCreate({
       ...data,
-      branchId: currentBranchId,
       openingCash, cashSales, nonCashSales, expensesPaidCash, actualCash,
       expectedCash, difference,
       submittedBy: "owner",
@@ -158,10 +150,8 @@ export function DailyClosingPanel() {
   };
 
   const customCreateTransfer = async (data: any) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     await transferCrud.onCreate({
       ...data,
-      branchId: currentBranchId,
       amount: Number(data.amount) || 0,
       referenceNo: data.referenceNo || "",
       status: "pending",
@@ -205,11 +195,7 @@ export function DailyClosingPanel() {
           )}
 
           <SectionHeader title="Riwayat Daily Closing" />
-          {currentBranchId ? (
-            <DailyClosingsNotionView branchId={currentBranchId} />
-          ) : (
-            <p className="text-sm text-muted-foreground px-2 py-6">Pilih cabang di header dulu.</p>
-          )}
+          <DailyClosingsNotionView />
           <RowSourceDialog
             open={!!closingSourceRow}
             onClose={() => setClosingSourceRow(null)}
@@ -294,8 +280,8 @@ export function DailyClosingPanel() {
         </>
       )}
 
-      {activeTab === "Upload CSV" && currentBranchId && (
-        <ClosingImportPreview branchId={currentBranchId} />
+      {activeTab === "Upload CSV" && (
+        <ClosingImportPreview />
       )}
     </motion.div>
   );

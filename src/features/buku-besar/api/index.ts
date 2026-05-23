@@ -1,19 +1,12 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 
-export function useBukuBesar(branchId: Id<"branches"> | undefined) {
-  return useQuery(
-    api.features.bukuBesar.queries.listBukuBesar,
-    branchId ? { branchId, limit: 5000 } : "skip",
-  );
+export function useBukuBesar() {
+  return useQuery(api.features.bukuBesar.queries.listBukuBesar, { limit: 5000 });
 }
 
-export function useBukuBesarCounts(branchId: Id<"branches"> | undefined) {
-  return useQuery(
-    api.features.bukuBesar.queries.countBukuBesar,
-    branchId ? { branchId } : "skip",
-  );
+export function useBukuBesarCounts() {
+  return useQuery(api.features.bukuBesar.queries.countBukuBesar, {});
 }
 
 export function useBulkPatch() {

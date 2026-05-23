@@ -20,7 +20,6 @@ export const create = mutation({
     paidAmount: v.number(),
     status: v.union(v.literal("open"), v.literal("partial"), v.literal("paid"), v.literal("overdue")),
     description: v.string(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -29,7 +28,6 @@ export const create = mutation({
     const id = await ctx.db.insert("payables", args);
     // Mirror ke Buku Besar SSOT — payable kind, direction=out (utang vendor).
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "invoice",
       direction: "out",
       date: args.invoiceDate,
@@ -47,7 +45,7 @@ export const create = mutation({
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: id, action: "create",
       description: `Created payable ${args.vendorName} - Rp${args.amount}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -105,7 +103,7 @@ export const update = mutation({
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: id, action: "update",
       description: `Updated payable ${data.vendorName ?? existing.vendorName}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -153,7 +151,7 @@ export const remove = mutation({
     await insertAuditLog(ctx, {
       entityType: "payables", entityId: args.id, action: "delete",
       description: `Deleted payable ${existing.vendorName} (${payments.length} payments, ${linkedReceipts.length + linkedBanks.length} bridge FKs cleared, ${txDeleted} tx deleted)`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },
@@ -176,13 +174,12 @@ export const addPayment = mutation({
     if (payable.paidAmount + args.amount > payable.amount) {
       throw new Error("Payment would exceed total payable amount");
     }
-    const paymentId = await ctx.db.insert("payablePayments", { ...args, branchId: payable.branchId });
+    const paymentId = await ctx.db.insert("payablePayments", args);
     const newPaidAmount = payable.paidAmount + args.amount;
     const newStatus = newPaidAmount >= payable.amount ? "paid" as const : "partial" as const;
     await ctx.db.patch(args.payableId, { paidAmount: newPaidAmount, status: newStatus });
     // Mirror payment ke Buku Besar SSOT — receipt kind (kas keluar bayar utang).
     const txId = await mirrorTx(ctx, {
-      branchId: payable.branchId,
       kind: "payment",
       direction: "out",
       date: args.paymentDate,
@@ -200,7 +197,7 @@ export const addPayment = mutation({
     await insertAuditLog(ctx, {
       entityType: "payablePayments", entityId: paymentId, action: "pay",
       description: `Payment Rp${args.amount} for ${payable.vendorName}`,
-      actedBy: userId, branchId: payable.branchId,
+      actedBy: userId,
     });
     return paymentId;
   },
@@ -213,7 +210,6 @@ export const addPayment = mutation({
 // the spelling.
 export const importPayablesBulk = mutation({
   args: {
-    branchId: v.id("branches"),
     rows: v.array(v.object({
       vendorName: v.string(),
       invoiceDate: v.string(),
@@ -225,7 +221,7 @@ export const importPayablesBulk = mutation({
       fileName: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { branchId, rows }) => {
+  handler: async (ctx, { rows }) => {
     const userId = await requireAuth(ctx);
 
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
@@ -262,11 +258,9 @@ export const importPayablesBulk = mutation({
           paidAmount: r.paidAmount,
           status,
           description: descriptionWithRef,
-          branchId,
         });
         // Mirror ke Buku Besar SSOT — kind=invoice direction=out.
         const txId = await mirrorTx(ctx, {
-          branchId,
           kind: "invoice",
           direction: "out",
           date: r.invoiceDate,
@@ -294,7 +288,7 @@ export const importPayablesBulk = mutation({
       entityId: "" as Id<"payables">,
       action: "create",
       description: `Bulk import payables — ${inserted} insert, ${errors.length} error, ${unresolvedVendors.size} vendor unresolved`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { inserted, errors, unresolvedVendors: [...unresolvedVendors] };
@@ -314,9 +308,8 @@ export const removeVendorAlias = mutation({
     await insertAuditLog(ctx, {
       entityType: "vendorBankAliases", entityId: aliasId, action: "delete",
       description: `Hapus alias bank "${alias.alias}"`,
-      actedBy: userId, branchId: alias.branchId,
+      actedBy: userId,
     });
     return null;
   },
 });
-

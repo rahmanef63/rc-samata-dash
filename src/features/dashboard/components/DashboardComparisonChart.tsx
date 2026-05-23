@@ -7,7 +7,6 @@ import { api } from "../../../../convex/_generated/api";
 import { MultiLineChart, type LineSeries } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope, type DateGranularity } from "../context/DateScopeContext";
 import { formatRp, formatRpFull } from "@/shared/lib";
 
@@ -58,9 +57,7 @@ function shiftRange(
 
 export function DashboardComparisonChart() {
   const [tab, setTab] = useState<Tab>("omzet");
-  const { branchId: scopeBranchId, branches } = useBranchScope();
   const { startDate, endDate, granularity, rangeLabel } = useDateScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   const prior = useMemo(
     () => shiftRange(granularity, startDate, endDate),
@@ -69,11 +66,11 @@ export function DashboardComparisonChart() {
 
   const current = useQuery(
     api.features.reports.dashboardQueries.getFinancialTrend,
-    branchId ? { branchId, startDate, endDate } : "skip",
+    { startDate, endDate },
   );
   const priorData = useQuery(
     api.features.reports.dashboardQueries.getFinancialTrend,
-    branchId ? { branchId, startDate: prior.start, endDate: prior.end } : "skip",
+    { startDate: prior.start, endDate: prior.end },
   );
 
   const isLoading = !current || !priorData;

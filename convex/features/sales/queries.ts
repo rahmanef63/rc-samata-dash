@@ -3,16 +3,17 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
 export const listByBranch = query({
-  args: { branchId: v.id("branches"), businessDate: v.optional(v.string()) },
+  args: { businessDate: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
-    let q = ctx.db.query("dailySales").withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId));
     if (args.businessDate) {
-      q = ctx.db.query("dailySales").withIndex("by_branch_date", (q) =>
-        q.eq("branchId", args.branchId).eq("businessDate", args.businessDate!)
-      );
+      return await ctx.db
+        .query("dailySales")
+        .withIndex("by_date", (q) => q.eq("businessDate", args.businessDate!))
+        .order("desc")
+        .take(100);
     }
-    return await q.order("desc").take(100);
+    return await ctx.db.query("dailySales").withIndex("by_date").order("desc").take(100);
   },
 });
 

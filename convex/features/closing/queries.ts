@@ -6,32 +6,32 @@ import { LIMITS } from "../../shared/limits";
 import { MATCH } from "../../projectConstants";
 
 export const getClosingByDate = query({
-  args: { branchId: v.id("branches"), businessDate: v.string() },
+  args: { businessDate: v.string() },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     return await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId).eq("businessDate", args.businessDate))
+      .withIndex("by_date", (q) => q.eq("businessDate", args.businessDate))
       .unique();
   },
 });
 
 export const listClosings = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(LIMITS.CLOSINGS_PAGE);
   },
 });
 
 export const listTransfers = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(50);
   },
@@ -40,11 +40,11 @@ export const listTransfers = query({
 // ─── Payment receipts ───────────────────────────────────────
 
 export const listPaymentReceipts = query({
-  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
+  args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     const rows = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(args.limit ?? 100);
     return rows;
@@ -60,12 +60,10 @@ export const getReceiptProofUrl = query({
 });
 
 export const listOpenPayables = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    const all = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(500);
+    const all = await ctx.db.query("payables").take(500);
     return all.filter((p) => p.status === "open" || p.status === "partial" || p.status === "overdue");
   },
 });
@@ -74,19 +72,17 @@ export const listOpenPayables = query({
 
 export const listBankStatementBatches = query({
   args: {
-    branchId: v.id("branches"),
     accountKind: v.optional(v.union(v.literal("owner"), v.literal("pic"))),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     if (args.accountKind) {
       return await ctx.db.query("bankStatementBatches")
-        .withIndex("by_branch_account", (q) => q.eq("branchId", args.branchId).eq("accountKind", args.accountKind!))
+        .withIndex("by_account", (q) => q.eq("accountKind", args.accountKind!))
         .order("desc")
         .take(50);
     }
     return await ctx.db.query("bankStatementBatches")
-      .withIndex("by_branch_account", (q) => q.eq("branchId", args.branchId))
       .order("desc")
       .take(50);
   },
@@ -105,19 +101,17 @@ export const listBankStatementEntries = query({
 // ─── Validation (reconciliation) ───────────────────────────
 
 export const listValidationCandidates = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     // Open / partial / overdue payables not yet validated
-    const payablesAll = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(1000);
+    const payablesAll = await ctx.db.query("payables").take(1000);
     const payables = payablesAll.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue" || (p.paidAmount > 0 && !p.isValidated))
     );
     // Bank entries with payable_payment category not yet validated
     const bankAll = await ctx.db.query("bankStatementEntries")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.BANK_ENTRIES_PAGE);
     const bank = bankAll.filter((b) =>
       b.category === "payable_payment" && !b.isValidated
@@ -127,7 +121,7 @@ export const listValidationCandidates = query({
     // instead of forcing wrong matches.
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const aliases = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .withIndex("by_alias")
       .take(LIMITS.ALIASES_PAGE);
     const aliasByVendor = new Map<string, string[]>();
     for (const a of aliases) {
@@ -144,29 +138,28 @@ export const listValidationCandidates = query({
 });
 
 export const listValidationBatches = query({
-  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
-  handler: async (ctx, { branchId, limit }) => {
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
     await requireAuth(ctx);
     return await ctx.db.query("validationBatches")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(limit ?? 30);
   },
 });
 
 export const listVendorBankAliases = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .withIndex("by_alias")
       .take(LIMITS.ALIASES_PAGE);
   },
 });
 
 export const listValidationLogs = query({
   args: {
-    branchId: v.id("branches"),
     batchId: v.optional(v.id("validationBatches")),
     entryType: v.optional(v.union(v.literal("bank_entry"), v.literal("payable"), v.literal("receipt"))),
     entryId: v.optional(v.string()),
@@ -185,7 +178,6 @@ export const listValidationLogs = query({
         .take(50);
     }
     return await ctx.db.query("validationLogs")
-      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
       .order("desc")
       .take(100);
   },
@@ -196,26 +188,24 @@ export const listValidationLogs = query({
 // approve/deny per row before user commits.
 
 export const previewAutoMatch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const allBank = await ctx.db.query("bankStatementEntries")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.BANK_ENTRIES_PAGE);
     const banks = allBank.filter((b) =>
       b.category === "payable_payment" && !b.isValidated && b.debit > 0
     );
 
-    const allPay = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.PAYABLES_PAGE);
+    const allPay = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const payables = allPay.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated
     );
 
     const aliases = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .withIndex("by_alias")
       .take(LIMITS.ALIASES_PAGE);
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
 

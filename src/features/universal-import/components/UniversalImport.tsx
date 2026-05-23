@@ -9,14 +9,13 @@
 // hence CSV is converted to xlsx-shape in-memory before detector runs.
 
 import { useState, useCallback, useMemo } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
   Upload, Loader2, CheckCircle, AlertCircle, FileText, Sparkles,
 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { formatRpFull } from "@/shared/lib";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { parseProductChanges, extractPeriodLabel, type ProductChangeItem } from "@/features/report-upload/parsers/parseProductChanges";
@@ -115,9 +114,6 @@ function num(s: unknown): number {
 }
 
 export function UniversalImport() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
-
   const [step, setStep] = useState<Step>("idle");
   const [file, setFile] = useState<File | null>(null);
   const [wb, setWb] = useState<XLSX.WorkBook | null>(null);
@@ -219,7 +215,7 @@ export function UniversalImport() {
   }, []);
 
   const commit = async () => {
-    if (!detection || !effectiveBranchId || !file) return;
+    if (!detection || !file) return;
     setStep("committing");
     try {
       const parts: string[] = [];
@@ -227,7 +223,6 @@ export function UniversalImport() {
 
       if (pergantian.length > 0) {
         const count = await importPergantian({
-          branchId: effectiveBranchId,
           fileName: fName,
           periodLabel: pergantianPeriod || "Tanpa periode",
           items: pergantian,
@@ -236,7 +231,6 @@ export function UniversalImport() {
       }
       if (tunjangan.length > 0) {
         const count = await importTunjangan({
-          branchId: effectiveBranchId,
           fileName: fName,
           periodLabel: tunjanganPeriod || "Tanpa periode",
           items: tunjangan,
@@ -248,7 +242,7 @@ export function UniversalImport() {
         parts.push(`${res.inserted} vendor (${res.skipped} skip)`);
       }
       if (payables.length > 0) {
-        const res = await importPayables({ branchId: effectiveBranchId, rows: payables });
+        const res = await importPayables({ rows: payables });
         const tail = res.unresolvedVendors.length > 0 ? `, ${res.unresolvedVendors.length} vendor unresolved` : "";
         parts.push(`${res.inserted} piutang${tail}`);
       }
@@ -346,7 +340,6 @@ export function UniversalImport() {
             {detectedAnyData && (
               <button
                 onClick={commit}
-                disabled={!effectiveBranchId}
                 className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
               >
                 <Upload className="h-4 w-4" />

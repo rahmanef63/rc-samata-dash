@@ -3,10 +3,10 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
 export const listByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("pettyCashRequests").withIndex("by_branch", (q) => q.eq("branchId", args.branchId)).order("desc").take(100);
+    return await ctx.db.query("pettyCashRequests").order("desc").take(100);
   },
 });
 
@@ -28,14 +28,12 @@ export const listByStatus = query({
 
 export const getMonthlySummary = query({
   args: {
-    branchId: v.id("branches"),
     yearMonth: v.string(),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     const records = await ctx.db
       .query("pettyCashRequests")
-      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
       .collect();
 
     const filtered = records.filter((r) => r.requestDate.startsWith(args.yearMonth));
@@ -61,14 +59,12 @@ export const getMonthlySummary = query({
 
 export const getMonthlySummaryInternal = internalQuery({
   args: {
-    branchId: v.id("branches"),
     yearMonth: v.string(),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     const records = await ctx.db
       .query("pettyCashRequests")
-      .withIndex("by_branch", (q) => q.eq("branchId", args.branchId))
       .collect();
 
     const filtered = records.filter((r) => r.requestDate.startsWith(args.yearMonth));

@@ -6,14 +6,11 @@ import { api } from "../../../../convex/_generated/api";
 import { WaterfallChart } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardCashflowChart() {
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const waterfallData = useQuery(
     api.features.reports.dashboardQueries.getCashflowWaterfall,
-    branchId ? { branchId } : "skip",
+    {},
   );
 
   if (!waterfallData) {

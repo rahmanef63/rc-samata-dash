@@ -11,7 +11,6 @@ export const create = mutation({
     description: v.string(),
     actedBy: v.string(),
     actedAt: v.string(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
@@ -42,18 +41,18 @@ export const removeMany = mutation({
   },
 });
 
-// Clear ALL audit logs scoped ke cabang (purge). Pakai by_branch index —
-// paginate via take(2000) sampai habis untuk avoid OOM pada riwayat besar.
-// Frontend role gating ensures only super_admin pencet ini.
+// Clear ALL audit logs (purge). Paginate via take(2000) sampai habis untuk
+// avoid OOM pada riwayat besar. Frontend role gating ensures only super_admin
+// pencet ini. Name preserved (`clearByBranch`) to keep frontend cascade stable.
 export const clearByBranch = mutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     let total = 0;
     while (true) {
       const batch = await ctx.db
         .query("auditLogs")
-        .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+        .withIndex("by_actedAt")
         .take(2000);
       if (batch.length === 0) break;
       for (const row of batch) await ctx.db.delete(row._id);

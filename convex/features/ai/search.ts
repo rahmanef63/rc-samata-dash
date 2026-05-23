@@ -49,7 +49,6 @@ export const countEmbeddings = internalQuery({
 export const semanticSearch = internalAction({
   args: {
     query: v.string(),
-    branchId: v.optional(v.id("branches")),
     sourceTable: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
@@ -70,20 +69,14 @@ export const semanticSearch = internalAction({
       { text: args.query }
     );
 
-    // 2. Vector search with optional filter
+    // 2. Vector search (single-tenant — no branch filter)
     const searchQuery: {
       vector: number[];
       limit: number;
-      filter?: (q: never) => unknown;
     } = {
       vector: queryEmbedding,
       limit: args.limit || 10,
     };
-
-    if (args.branchId) {
-      searchQuery.filter = ((q: { eq: (f: string, v: unknown) => unknown }) =>
-        q.eq("branchId", args.branchId)) as (q: never) => unknown;
-    }
 
     const searchResults = await ctx.vectorSearch(
       "aiEmbeddings",

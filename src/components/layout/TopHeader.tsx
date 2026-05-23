@@ -4,7 +4,7 @@ import { Bell, Search, Sun, Moon, User, LogOut, Settings, Filter } from "lucide-
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
-import { BranchSelector, DateRangePicker } from "@/shared/components";
+import { DateRangePicker } from "@/shared/components";
 import {
   Sheet,
   SheetContent,
@@ -134,16 +134,15 @@ export function TopHeader() {
       </div>
 
       <div className="flex items-center gap-1">
-        {/* Branch + Date scope — desktop: inline, mobile: sheet trigger */}
+        {/* Date scope — desktop: inline, mobile: sheet trigger */}
         {!isMobile ? (
           <div className="flex items-center gap-1.5 mr-2">
-            <BranchSelector />
             <DateRangePicker />
           </div>
         ) : (
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Filter cabang & periode">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Filter periode">
                 <Filter className="h-4 w-4 text-muted-foreground" />
               </Button>
             </SheetTrigger>
@@ -151,14 +150,10 @@ export function TopHeader() {
               <SheetHeader>
                 <SheetTitle>Filter Data</SheetTitle>
                 <SheetDescription>
-                  Pilih cabang dan periode untuk seluruh halaman.
+                  Pilih periode untuk seluruh halaman.
                 </SheetDescription>
               </SheetHeader>
               <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5">Cabang</p>
-                  <BranchSelector className="w-full" />
-                </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1.5">Periode</p>
                   <DateRangePicker className="w-full" />

@@ -3,7 +3,6 @@
 import { useQuery } from "convex/react";
 import { TrendingUp } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +15,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function DashboardTopProducts() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
   const items = useQuery(
     api.features.reports.analytics.getProductProfitability,
-    effectiveBranchId ? { branchId: effectiveBranchId, timeFilter: "monthly" } : "skip",
+    { timeFilter: "monthly" },
   );
 
   if (!items) {

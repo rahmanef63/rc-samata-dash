@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Loader2, AlertTriangle } from "lucide-react";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope, type DateGranularity } from "../context/DateScopeContext";
 import { api } from "../../../../convex/_generated/api";
 import { formatRpFull } from "@/shared/lib";
@@ -37,21 +36,11 @@ function LoadingSkeleton() {
 }
 
 export function DashboardAnalysisDrill() {
-  const { branchId } = useBranchScope();
   const { granularity } = useDateScope();
   const [activeTab, setActiveTab] = useState<Tab>("Item Prioritas");
 
-  if (!branchId) {
-    return (
-      <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-        Pilih satu cabang untuk melihat detail analisis (mode &quot;Semua cabang&quot; tidak tersedia).
-      </div>
-    );
-  }
-
   const args = {
     reportId: "all" as const,
-    branchId,
     timeFilter: granularityToTimeFilter(granularity),
   };
 

@@ -14,9 +14,6 @@ import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/h
 import type { StockItem, StockMovement } from "@/shared/types";
 import { movementTypeLabels } from "../lib";
 import { useStockItems, useCreateStockItem, useUpdateStockItem, useDeleteStockItem, useRecordMovement, useAllStockMovements } from "../api";
-import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
-import { api } from "../../../../convex/_generated/api";
 
 // Stock Items
 const itemFields: FieldConfig[] = [
@@ -65,13 +62,10 @@ export function InventoryOverview() {
   const [activeTab, setActiveTab] = useState<SubTab>("Daftar Stok");
   const [movementSourceRow, setMovementSourceRow] = useState<StockMovement | null>(null);
 
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
-
-  const rawItems = useStockItems(currentBranchId || "");
+  const rawItems = useStockItems();
   const itemsData = (rawItems || []).map(i => ({ ...i, id: i._id })) as unknown as StockItem[];
 
-  const rawMovements = useAllStockMovements(currentBranchId || "");
+  const rawMovements = useAllStockMovements();
   const movementsAll = (rawMovements || []).map(m => ({ ...m, id: m._id })) as unknown as StockMovement[];
   const movementsData = useFilteredByDate(movementsAll, "date");
 
@@ -86,7 +80,6 @@ export function InventoryOverview() {
   const recordMovementMutation = useRecordMovement();
   const moveCrud = useConvexCrudState<StockMovement>({
     createMutation: async (data: any) => {
-      if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
       const item = rawItems?.find(i => i.name === data.itemName);
       if (!item) { toast.error("Item tidak ditemukan."); return; }
       await recordMovementMutation({
@@ -97,7 +90,6 @@ export function InventoryOverview() {
         unit: data.unit || item.unit,
         date: data.date || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
         notes: data.notes || "",
-        branchId: currentBranchId,
       });
     },
     updateMutation: async () => {},
@@ -106,11 +98,10 @@ export function InventoryOverview() {
   const moveTable = useTableState(movementsData, ["itemName", "type", "notes"]);
 
   const customCreateItem = async (data: any) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const currentQty = Number(data.currentQty) || 0;
     const minQty = Number(data.minQty) || 0;
     const status = currentQty <= 0 ? "Critical" as const : currentQty <= minQty ? "Low" as const : "Stable" as const;
-    await itemCrud.onCreate({ ...data, branchId: currentBranchId, currentQty, minQty, status });
+    await itemCrud.onCreate({ ...data, currentQty, minQty, status });
   };
 
   const lowStockItems = itemsData.filter(i => i.status === "Low" || i.status === "Critical");

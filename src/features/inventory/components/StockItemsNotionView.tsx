@@ -44,8 +44,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function StockItemsNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.inventory.queries.listItems, { branchId }) as Row[] | undefined;
+export function StockItemsNotionView() {
+  const rows = useQuery(api.features.inventory.queries.listItems, {}) as Row[] | undefined;
   const patch = useMutation(api.features.inventory.mutations.patchItem);
   const remove = useMutation(api.features.inventory.mutations.deleteItem);
 

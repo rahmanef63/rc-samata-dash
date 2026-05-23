@@ -16,19 +16,16 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/features/auth/useUserRole";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope } from "../context/DateScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 
 export function DashboardTransactionLog() {
   const router = useRouter();
   const isOwner = useUserRole() === "owner";
-  const { branchId: scopeBranchId, branches } = useBranchScope();
   const { rangeLabel, setGranularity } = useDateScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawTransactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
-    branchId ? { branchId } : "skip",
+    {},
   );
   const transactions = useFilteredByDate(rawTransactions, "time");
 

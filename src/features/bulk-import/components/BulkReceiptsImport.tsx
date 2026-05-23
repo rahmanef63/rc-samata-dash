@@ -5,11 +5,10 @@ import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { Upload, Loader2, AlertTriangle, FileText } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { formatRpFull } from "@/shared/lib";
 import { parseReceiptsCsv, buildReceiptsCsvTemplate, type ReceiptCsvRow } from "../parsers/parseReceiptsCsv";
 
-export function BulkReceiptsImport({ branchId }: { branchId: Id<"branches"> }) {
+export function BulkReceiptsImport() {
   const importBulk = useMutation(api.features.closing.mutations.importPaymentReceiptsBulk);
   const [rows, setRows] = useState<ReceiptCsvRow[]>([]);
   const [errors, setErrors] = useState<{ line: number; message: string }[]>([]);
@@ -45,7 +44,6 @@ export function BulkReceiptsImport({ branchId }: { branchId: Id<"branches"> }) {
     setCommitting(true);
     try {
       const res = await importBulk({
-        branchId,
         rows: rows.map((r) => ({
           paidDate: r.paidDate,
           amount: r.amount,

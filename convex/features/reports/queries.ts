@@ -17,7 +17,7 @@ export const getReportFileUrl = query({
  * Owner pakai hasil ini buat compare side-by-side dengan xlsx asli — cari
  * baris yang gagal masuk database.
  *
- * Expenses TIDAK punya reportId field, jadi diquery by_branch_date pakai
+ * Expenses TIDAK punya reportId field, jadi diquery by_date pakai
  * periodStart..periodEnd. Bisa overlap dengan input non-laporan (manual
  * petty cash dll) — caveat ditulis di nama sheet.
  */
@@ -51,9 +51,8 @@ export const getReportExport = query({
     // expenses by date range (no reportId link — caveat)
     if (report.periodStart && report.periodEnd) {
       result["expenses_byPeriod"] = await ctx.db.query("expenses")
-        .withIndex("by_branch_date", (q) =>
-          q.eq("branchId", report.branchId)
-            .gte("expenseDate", report.periodStart)
+        .withIndex("by_date", (q) =>
+          q.gte("expenseDate", report.periodStart)
             .lte("expenseDate", report.periodEnd))
         .take(5000);
     }
@@ -95,17 +94,17 @@ export const getReportById = internalQuery({
 });
 
 export const listWeeklyReports = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .collect();
     const expenses = await ctx.db
       .query("expenses")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .collect();
 
     return reports.map((report) => {
@@ -144,16 +143,13 @@ export const getWeeklyReport = query({
  */
 export const checkDuplicatePeriod = query({
   args: {
-    branchId: v.id("branches"),
     periodStart: v.string(),
   },
-  handler: async (ctx, { branchId, periodStart }) => {
+  handler: async (ctx, { periodStart }) => {
     await requireAuth(ctx);
     const existing = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch_period", (q) =>
-        q.eq("branchId", branchId).eq("periodStart", periodStart)
-      )
+      .withIndex("by_period", (q) => q.eq("periodStart", periodStart))
       .first();
     return existing ?? null;
   },
@@ -261,24 +257,22 @@ export const getEmployeeIncentives = query({
 // ─── Standalone document queries ────────────────────────────
 
 export const listProductChanges = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db
       .query("productChanges")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
       .collect();
   },
 });
 
 export const listEmployeeAllowances = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db
       .query("employeeAllowances")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .order("desc")
       .collect();
   },
@@ -287,17 +281,17 @@ export const listEmployeeAllowances = query({
 // ─── Finance Bridge Queries (aggregate report data by branch) ──
 
 export const getSalesByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     // Convex returns max 8192 rows per query. Cap raw rows here so the
-    // dashboard / sales drill don't crash for branches with many weeks
-    // of uploaded productSales. Newest reports first; stop early once
-    // we've collected ROW_CAP entries.
+    // dashboard / sales drill don't crash for many weeks of uploaded
+    // productSales. Newest reports first; stop early once we've
+    // collected ROW_CAP entries.
     const ROW_CAP = 5000;
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(LIMITS.REPORTS_PAGE);
     const all = [];
@@ -314,20 +308,19 @@ export const getSalesByBranch = query({
 });
 
 export const getExpensesByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     // LPKK data is imported into the expenses table (not a report-linked table).
     // Cap at 5000 newest rows so Convex 8192-row return cap doesn't trip.
     const items = await ctx.db
       .query("expenses")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(LIMITS.SALES_PAGE);
     return items.map((e) => ({
       _id: e._id,
       _creationTime: e._creationTime,
-      branchId: e.branchId,
       expenseDate: e.expenseDate,
       categoryLabel: e.categoryName,
       categoryType: e.paymentSource === "petty_cash" ? "cogs" : "other",
@@ -338,13 +331,13 @@ export const getExpensesByBranch = query({
 });
 
 export const getPayablesByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     const ROW_CAP = 5000;
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(LIMITS.REPORTS_PAGE);
     const all: Array<
@@ -373,13 +366,13 @@ export const getPayablesByBranch = query({
 });
 
 export const getCashFlowByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     const ROW_CAP = 5000;
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(LIMITS.STAGING_PAGE);
     const all = [];

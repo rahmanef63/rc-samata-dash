@@ -3,10 +3,10 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
 export const listItems = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("stockItems").withIndex("by_branch", (q) => q.eq("branchId", args.branchId)).take(200);
+    return await ctx.db.query("stockItems").take(200);
   },
 });
 
@@ -19,22 +19,21 @@ export const getItem = query({
 });
 
 export const listMovements = query({
-  args: { branchId: v.id("branches"), itemId: v.id("stockItems") },
+  args: { itemId: v.id("stockItems") },
   handler: async (ctx, args) => {
     await requireAuth(ctx);
     return await ctx.db.query("stockMovements")
-      .withIndex("by_branch_item", (q) => q.eq("branchId", args.branchId).eq("itemId", args.itemId))
+      .withIndex("by_item_date", (q) => q.eq("itemId", args.itemId))
       .order("desc")
       .take(100);
   },
 });
 
 export const listAllMovements = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     return await ctx.db.query("stockMovements")
-      .withIndex("by_branch_item", (q) => q.eq("branchId", args.branchId))
       .order("desc")
       .take(200);
   },

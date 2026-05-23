@@ -48,7 +48,6 @@ export const updatePreferences = mutation({
     theme: v.optional(
       v.union(v.literal("light"), v.literal("dark"), v.literal("system")),
     ),
-    defaultBranchId: v.optional(v.id("branches")),
     notifAnomaly: v.optional(v.boolean()),
     notifEmail: v.optional(v.boolean()),
   },

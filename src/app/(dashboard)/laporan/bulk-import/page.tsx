@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
 import { Upload, ScanLine, Receipt, FileText } from "lucide-react";
-import { api } from "../../../../../convex/_generated/api";
 import { FilenameScanner } from "@/features/bulk-import/components/FilenameScanner";
 import { BulkReceiptsImport } from "@/features/bulk-import/components/BulkReceiptsImport";
 import { BulkPayablesImport } from "@/features/bulk-import/components/BulkPayablesImport";
@@ -18,13 +16,7 @@ const TABS: { key: Tab; label: string; icon: typeof Upload }[] = [
 ];
 
 export default function BulkImportPage() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
   const [tab, setTab] = useState<Tab>("scan");
-
-  if (!branchId) {
-    return <p className="p-8 text-center text-sm text-muted-foreground">Memuat cabang...</p>;
-  }
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
@@ -62,8 +54,8 @@ export default function BulkImportPage() {
       </div>
 
       {tab === "scan" && <FilenameScanner />}
-      {tab === "receipts" && <BulkReceiptsImport branchId={branchId} />}
-      {tab === "payables" && <BulkPayablesImport branchId={branchId} />}
+      {tab === "receipts" && <BulkReceiptsImport />}
+      {tab === "payables" && <BulkPayablesImport />}
     </div>
   );
 }

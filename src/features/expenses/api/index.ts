@@ -2,8 +2,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-export const useExpenses = (branchId: string) =>
-  useQuery(api.features.expenses.queries.listByBranch, branchId ? { branchId: branchId as Id<"branches"> } : "skip");
+export const useExpenses = () =>
+  useQuery(api.features.expenses.queries.listByBranch, {});
 
 export const useExpense = (id: string) =>
   useQuery(api.features.expenses.queries.getById, id ? { id: id as Id<"expenses"> } : "skip");

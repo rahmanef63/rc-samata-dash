@@ -56,8 +56,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function OwnerTransfersNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.closing.queries.listTransfers, { branchId }) as Row[] | undefined;
+export function OwnerTransfersNotionView() {
+  const rows = useQuery(api.features.closing.queries.listTransfers, {}) as Row[] | undefined;
   const patch = useMutation(api.features.closing.mutations.updateTransfer);
   const remove = useMutation(api.features.closing.mutations.removeTransfer);
 

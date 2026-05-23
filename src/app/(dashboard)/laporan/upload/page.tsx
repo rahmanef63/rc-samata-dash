@@ -21,7 +21,6 @@ import { parseCostAnalysis, type CostAnalysisItem } from "@/features/report-uplo
 import { parseLapCF, type DailyCashFlowItem } from "@/features/report-upload/parsers/parseLapCF";
 import { parseOwnerTransfers, type OwnerTransferItem } from "@/features/report-upload/parsers/parseOwnerTransfers";
 import { parseInsentif, type IncentiveItem } from "@/features/report-upload/parsers/parseInsentif";
-import { BRAND } from "@/config/branding";
 import { UploadDropzone } from "@/features/report-upload/components/UploadDropzone";
 import { ImportPreview, type ParsedData as ImportParsedData } from "@/features/report-upload/components/ImportPreview";
 import { PanduanAiDialog } from "@/features/report-upload/components/PanduanAiDialog";
@@ -211,12 +210,7 @@ export default function LaporanUploadPage() {
   const [updateTargetId, setUpdateTargetId] = useState<Id<"weeklyReports"> | null>(null);
   const updateFileInputRef = useRef<HTMLInputElement>(null);
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
-  const recentReports = useQuery(
-    api.features.reports.queries.listWeeklyReports,
-    branchId ? { branchId } : "skip"
-  );
+  const recentReports = useQuery(api.features.reports.queries.listWeeklyReports, {});
 
   // ─── Cek duplikat secara reaktif saat parsed atau recentReports berubah ─────
   useEffect(() => {
@@ -251,19 +245,6 @@ export default function LaporanUploadPage() {
       return [dupWarning, ...filtered];
     });
   }, [parsed, recentReports]);
-
-  const createBranch      = useMutation(api.features.masterData.mutations.createBranch);
-
-  // Auto-seed default branch if none exists
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (branches && branches.length === 0 && !seededRef.current) {
-      seededRef.current = true;
-      createBranch({ code: BRAND.code, name: BRAND.name, location: BRAND.location, isActive: true })
-        .then(() => toast.success(`Cabang default ${BRAND.name} dibuat otomatis`))
-        .catch(() => { seededRef.current = false; });
-    }
-  }, [branches, createBranch]);
 
   const createReport      = useMutation(api.features.reports.mutations.createWeeklyReport);
   const generateUploadUrl = useMutation(api.features.reports.mutations.generateReportUploadUrl);
@@ -399,7 +380,7 @@ export default function LaporanUploadPage() {
   // ─── Cek duplikat sebelum import ────────────────────────────
 
   const checkAndImport = async () => {
-    if (!parsed || !branchId) return;
+    if (!parsed) return;
     // Mode update: langsung hapus laporan lama lalu import tanpa dialog konfirmasi
     if (updateTargetId) {
       await deleteReport({ reportId: updateTargetId });
@@ -428,7 +409,7 @@ export default function LaporanUploadPage() {
   // ─── Jalankan import ─────────────────────────────────────────
 
   const runImport = async () => {
-    if (!parsed || !branchId) return;
+    if (!parsed) return;
     setStep("importing");
 
     const allSales = [...parsed.penjualan, ...parsed.platformSales];
@@ -459,7 +440,6 @@ export default function LaporanUploadPage() {
     try {
       setProgress({ current: ++current, total, label: "Membuat record laporan..." });
       const reportId = await createReport({
-        branchId,
         fileName: parsed.fileName,
         fileStorageId: parsed.fileStorageId,
         periodStart: parsed.periodStart,
@@ -469,77 +449,77 @@ export default function LaporanUploadPage() {
 
       for (const chunk of lpkkChunks) {
         setProgress({ current: ++current, total, label: `Kas kecil (${counts.expense + chunk.length}/${parsed.lpkk.length})...` });
-        counts.expense += await importLPKK({ reportId, branchId, items: chunk });
+        counts.expense += await importLPKK({ reportId, items: chunk });
       }
 
       for (const chunk of salesChunks) {
         setProgress({ current: ++current, total, label: `Penjualan (${counts.sales + chunk.length}/${allSales.length})...` });
-        counts.sales += await importSales({ reportId, branchId, items: chunk });
+        counts.sales += await importSales({ reportId, items: chunk });
       }
 
       if (parsed.vendor.length > 0) {
         setProgress({ current: ++current, total, label: "Vendor/stok..." });
-        counts.vendor = await importVendor({ reportId, branchId, weekStart: parsed.periodStart, items: parsed.vendor });
+        counts.vendor = await importVendor({ reportId, weekStart: parsed.periodStart, items: parsed.vendor });
       }
 
       if (parsed.weeklyFc.length > 0) {
         setProgress({ current: ++current, total, label: "Food cost..." });
-        counts.inventory = await importInventory({ reportId, branchId, valuationDate: parsed.periodEnd, items: parsed.weeklyFc });
+        counts.inventory = await importInventory({ reportId, valuationDate: parsed.periodEnd, items: parsed.weeklyFc });
       }
 
       if (parsed.leftover.length > 0) {
         setProgress({ current: ++current, total, label: "Left over..." });
-        counts.leftover = await importLeftOver({ reportId, branchId, items: parsed.leftover });
+        counts.leftover = await importLeftOver({ reportId, items: parsed.leftover });
       }
 
       if (parsed.kasPeriode.length > 0) {
         setProgress({ current: ++current, total, label: "Laporan kas periode..." });
-        counts.kasPeriode = await importKasPeriode({ reportId, branchId, items: parsed.kasPeriode });
+        counts.kasPeriode = await importKasPeriode({ reportId, items: parsed.kasPeriode });
       }
 
       if (parsed.salesControl.length > 0) {
         setProgress({ current: ++current, total, label: "Sales control..." });
-        counts.salesControl = await importSalesCtrl({ reportId, branchId, items: parsed.salesControl });
+        counts.salesControl = await importSalesCtrl({ reportId, items: parsed.salesControl });
       }
 
       if (parsed.pembelianKredit.length > 0) {
         setProgress({ current: ++current, total, label: "Pembelian kredit..." });
-        counts.creditPurchase = await importKredit({ reportId, branchId, items: parsed.pembelianKredit });
+        counts.creditPurchase = await importKredit({ reportId, items: parsed.pembelianKredit });
       }
 
       if (parsed.ikhtisarFC.length > 0) {
         setProgress({ current: ++current, total, label: "Ikhtisar food cost..." });
-        counts.fcSummary = await importFCSummary({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.ikhtisarFC });
+        counts.fcSummary = await importFCSummary({ reportId, periodStart: parsed.periodStart, items: parsed.ikhtisarFC });
       }
 
       if (parsed.transferTOTI.length > 0) {
         setProgress({ current: ++current, total, label: "Transfer TO-TI..." });
-        counts.transfer = await importTransfer({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.transferTOTI });
+        counts.transfer = await importTransfer({ reportId, periodStart: parsed.periodStart, items: parsed.transferTOTI });
       }
 
       if (parsed.hppProduk.length > 0) {
         setProgress({ current: ++current, total, label: "HPP produk..." });
-        counts.hpp = await importHPP({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.hppProduk });
+        counts.hpp = await importHPP({ reportId, periodStart: parsed.periodStart, items: parsed.hppProduk });
       }
 
       if (parsed.costAnalysis.length > 0) {
         setProgress({ current: ++current, total, label: "Cost analysis..." });
-        counts.costAnalysis = await importCostAn({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.costAnalysis });
+        counts.costAnalysis = await importCostAn({ reportId, periodStart: parsed.periodStart, items: parsed.costAnalysis });
       }
 
       if (parsed.cashFlow.length > 0) {
         setProgress({ current: ++current, total, label: "Cash flow..." });
-        counts.cashFlow = await importCashFlow({ reportId, branchId, items: parsed.cashFlow });
+        counts.cashFlow = await importCashFlow({ reportId, items: parsed.cashFlow });
       }
 
       if (parsed.ownerTransfers.length > 0) {
         setProgress({ current: ++current, total, label: "Transfer owner..." });
-        counts.ownerTransfer = await importOwnerTransfers({ reportId, branchId, items: parsed.ownerTransfers });
+        counts.ownerTransfer = await importOwnerTransfers({ reportId, items: parsed.ownerTransfers });
       }
 
       if (parsed.insentif.length > 0) {
         setProgress({ current: ++current, total, label: "Insentif karyawan..." });
-        counts.incentive = await importIncentive({ reportId, branchId, periodStart: parsed.periodStart, items: parsed.insentif });
+        counts.incentive = await importIncentive({ reportId, periodStart: parsed.periodStart, items: parsed.insentif });
       }
 
       setProgress({ current: total, total, label: "Menyelesaikan..." });
@@ -879,7 +859,7 @@ export default function LaporanUploadPage() {
                 </button>
                 <button
                   onClick={checkAndImport}
-                  disabled={!branchId || totalParsed === 0}
+                  disabled={totalParsed === 0}
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                 >
                   <Upload className="h-4 w-4" />

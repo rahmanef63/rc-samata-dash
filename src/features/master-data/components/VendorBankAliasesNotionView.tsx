@@ -35,8 +35,8 @@ const VIEWS = [
 ];
 const EDITABLE = new Set(["alias", "accountNo"]);
 
-export function VendorBankAliasesNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.closing.queries.listVendorBankAliases, { branchId }) as Row[] | undefined;
+export function VendorBankAliasesNotionView() {
+  const rows = useQuery(api.features.closing.queries.listVendorBankAliases, {}) as Row[] | undefined;
   const vendors = useQuery(api.features.masterData.queries.listVendors, {}) as Array<{ _id: string; name: string }> | undefined;
   const patch = useMutation(api.features.closing.mutations.patchVendorAlias);
   const remove = useMutation(api.features.closing.mutations.deleteVendorAlias);

@@ -63,8 +63,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function DailySalesNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.sales.queries.listByBranch, { branchId }) as Row[] | undefined;
+export function DailySalesNotionView() {
+  const rows = useQuery(api.features.sales.queries.listByBranch, {}) as Row[] | undefined;
   const patch = useMutation(api.features.sales.mutations.patch);
   const remove = useMutation(api.features.sales.mutations.remove);
 

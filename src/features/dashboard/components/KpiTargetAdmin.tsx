@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { Target, Plus, Save } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,28 +17,12 @@ type EditState = Record<
 >;
 
 export function KpiTargetAdmin() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
-
-  const targets = useQuery(
-    api.features.reports.kpiAnalytics.listKPITargets,
-    effectiveBranchId ? { branchId: effectiveBranchId } : "skip",
-  );
+  const targets = useQuery(api.features.reports.kpiAnalytics.listKPITargets, {});
   const seed = useMutation(api.features.reports.kpiAnalytics.seedDefaultKPITargets);
   const updateTarget = useMutation(api.features.reports.kpiAnalytics.updateKPITarget);
 
   const [editing, setEditing] = useState<EditState>({});
   const [savingId, setSavingId] = useState<string | null>(null);
-
-  if (!effectiveBranchId) {
-    return (
-      <div className="p-4 md:p-6">
-        <Card className="p-6 text-center text-sm text-muted-foreground">
-          Pilih cabang dulu di header untuk mengatur target KPI.
-        </Card>
-      </div>
-    );
-  }
 
   if (targets === undefined) {
     return (
@@ -53,7 +36,7 @@ export function KpiTargetAdmin() {
 
   const handleSeed = async () => {
     try {
-      const res = await seed({ branchId: effectiveBranchId });
+      const res = await seed({});
       toast.success(res.message);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal seed target");

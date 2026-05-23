@@ -24,7 +24,6 @@ type CategoryKey = BankCategory;
 
 export function StatementImportPreview({
   rows,
-  branchId,
   fileName,
   uploading,
   onRowsChange,
@@ -32,7 +31,6 @@ export function StatementImportPreview({
   onCancel,
 }: {
   rows: EditableBankRow[];
-  branchId: Id<"branches">;
   fileName: string;
   uploading: boolean;
   onRowsChange: (rows: EditableBankRow[]) => void;
@@ -136,7 +134,7 @@ export function StatementImportPreview({
       </div>
 
       {/* Table */}
-      <PreviewTable rows={filteredRows} branchId={branchId} onRowChange={updateRow} />
+      <PreviewTable rows={filteredRows} onRowChange={updateRow} />
 
       {/* Warning footer */}
       <div className="px-4 pb-3 flex items-center gap-3 flex-wrap">
@@ -222,11 +220,9 @@ function TabBtn({ label, count, active, onClick }: { label: string; count: numbe
 
 function PreviewTable({
   rows,
-  branchId,
   onRowChange,
 }: {
   rows: EditableBankRow[];
-  branchId: Id<"branches">;
   onRowChange: (row: EditableBankRow, patch: Partial<EditableBankRow>) => void;
 }) {
   const { search, setSearch, sort, toggleSort, sortedItems } = useTableState(
@@ -296,7 +292,6 @@ function PreviewTable({
                     <td className="px-1 py-0.5 min-w-[180px]">
                       {cat === "payable_payment" ? (
                         <PayableLinkCombo
-                          branchId={branchId}
                           value={r.payableId ?? null}
                           debit={r.debit}
                           counterpartyHint={r.pihak}

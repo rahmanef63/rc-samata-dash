@@ -15,12 +15,15 @@ export type TxRow = {
   _creationTime: number;
   kind: string;
   direction: string;
-  branchId: string;
   date: string;
   amount: number;
   paidAmount?: number;
   status?: string;
   vendorId?: string;
+  pocketSourceId?: string;
+  paidByStaffId?: string;
+  receivedByStaffId?: string;
+  sourceTier?: string;
   counterparty?: string;
   description?: string;
   reference?: string;

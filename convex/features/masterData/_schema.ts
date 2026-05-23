@@ -8,15 +8,16 @@ import {
   ingredientCategoryValidator,
 } from "./_types";
 
-export const masterDataTables = {
-  branches: defineTable({
-    code: v.string(),
-    name: v.string(),
-    location: v.string(),
-    isActive: v.boolean(),
-    uploadedBy: v.optional(v.string()),
-  }).index("by_code", ["code"]),
+export const fixedAssetCategoryValidator = v.union(
+  v.literal("kitchen_equipment"),
+  v.literal("furniture"),
+  v.literal("vehicle"),
+  v.literal("electronic"),
+  v.literal("building"),
+  v.literal("other"),
+);
 
+export const masterDataTables = {
   vendors: defineTable({
     name: v.string(),
     type: vendorTypeValidator,
@@ -39,10 +40,6 @@ export const masterDataTables = {
     uploadedBy: v.optional(v.string()),
   }),
 
-  /**
-   * Master produk jadi — dari productSales.productName, productHPP.productName.
-   * Digunakan untuk match lintas tabel (sales ↔ HPP ↔ platform).
-   */
   masterProducts: defineTable({
     code: v.string(),
     canonicalName: v.string(),
@@ -55,11 +52,6 @@ export const masterDataTables = {
     .index("by_code", ["code"])
     .index("by_normalized", ["normalizedName"]),
 
-  /**
-   * Master bahan baku — dari vendorPurchases.commodityName, inventoryValuation.itemName,
-   * costAnalysis.itemName, leftoverItems.itemName, creditPurchases.itemName,
-   * productHPP.ingredients[].name.
-   */
   masterIngredients: defineTable({
     code: v.string(),
     canonicalName: v.string(),
@@ -72,33 +64,50 @@ export const masterDataTables = {
     .index("by_code", ["code"])
     .index("by_normalized", ["normalizedName"]),
 
-  /**
-   * DB-backed keyword inference rules. Replaces the static INFERENCE_RULES array
-   * in shared/categoryInference.ts. Read by parsers via useQuery + by server
-   * mutations directly. Order by priority asc — first match wins.
-   */
   categoryRules: defineTable({
-    keyword: v.string(),       // UPPER-cased, can be a multi-word phrase
-    label: v.string(),         // expense category label (matches expenseCategories.name)
-    type: v.string(),          // expense category type ("cogs" | "utility" | "other" | ...)
-    priority: v.number(),      // lower = checked first; default 100
+    keyword: v.string(),
+    label: v.string(),
+    type: v.string(),
+    priority: v.number(),
     isActive: v.boolean(),
-    source: v.optional(v.string()), // "seed" | "user" | "ai"
+    source: v.optional(v.string()),
   })
     .index("by_priority", ["priority"])
     .index("by_keyword", ["keyword"]),
 
-  /**
-   * Known sheet types from the various RC Samata weekly xlsx variants.
-   * `isParsed: true` → parser exists. `isParsed: false` → known but intentionally
-   * skipped (so validateParsedData doesn't show as "Sheet Baru" warning).
-   */
   sheetTypeRegistry: defineTable({
-    sheetNamePattern: v.string(), // case-insensitive substring match
+    sheetNamePattern: v.string(),
     description: v.string(),
     isParsed: v.boolean(),
     parserName: v.optional(v.string()),
     isActive: v.boolean(),
+  }).index("by_pattern", ["sheetNamePattern"]),
+
+  /** Fixed assets / CapEx tracking — kitchen equipment, furniture, etc. */
+  fixedAssets: defineTable({
+    name: v.string(),
+    category: fixedAssetCategoryValidator,
+    acquisitionDate: v.string(),         // YYYY-MM-DD
+    acquisitionCost: v.number(),
+    currentValue: v.optional(v.number()),
+    usefulLifeMonths: v.optional(v.number()),
+    location: v.optional(v.string()),
+    vendorId: v.optional(v.id("vendors")),
+    transactionId: v.optional(v.id("transactions")),
+    isActive: v.boolean(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
-    .index("by_pattern", ["sheetNamePattern"]),
+    .index("by_category", ["category"])
+    .index("by_active", ["isActive"]),
+
+  /** Business glossary — istilah/terminologi operasional. */
+  glossaryTerms: defineTable({
+    term: v.string(),
+    definition: v.string(),
+    category: v.optional(v.string()),    // "finance" | "operasional" | "hr"
+    aliases: v.optional(v.array(v.string())),
+    updatedAt: v.optional(v.number()),
+  }).index("by_term", ["term"]),
 };

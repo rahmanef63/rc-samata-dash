@@ -2,42 +2,30 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const reportsTables = {
-  /** Header record per file LAP yang diupload. */
   weeklyReports: defineTable({
-    branchId: v.id("branches"),
     fileName: v.string(),
-    /** Original xlsx persisted to Convex storage for re-download/comparison. Optional for legacy rows. */
     fileStorageId: v.optional(v.id("_storage")),
     periodStart: v.string(),
     periodEnd: v.string(),
     uploadedBy: v.string(),
     uploadedAt: v.number(),
     status: v.union(v.literal("pending"), v.literal("processed"), v.literal("error")),
-    /** Validation tracking — "clean" = no issues, "needs_review" = has notes, "validated" = user confirmed OK */
     validationStatus: v.optional(v.union(v.literal("clean"), v.literal("needs_review"), v.literal("validated"))),
-    /** Stored validation notes from upload (JSON array of {severity, category, message, tip}) */
     validationNotes: v.optional(v.array(v.object({
       severity: v.string(),
       category: v.string(),
       message: v.string(),
       tip: v.string(),
     }))),
-    /**
-     * Sheet names in the uploaded xlsx that no parser matched. Lets the
-     * UI flag "data we haven't prepared yet" — owner can request a parser
-     * for a new sheet type without losing the upload.
-     */
     unknownSheets: v.optional(v.array(v.string())),
     expenseCount: v.optional(v.number()),
     salesCount: v.optional(v.number()),
     vendorCount: v.optional(v.number()),
     inventoryCount: v.optional(v.number()),
-    // Tambahan sheet baru
     leftoverCount: v.optional(v.number()),
     kasPeriodeCount: v.optional(v.number()),
     salesControlCount: v.optional(v.number()),
     creditPurchaseCount: v.optional(v.number()),
-    // Phase 2 sheets
     foodCostSummaryCount: v.optional(v.number()),
     transferCount: v.optional(v.number()),
     hppCount: v.optional(v.number()),
@@ -45,22 +33,11 @@ export const reportsTables = {
     cashFlowCount: v.optional(v.number()),
     incentiveCount: v.optional(v.number()),
   })
-    .index("by_branch", ["branchId"])
-    .index("by_branch_period", ["branchId", "periodStart"]),
+    .index("by_period", ["periodStart"])
+    .index("by_uploadedAt", ["uploadedAt"]),
 
-  /**
-   * Penjualan harian per produk — dari sheet LAP. PENJUALAN,
-   * LAP. PENJUALAN GRAB FOOD, GO FOOD, SHOPEE FOOD.
-   * channel: "all" | "grabfood" | "gofood" | "shopeefood" | "ovo" |
-   *          "dana" | "qris" | "tambahan"
-   * Stored as optional string (no enum guard) so new platforms can
-   * be added without schema migration; production code should refer
-   * to convex/shared/validators.ts:incomeChannelTypeValidator for
-   * the canonical list.
-   */
   productSales: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     businessDate: v.string(),
     productName: v.string(),
     qty: v.number(),
@@ -70,13 +47,11 @@ export const reportsTables = {
     channel: v.optional(v.string()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "businessDate"])
+    .index("by_date", ["businessDate"])
     .index("by_report_channel", ["reportId", "channel"]),
 
-  /** Pembelian & stok bahan mingguan per komoditi — dari sheet VENDOR. */
   vendorPurchases: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     weekStart: v.string(),
     commodityName: v.string(),
     section: v.optional(v.string()),
@@ -91,15 +66,10 @@ export const reportsTables = {
     prevWeekValue: v.optional(v.number()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_week", ["branchId", "weekStart"]),
+    .index("by_week", ["weekStart"]),
 
-  /** Valuasi inventory / food cost — dari sheet WEEKLY FC.
-   *  `category` (string) di-keep buat back-compat + display, `categoryId`
-   *  (FK) di-set oleh ETL via lookup ke expenseCategories master. SSOT:
-   *  FK adalah truth; string adalah cache. */
   inventoryValuation: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     valuationDate: v.string(),
     category: v.string(),
     categoryId: v.optional(v.id("expenseCategories")),
@@ -110,30 +80,20 @@ export const reportsTables = {
     totalValue: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "valuationDate"])
+    .index("by_date", ["valuationDate"])
     .index("by_category", ["categoryId"]),
 
-  /**
-   * Left over / spoilage harian per item — dari sheet LEFT OVER.
-   * Satu record = satu item, satu hari.
-   */
   leftoverItems: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     businessDate: v.string(),
     itemName: v.string(),
     qty: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "businessDate"]),
+    .index("by_date", ["businessDate"]),
 
-  /**
-   * Ringkasan kas & penjualan harian — dari sheet LAPORAN KAS PERIODE.
-   * Satu record = satu hari.
-   */
   dailyCashSummary: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     businessDate: v.string(),
     grossSales: v.number(),
     komisiGofood: v.number(),
@@ -144,15 +104,10 @@ export const reportsTables = {
     netSales: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "businessDate"]),
+    .index("by_date", ["businessDate"]),
 
-  /**
-   * Kontrol penjualan harian — dari sheet SALES CONTROL.
-   * Berisi net sales, customer count, target, dll.
-   */
   salesControl: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     businessDate: v.string(),
     netSales: v.number(),
     customerCount: v.number(),
@@ -161,14 +116,10 @@ export const reportsTables = {
     achievementPct: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "businessDate"]),
+    .index("by_date", ["businessDate"]),
 
-  /**
-   * Pembelian kredit dari supplier — dari sheet PEMBELIAN KREDIT.
-   */
   creditPurchases: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     purchaseDate: v.string(),
     supplierName: v.string(),
     itemName: v.string(),
@@ -177,20 +128,14 @@ export const reportsTables = {
     unitPrice: v.number(),
     totalAmount: v.number(),
     dueDate: v.optional(v.string()),
-    // Sheet "PEMBELIAN KREDIT" col 7 (LAMA KREDIT in days) + col 10 (TANGGAL DIBAYAR)
     creditDays: v.optional(v.number()),
     paidDate: v.optional(v.string()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "purchaseDate"]),
+    .index("by_date", ["purchaseDate"]),
 
-  /**
-   * Ikhtisar food cost per kategori — dari sheet IKHTISAR FOOD COST.
-   * Satu record = satu kategori bahan (ayam, es, minyak, dll).
-   */
   foodCostSummary: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     category: v.string(),
     categoryId: v.optional(v.id("expenseCategories")),
@@ -204,16 +149,11 @@ export const reportsTables = {
     foodCostPct: v.optional(v.number()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"])
+    .index("by_period", ["periodStart"])
     .index("by_category", ["categoryId"]),
 
-  /**
-   * Transfer Out / Transfer In — dari sheet TO - TI.
-   * Perkedel, catering, staff meal, free items, dll.
-   */
   transferItems: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     direction: v.union(v.literal("out"), v.literal("in")),
     category: v.string(),
@@ -224,16 +164,11 @@ export const reportsTables = {
     totalValue: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"])
+    .index("by_period", ["periodStart"])
     .index("by_category", ["categoryId"]),
 
-  /**
-   * HPP per produk — dari sheet HITUNGAN HPP PRODUK + FOOD COST ITEM KELAS.
-   * Satu record = satu produk dengan daftar ingredients.
-   */
   productHPP: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     productName: v.string(),
     pricingClass: v.union(
@@ -254,16 +189,11 @@ export const reportsTables = {
     }))),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_product", ["branchId", "productName"])
+    .index("by_product", ["productName"])
     .index("by_report_class", ["reportId", "pricingClass"]),
 
-  /**
-   * Cost analysis per item — dari sheet COST ANALYSIS.
-   * Opening, purchase, usage, closing, variance.
-   */
   costAnalysis: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     itemName: v.string(),
     unit: v.optional(v.string()),
@@ -278,15 +208,10 @@ export const reportsTables = {
     variance: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"]),
+    .index("by_period", ["periodStart"]),
 
-  /**
-   * Arus kas harian — dari sheet LAP. CF.
-   * Satu record = satu hari.
-   */
   dailyCashFlow: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     businessDate: v.string(),
     openingBalance: v.number(),
     salesInflow: v.number(),
@@ -296,14 +221,10 @@ export const reportsTables = {
     closingBalance: v.number(),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_date", ["branchId", "businessDate"]),
+    .index("by_date", ["businessDate"]),
 
-  /**
-   * Insentif karyawan — dari sheet INSENTIF.
-   */
   employeeIncentives: defineTable({
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     employeeName: v.string(),
     incentiveType: v.string(),
@@ -311,14 +232,9 @@ export const reportsTables = {
     notes: v.optional(v.string()),
   })
     .index("by_report", ["reportId"])
-    .index("by_branch_period", ["branchId", "periodStart"]),
+    .index("by_period", ["periodStart"]),
 
-  /**
-   * Pergantian produk / bahan — dari file "RC SAMATA PERGANTIAN PRODUK".
-   * Satu record = satu bahan yang diganti/dibuang dalam periode tertentu.
-   */
   productChanges: defineTable({
-    branchId: v.id("branches"),
     fileName: v.string(),
     periodLabel: v.string(),
     uploadedAt: v.number(),
@@ -329,16 +245,9 @@ export const reportsTables = {
     qty: v.number(),
     ppn: v.number(),
     totalPrice: v.number(),
-  })
-    .index("by_branch", ["branchId"])
-    .index("by_branch_period", ["branchId", "periodLabel"]),
+  }).index("by_period", ["periodLabel"]),
 
-  /**
-   * KPI targets per branch — target vs actual benchmarks for QSR operations.
-   * Seeded with standard Rocket Chicken targets, editable per branch.
-   */
   kpiTargets: defineTable({
-    branchId: v.id("branches"),
     effectiveFrom: v.string(),
     kpiCode: v.string(),
     kpiLabel: v.string(),
@@ -347,16 +256,9 @@ export const reportsTables = {
     dangerThreshold: v.number(),
     unit: v.string(),
     direction: v.union(v.literal("lower_is_better"), v.literal("higher_is_better")),
-  })
-    .index("by_branch", ["branchId"])
-    .index("by_branch_kpi", ["branchId", "kpiCode"]),
+  }).index("by_kpi", ["kpiCode"]),
 
-  /**
-   * Tunjangan khusus karyawan — dari file "FORM PENGAJUAN TUNJANGAN KHUSUS".
-   * Satu record = satu karyawan dengan detail tunjangan.
-   */
   employeeAllowances: defineTable({
-    branchId: v.id("branches"),
     fileName: v.string(),
     periodLabel: v.string(),
     uploadedAt: v.number(),
@@ -373,7 +275,5 @@ export const reportsTables = {
     budgetKosAmount: v.number(),
     reimburseNote: v.optional(v.string()),
     kosNote: v.optional(v.string()),
-  })
-    .index("by_branch", ["branchId"])
-    .index("by_employee", ["branchId", "employeeName"]),
+  }).index("by_employee", ["employeeName"]),
 };

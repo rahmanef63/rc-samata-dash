@@ -2,7 +2,6 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Page, PropertyValue } from "@/features/notion-shell/types";
 import { EntityNotionView } from "@/features/notion-shell-wrapper/EntityNotionView";
 
@@ -36,8 +35,8 @@ const VIEWS = [
   { id: "v_board", name: "Board (Status)", type: "board" as const, groupBy: "status", sorts: [], filters: [], search: "" },
 ];
 
-export function BankStatementBatchesNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.closing.queries.listBankStatementBatches, { branchId }) as Row[] | undefined;
+export function BankStatementBatchesNotionView() {
+  const rows = useQuery(api.features.closing.queries.listBankStatementBatches, {}) as Row[] | undefined;
 
   return (
     <EntityNotionView<Row>

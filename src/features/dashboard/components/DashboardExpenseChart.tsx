@@ -6,14 +6,11 @@ import { api } from "../../../../convex/_generated/api";
 import { PieChartCard } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardExpenseChart() {
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const expenseData = useQuery(
     api.features.reports.dashboardQueries.getExpenseBreakdown,
-    branchId ? { branchId } : "skip",
+    {},
   );
 
   if (!expenseData) {

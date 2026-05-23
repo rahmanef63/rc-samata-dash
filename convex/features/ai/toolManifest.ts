@@ -16,7 +16,6 @@ export type AiToolCall = {
   query?: string;
   action?: string;
   args?: Record<string, unknown>;
-  branchId?: string;
   reportId?: string;
   period?: string;
   month?: string;
@@ -31,7 +30,6 @@ export type AiRouteDecision =
       query?: string;
       action?: string;
       args?: Record<string, unknown>;
-      branchId?: string;
       reportId?: string;
       period?: string;
       month?: string;
@@ -44,7 +42,6 @@ export type AiRouteDecision =
       query?: string;
       action?: string;
       args?: Record<string, unknown>;
-      branchId?: string;
       reportId?: string;
       period?: string;
       month?: string;
@@ -383,7 +380,7 @@ export function extractToolRouteDecision(content: string): AiRouteDecision | nul
       if (!agentId) return null;
 
       const decision: AiRouteDecision = { mode: "agent", agentId };
-      for (const key of ["query", "action", "branchId", "reportId", "period", "month", "year", "expression"] as const) {
+      for (const key of ["query", "action", "reportId", "period", "month", "year", "expression"] as const) {
         if (typeof parsed[key] === "string") (decision as Extract<AiRouteDecision, { mode: "agent" }>)[key] = parsed[key];
       }
       if (parsed.args && typeof parsed.args === "object" && !Array.isArray(parsed.args)) {
@@ -396,7 +393,7 @@ export function extractToolRouteDecision(content: string): AiRouteDecision | nul
     if (!toolId) return null;
 
     const call: AiRouteDecision = { mode: "tool", toolId };
-    for (const key of ["query", "action", "branchId", "reportId", "period", "month", "year", "expression"] as const) {
+    for (const key of ["query", "action", "reportId", "period", "month", "year", "expression"] as const) {
       if (typeof parsed[key] === "string") (call as Extract<AiRouteDecision, { mode: "tool" }>)[key] = parsed[key];
     }
     if (parsed.args && typeof parsed.args === "object" && !Array.isArray(parsed.args)) {

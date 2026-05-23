@@ -7,29 +7,16 @@ import { api } from "../../../../convex/_generated/api";
 import { AreaChartCard, TransactionRow, SectionHeader } from "@/shared/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRpFull } from "@/shared/lib";
-import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 
 export function CashflowOverview() {
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
-
-  const waterfall = useQuery(
-    api.features.reports.dashboardQueries.getCashflowWaterfall,
-    branchId ? { branchId } : "skip"
-  );
-  const rawRecentTx = useQuery(
-    api.features.reports.dashboardQueries.getRecentTransactions,
-    branchId ? { branchId } : "skip"
-  );
-  const rawWeeklySales = useQuery(
-    api.features.reports.dashboardQueries.getWeeklySalesTrend,
-    branchId ? { branchId } : "skip"
-  );
+  const waterfall = useQuery(api.features.reports.dashboardQueries.getCashflowWaterfall, {});
+  const rawRecentTx = useQuery(api.features.reports.dashboardQueries.getRecentTransactions, {});
+  const rawWeeklySales = useQuery(api.features.reports.dashboardQueries.getWeeklySalesTrend, {});
   const recentTx = useFilteredByDate(rawRecentTx, "time");
   const weeklySales = useFilteredByDate(rawWeeklySales, "date");
 
-  if (!branches || !waterfall || !rawRecentTx) {
+  if (!waterfall || !rawRecentTx) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-28 w-full rounded-2xl" />

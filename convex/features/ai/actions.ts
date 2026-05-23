@@ -544,7 +544,6 @@ async function executeToolCall(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ctx: any,
   toolCall: AiToolCall,
-  branchId?: string
 ): Promise<ToolExecutionResult | null> {
   const queryText = (toolCall.query || toolCall.action || "").trim();
   const normalized = normalizeQueryText(queryText);
@@ -552,35 +551,34 @@ async function executeToolCall(
   switch (toolCall.toolId) {
     case "generateChart": {
       if (/cashflow|arus kas/i.test(queryText)) {
-        return executeToolCall(ctx, { ...toolCall, toolId: "cashflow_summary" }, branchId);
+        return executeToolCall(ctx, { ...toolCall, toolId: "cashflow_summary" });
       }
       if (/expense|pengeluaran|biaya/i.test(queryText)) {
-        return executeToolCall(ctx, { ...toolCall, toolId: "expense_breakdown" }, branchId);
+        return executeToolCall(ctx, { ...toolCall, toolId: "expense_breakdown" });
       }
-      return executeToolCall(ctx, { ...toolCall, toolId: "trend_analysis" }, branchId);
+      return executeToolCall(ctx, { ...toolCall, toolId: "trend_analysis" });
     }
 
     case "generateKPICards":
-      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" }, branchId);
+      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" });
 
     case "generateComparisonTable":
-      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" }, branchId);
+      return executeToolCall(ctx, { ...toolCall, toolId: "kpi_check" });
 
     case "generateActionList":
       return executeToolCall(
         ctx,
         { ...toolCall, toolId: /waste|boros/i.test(queryText) ? "waste_analysis" : "kpi_check" },
-        branchId
       );
 
     case "generateTable":
       if (/petty cash/i.test(queryText)) {
-        return executeToolCall(ctx, { ...toolCall, toolId: "petty_cash_summary" }, branchId);
+        return executeToolCall(ctx, { ...toolCall, toolId: "petty_cash_summary" });
       }
       if (/waste|boros/i.test(queryText)) {
-        return executeToolCall(ctx, { ...toolCall, toolId: "waste_analysis" }, branchId);
+        return executeToolCall(ctx, { ...toolCall, toolId: "waste_analysis" });
       }
-      return executeToolCall(ctx, { ...toolCall, toolId: "recent_transactions" }, branchId);
+      return executeToolCall(ctx, { ...toolCall, toolId: "recent_transactions" });
 
     case "rag_database": {
       if (!queryText) return null;
@@ -588,7 +586,6 @@ async function executeToolCall(
         internal.features.ai.search.semanticSearch,
         {
           query: queryText,
-          branchId,
           limit: 8,
         }
       ) as Array<{ text: string; score: number; sourceTable: string; periodKey: string }>;
@@ -615,14 +612,6 @@ async function executeToolCall(
     }
 
     case "kpi_check": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "KPI & Target",
-          summary: "Branch belum tersedia untuk menghitung KPI.",
-        };
-      }
-
       const timeFilter =
         normalized.includes("minggu") || normalized.includes("weekly")
           ? "weekly"
@@ -635,7 +624,6 @@ async function executeToolCall(
                 : "monthly";
 
       const result = await ctx.runQuery(internal.features.reports.kpiAnalytics.getKPIDashboardInternal, {
-        branchId: branchId as never,
         timeFilter,
       }) as { kpis: Array<{ kpiLabel: string; actual: number; target: number; unit: string; status: string }>; hasTargets: boolean };
 
@@ -661,26 +649,14 @@ async function executeToolCall(
     }
 
     case "trend_analysis": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Analisis Tren",
-          summary: "Branch belum tersedia untuk analisis tren.",
-        };
-      }
-
       const useMonthly =
         normalized.includes("bulan") ||
         normalized.includes("monthly") ||
         normalized.includes("30 hari");
 
       const result = useMonthly
-        ? await ctx.runQuery(internal.features.reports.dashboardQueries.getMonthlySalesTrendInternal, {
-            branchId: branchId as never,
-          }) as Array<{ label: string; date: string; value: number }>
-        : await ctx.runQuery(internal.features.reports.dashboardQueries.getWeeklySalesTrendInternal, {
-            branchId: branchId as never,
-          }) as Array<{ label: string; date: string; value: number }>;
+        ? await ctx.runQuery(internal.features.reports.dashboardQueries.getMonthlySalesTrendInternal, {}) as Array<{ label: string; date: string; value: number }>
+        : await ctx.runQuery(internal.features.reports.dashboardQueries.getWeeklySalesTrendInternal, {}) as Array<{ label: string; date: string; value: number }>;
 
       return {
         toolId: toolCall.toolId,
@@ -693,21 +669,13 @@ async function executeToolCall(
     }
 
     case "petty_cash_summary": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Ringkasan Petty Cash",
-          summary: "Branch belum tersedia untuk menghitung petty cash.",
-        };
-      }
-
       const explicitYearMonth =
         toolCall.year && toolCall.month ? `${toolCall.year}-${String(toolCall.month).padStart(2, "0")}` : null;
       const yearMonth = explicitYearMonth || parseYearMonthFromQuery(queryText) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
       const summary = await ctx.runQuery(
         internal.features.pettyCash.queries.getMonthlySummaryInternal,
-        { branchId: branchId as never, yearMonth } as never
+        { yearMonth } as never
       ) as PettyCashMonthlySummary;
 
       if (!summary.count) {
@@ -739,17 +707,7 @@ async function executeToolCall(
     }
 
     case "cashflow_summary": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Ringkasan Cashflow",
-          summary: "Branch belum tersedia untuk menghitung cashflow.",
-        };
-      }
-
-      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getCashflowWaterfallInternal, {
-        branchId: branchId as never,
-      }) as Array<{ name: string; value: number }>;
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getCashflowWaterfallInternal, {}) as Array<{ name: string; value: number }>;
 
       return {
         toolId: toolCall.toolId,
@@ -762,17 +720,7 @@ async function executeToolCall(
     }
 
     case "expense_breakdown": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Breakdown Expense",
-          summary: "Branch belum tersedia untuk menghitung expense.",
-        };
-      }
-
-      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getExpenseBreakdownInternal, {
-        branchId: branchId as never,
-      }) as Array<{ name: string; value: number }>;
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getExpenseBreakdownInternal, {}) as Array<{ name: string; value: number }>;
 
       return {
         toolId: toolCall.toolId,
@@ -785,17 +733,7 @@ async function executeToolCall(
     }
 
     case "recent_transactions": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Transaksi Terbaru",
-          summary: "Branch belum tersedia untuk mengambil transaksi terbaru.",
-        };
-      }
-
-      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getRecentTransactionsInternal, {
-        branchId: branchId as never,
-      }) as Array<{ name: string; type: string; amount: string; time: string; status: string }>;
+      const result = await ctx.runQuery(internal.features.reports.dashboardQueries.getRecentTransactionsInternal, {}) as Array<{ name: string; type: string; amount: string; time: string; status: string }>;
 
       return {
         toolId: toolCall.toolId,
@@ -808,17 +746,7 @@ async function executeToolCall(
     }
 
     case "waste_analysis": {
-      if (!branchId) {
-        return {
-          toolId: toolCall.toolId,
-          title: "Analisis Waste",
-          summary: "Branch belum tersedia untuk analisis waste.",
-        };
-      }
-
-      const waste = await ctx.runQuery(internal.features.reports.analytics.getWasteAnalysisInternal, {
-        branchId: branchId as never,
-      }) as {
+      const waste = await ctx.runQuery(internal.features.reports.analytics.getWasteAnalysisInternal, {}) as {
         topWastedItems: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
         topWastedByQty: Array<{ itemName: string; totalQty: number; estimatedCost: number }>;
         totalWasteCost: number;
@@ -853,7 +781,7 @@ async function executeToolCall(
 
     case "laporan_query": {
       if (!queryText) return null;
-      return executeToolCall(ctx, { ...toolCall, toolId: "rag_database" }, branchId);
+      return executeToolCall(ctx, { ...toolCall, toolId: "rag_database" });
     }
 
     case "calculator": {
@@ -909,7 +837,6 @@ async function executeAgentFlow(
   },
   model: string,
   messages: Message[],
-  branchId: string | undefined,
   agentId: string
 ): Promise<{
   content: string;
@@ -1000,14 +927,12 @@ async function executeAgentFlow(
         query: routeDecision.query,
         action: routeDecision.action,
         args: routeDecision.args,
-        branchId: routeDecision.branchId,
         reportId: routeDecision.reportId,
         period: routeDecision.period,
         month: routeDecision.month,
         year: routeDecision.year,
         expression: routeDecision.expression,
       },
-      branchId
     );
 
     if (!toolResult) {
@@ -1048,7 +973,6 @@ export const chatCompletion = action({
       })
     ),
     useRag: v.optional(v.boolean()),
-    branchId: v.optional(v.id("branches")),
   },
   handler: async (ctx, args): Promise<{
     content: string;
@@ -1092,7 +1016,6 @@ export const chatCompletion = action({
               internal.features.ai.search.semanticSearch,
               {
                 query: lastUserMsg.content,
-                branchId: args.branchId,
                 limit: 8,
               }
             );
@@ -1137,7 +1060,6 @@ export const chatCompletion = action({
       ...chatMessages,
     ];
 
-    const branchId = args.branchId ? String(args.branchId) : undefined;
     const routerResponse = await requestModelCompletion(provider, model, routerMessages, {
       temperature: 0,
       maxTokens: 1024,
@@ -1172,7 +1094,6 @@ export const chatCompletion = action({
         provider,
         model,
         chatMessages,
-        branchId,
         routeDecision.agentId
       );
 
@@ -1192,14 +1113,12 @@ export const chatCompletion = action({
         query: routeDecision.query,
         action: routeDecision.action,
         args: routeDecision.args,
-        branchId: routeDecision.branchId,
         reportId: routeDecision.reportId,
         period: routeDecision.period,
         month: routeDecision.month,
         year: routeDecision.year,
         expression: routeDecision.expression,
       },
-      branchId
     );
 
     if (!toolResult) {

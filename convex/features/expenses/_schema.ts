@@ -15,17 +15,11 @@ export const expensesTables = {
     paymentSource: expensePaymentSourceValidator,
     status: expenseStatusValidator,
     hasAttachment: v.boolean(),
-    branchId: v.id("branches"),
     etlSource: etlSourceValidator,
-    // Direct FK to the weekly report that produced this row.
-    // Lets `deleteWeeklyReport` cascade-purge derived expenses cheaply
-    // via an index instead of scanning every row's nested etlSource.
     sourceReportId: v.optional(v.id("weeklyReports")),
-    // Bridge FK ke Buku Besar (transactions) — mirror row di SSOT.
-    // Cascade delete pakai field ini supaya tx ikut terhapus saat expense dihapus.
     transactionId: v.optional(v.id("transactions")),
   })
-    .index("by_branch_date", ["branchId", "expenseDate"])
+    .index("by_date", ["expenseDate"])
     .index("by_status", ["status"])
     .index("by_source_report", ["sourceReportId"])
     .index("by_transaction", ["transactionId"]),

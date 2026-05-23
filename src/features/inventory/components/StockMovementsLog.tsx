@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Package, ArrowDownLeft, ArrowUpRight, Wrench, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,11 +46,9 @@ const TYPE_META: Record<
 const TYPE_OPTIONS = ["all", "stock_in", "usage", "adjustment", "waste"] as const;
 
 export function StockMovementsLog() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
   const movements = useQuery(
     api.features.inventory.queries.listAllMovements,
-    effectiveBranchId ? { branchId: effectiveBranchId } : "skip",
+    {},
   );
 
   const [typeFilter, setTypeFilter] = useState<string>("all");

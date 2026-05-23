@@ -58,7 +58,6 @@ export const myPreferences = query({
       .first();
     return {
       theme: row?.theme ?? "system",
-      defaultBranchId: row?.defaultBranchId ?? null,
       notifAnomaly: row?.notifAnomaly ?? false,
       notifEmail: row?.notifEmail ?? false,
     };

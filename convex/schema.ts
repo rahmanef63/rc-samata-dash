@@ -1,9 +1,10 @@
 /**
  * Convex Schema — SSOT Aggregator
  *
- * This file dynamically gathers all table definitions from each feature's
- * _schema.ts. To add/edit tables, modify the feature's own _schema.ts file,
- * NOT this file directly.
+ * Single-tenant (RC Samata Gowa). No `branches` table — sengaja dihapus
+ * 2026-05-23 karena tidak akan ada cabang lain.
+ *
+ * To add/edit tables, modify the feature's own _schema.ts file.
  */
 import { defineSchema } from "convex/server";
 import { authTables } from "@convex-dev/auth/server";
@@ -22,6 +23,9 @@ import { aiTables } from "./features/ai/_schema";
 import { authExtensionTables } from "./features/auth/_schema";
 import { dailyReportValidationTables } from "./features/dailyReportValidation/_schema";
 import { transactionsTables } from "./features/transactions/_schema";
+import { pocketsTables } from "./features/pockets/_schema";
+import { hrTables } from "./features/hr/_schema";
+import { waAuditTables } from "./features/waAudit/_schema";
 
 // ─── Merge all feature tables into one schema ───────────────
 export default defineSchema({
@@ -39,4 +43,7 @@ export default defineSchema({
   ...aiTables,
   ...dailyReportValidationTables,
   ...transactionsTables,
+  ...pocketsTables,
+  ...hrTables,
+  ...waAuditTables,
 });

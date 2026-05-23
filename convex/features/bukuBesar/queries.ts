@@ -10,22 +10,18 @@ import { PARTY } from "../../projectConstants";
 // the bulk-edit dispatcher route patches back to the correct source.
 
 export const listBukuBesar = query({
-  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
-  handler: async (ctx, { branchId, limit }) => {
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
     await requireAuth(ctx);
     const cap = limit ?? LIMITS.TX_PAGE;
 
-    const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(cap);
+    const payables = await ctx.db.query("payables").take(cap);
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(cap);
-    const transfers = await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(cap);
+    const transfers = await ctx.db.query("ownerTransfers").take(cap);
     const closings = await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(cap);
 
     type Row = {
@@ -132,17 +128,15 @@ export const listBukuBesar = query({
 
 // Counts per kind for filter-chip badges
 export const countBukuBesar = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(LIMITS.PAYABLES_PAGE);
+    const payables = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(LIMITS.RECEIPTS_PAGE);
-    const transfers = await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId)).take(LIMITS.OWNER_TRANSFERS_PAGE);
+      .withIndex("by_date").take(LIMITS.RECEIPTS_PAGE);
+    const transfers = await ctx.db.query("ownerTransfers").take(LIMITS.OWNER_TRANSFERS_PAGE);
     const closings = await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).take(LIMITS.CLOSINGS_PAGE);
+      .withIndex("by_date").take(LIMITS.CLOSINGS_PAGE);
     const anomalyCount = receipts.filter((r) => r.anomalyFlag && r.anomalyFlag !== "ok").length;
     return {
       tagihan: payables.length,

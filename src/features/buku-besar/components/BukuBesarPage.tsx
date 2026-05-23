@@ -7,16 +7,15 @@ import {
   BookOpen, Pencil, Trash2, Upload, Download, Loader2,
   FileSpreadsheet, MessageSquareText, Landmark, FilePlus2,
 } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useBukuBesar, useBukuBesarCounts, useBulkDelete } from "../api";
 import { BukuBesarTable, type BukuBesarRow } from "./BukuBesarTable";
 import { BulkEditDialog } from "./BulkEditDialog";
 import { KIND_LABEL } from "../constants/kind";
 
-export function BukuBesarPage({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useBukuBesar(branchId);
-  const counts = useBukuBesarCounts(branchId);
+export function BukuBesarPage() {
+  const rows = useBukuBesar();
+  const counts = useBukuBesarCounts();
   const bulkDelete = useBulkDelete();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -35,7 +34,6 @@ export function BukuBesarPage({ branchId }: { branchId: Id<"branches"> }) {
     setDeleting(true);
     try {
       const res = await bulkDelete({
-        branchId,
         targets: selectedRows.map((r) => ({ id: r.id, sourceTable: r.sourceTable })),
       });
       toast.success(`${res.deleted} row dihapus`);
@@ -153,7 +151,6 @@ export function BukuBesarPage({ branchId }: { branchId: Id<"branches"> }) {
         open={bulkEditOpen}
         onClose={() => setBulkEditOpen(false)}
         rows={selectedRows}
-        branchId={branchId}
       />
 
       {/* Single-row edit (uses same BulkEditDialog with 1 item) */}
@@ -161,7 +158,6 @@ export function BukuBesarPage({ branchId }: { branchId: Id<"branches"> }) {
         open={!!editRow}
         onClose={() => setEditRow(null)}
         rows={editRow ? [editRow] : []}
-        branchId={branchId}
       />
     </div>
   );

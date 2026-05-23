@@ -5,14 +5,13 @@ import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { AlertTriangle, Info, Loader2, Upload, FileText, Search } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useTableState } from "@/shared/hooks/useTableState";
 import { SortableTh } from "@/shared/components";
 import { formatRpFull } from "@/shared/lib";
 import { cn } from "@/lib/utils";
 import { parseClosingCsv, buildClosingCsvTemplate, type ClosingCsvRow } from "../parsers/parseClosingCsv";
 
-export function ClosingImportPreview({ branchId }: { branchId: Id<"branches"> }) {
+export function ClosingImportPreview() {
   const importClosings = useMutation(api.features.closing.mutations.importDailyClosings);
   const [rows, setRows] = useState<ClosingCsvRow[]>([]);
   const [errors, setErrors] = useState<{ line: number; message: string }[]>([]);
@@ -66,7 +65,6 @@ export function ClosingImportPreview({ branchId }: { branchId: Id<"branches"> })
     setCommitting(true);
     try {
       const res = await importClosings({
-        branchId,
         submittedBy: "csv-import",
         rows: rows.map((r) => ({
           businessDate: r.businessDate,

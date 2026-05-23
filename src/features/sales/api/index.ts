@@ -2,10 +2,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-export const useDailySales = (branchId: string, businessDate?: string) =>
-  useQuery(api.features.sales.queries.listByBranch,
-    branchId ? { branchId: branchId as Id<"branches">, businessDate } : "skip"
-  );
+export const useDailySales = (businessDate?: string) =>
+  useQuery(api.features.sales.queries.listByBranch, { businessDate });
 
 export const useDailySale = (id: string) =>
   useQuery(api.features.sales.queries.getById, id ? { id: id as Id<"dailySales"> } : "skip");

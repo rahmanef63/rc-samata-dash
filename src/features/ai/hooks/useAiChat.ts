@@ -40,7 +40,7 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
   }));
 
   const sendMessage = useCallback(
-    async (content: string, systemPrompt?: string, branchId?: Id<"branches">) => {
+    async (content: string, systemPrompt?: string) => {
       if (!sessionId || !content.trim()) return;
 
       setError(null);
@@ -66,7 +66,6 @@ export function useAiChat(sessionId: Id<"aiChatSessions"> | null) {
         const result = await chatCompletion({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
           useRag: true,
-          branchId,
         });
 
         // Store assistant response

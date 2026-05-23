@@ -1,20 +1,12 @@
 "use client";
 
-import { useQuery } from "convex/react";
 import { MessageSquareText, History } from "lucide-react";
-import { api } from "../../../../../convex/_generated/api";
 import { WhatsAppValidator } from "@/features/daily-report-validation/components/WhatsAppValidator";
 import { useDailyReportValidations } from "@/features/daily-report-validation/api";
 import { cn } from "@/lib/utils";
 
 export default function ValidasiHarianPage() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
-  const history = useDailyReportValidations(branchId);
-
-  if (!branchId) {
-    return <p className="p-8 text-center text-sm text-muted-foreground">Memuat cabang...</p>;
-  }
+  const history = useDailyReportValidations();
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
@@ -29,7 +21,7 @@ export default function ValidasiHarianPage() {
         </p>
       </header>
 
-      <WhatsAppValidator branchId={branchId} />
+      <WhatsAppValidator />
 
       <section className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">

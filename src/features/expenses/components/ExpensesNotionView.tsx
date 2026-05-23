@@ -70,8 +70,8 @@ function expenseToPage(e: ExpenseRow): Page {
   };
 }
 
-export function ExpensesNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.expenses.queries.listByBranch, { branchId }) as ExpenseRow[] | undefined;
+export function ExpensesNotionView() {
+  const rows = useQuery(api.features.expenses.queries.listByBranch, {}) as ExpenseRow[] | undefined;
   const expenseCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
   const patch = useMutation(api.features.expenses.mutations.patch);
   const remove = useMutation(api.features.expenses.mutations.remove);

@@ -3,10 +3,10 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 
 export const listByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("expenses").withIndex("by_branch_date", (q) => q.eq("branchId", args.branchId)).order("desc").take(100);
+    return await ctx.db.query("expenses").withIndex("by_date").order("desc").take(100);
   },
 });
 

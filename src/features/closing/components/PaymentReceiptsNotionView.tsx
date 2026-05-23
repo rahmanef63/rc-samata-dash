@@ -62,8 +62,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function PaymentReceiptsNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.closing.queries.listPaymentReceipts, { branchId }) as Row[] | undefined;
+export function PaymentReceiptsNotionView() {
+  const rows = useQuery(api.features.closing.queries.listPaymentReceipts, {}) as Row[] | undefined;
   const patch = useMutation(api.features.closing.mutations.patchPaymentReceipt);
   const remove = useMutation(api.features.closing.mutations.removePaymentReceipt);
 

@@ -78,8 +78,8 @@ function pettyCashToPage(r: PettyCashRow): Page {
   };
 }
 
-export function PettyCashNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.pettyCash.queries.listByBranch, { branchId }) as PettyCashRow[] | undefined;
+export function PettyCashNotionView() {
+  const rows = useQuery(api.features.pettyCash.queries.listByBranch, {}) as PettyCashRow[] | undefined;
   const patch = useMutation(api.features.pettyCash.mutations.update);
   const remove = useMutation(api.features.pettyCash.mutations.remove);
 

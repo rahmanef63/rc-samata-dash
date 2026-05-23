@@ -2,7 +2,6 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Page, PropertyValue } from "@/features/notion-shell/types";
 import { EntityNotionView } from "@/features/notion-shell-wrapper/EntityNotionView";
 
@@ -32,8 +31,8 @@ const VIEWS = [
     sorts: [{ propertyId: "businessDate", direction: "desc" as const }], filters: [], search: "" },
 ];
 
-export function DailyReportValidationsNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.dailyReportValidation.queries.listDailyReportValidations, { branchId }) as Row[] | undefined;
+export function DailyReportValidationsNotionView() {
+  const rows = useQuery(api.features.dailyReportValidation.queries.listDailyReportValidations, {}) as Row[] | undefined;
 
   return (
     <EntityNotionView<Row>

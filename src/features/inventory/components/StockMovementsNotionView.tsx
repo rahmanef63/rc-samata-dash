@@ -49,8 +49,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function StockMovementsNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.inventory.queries.listAllMovements, { branchId }) as Row[] | undefined;
+export function StockMovementsNotionView() {
+  const rows = useQuery(api.features.inventory.queries.listAllMovements, {}) as Row[] | undefined;
   const patch = useMutation(api.features.inventory.mutations.patchMovement);
   const remove = useMutation(api.features.inventory.mutations.removeMovement);
 

@@ -34,12 +34,7 @@ export default function UploadTunjanganPage() {
   const [result, setResult] = useState<number | null>(null);
   const [showPanduan, setShowPanduan] = useState(false);
 
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
-  const existingItems = useQuery(
-    api.features.reports.queries.listEmployeeAllowances,
-    branchId ? { branchId } : "skip"
-  );
+  const existingItems = useQuery(api.features.reports.queries.listEmployeeAllowances, {});
 
   const importBatch = useMutation(api.features.reports.mutations.importAllowancesBatch);
   const deleteBatch = useMutation(api.features.reports.mutations.deleteAllowances);
@@ -71,11 +66,10 @@ export default function UploadTunjanganPage() {
   // ─── Import ─────────────────────────────────────────────────
 
   const runImport = async () => {
-    if (!parsed || !branchId) return;
+    if (!parsed) return;
     setStep("importing");
     try {
       const count = await importBatch({
-        branchId,
         fileName,
         periodLabel,
         items: parsed,
@@ -210,7 +204,7 @@ export default function UploadTunjanganPage() {
                 </button>
                 <button
                   onClick={runImport}
-                  disabled={!branchId || parsed.length === 0}
+                  disabled={parsed.length === 0}
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                 >
                   <Upload className="h-4 w-4" />
@@ -311,8 +305,8 @@ export default function UploadTunjanganPage() {
                       </div>
                       <button
                         onClick={async () => {
-                          if (!branchId || !confirm(`Hapus data tunjangan "${g.periodLabel}"?`)) return;
-                          await deleteBatch({ branchId, periodLabel: g.periodLabel });
+                          if (!confirm(`Hapus data tunjangan "${g.periodLabel}"?`)) return;
+                          await deleteBatch({ periodLabel: g.periodLabel });
                           toast.success("Data dihapus");
                         }}
                         className="text-muted-foreground md:opacity-0 md:group-hover:opacity-100 hover:text-destructive transition-all p-2 rounded-lg hover:bg-destructive/10 shrink-0"

@@ -134,10 +134,15 @@ Super-admin only:
 
 ## Cross-cutting infrastructure
 
-**Branch + Date scope** — `BranchScopeProvider` + `DateScopeProvider`
-mounted in `src/app/(dashboard)/layout.tsx`. URL keys: `?b=ID|all`,
-`?p=today|7d|wtd|30d|mtd|qtd|ytd`, `?from=ms&to=ms`. New owner-facing
-queries should opt in via `useBranchScope()` / `useDateScope()`.
+**Single-tenant (RC Samata Gowa)** — `branches` table dropped
+2026-05-23. All queries are tenant-implicit. No branch picker, no
+`?b=` URL param. Adding multi-outlet support back later = restore
+`branches` table + branchId FKs across schemas.
+
+**Date scope** — `DateScopeProvider` mounted in
+`src/app/(dashboard)/layout.tsx`. URL keys:
+`?p=today|7d|wtd|30d|mtd|qtd|ytd`, `?from=ms&to=ms`. Owner-facing
+queries opt in via `useDateScope()`.
 
 **Version watcher** — `VersionWatcher` polls `/api/version` every 5
 min + on focus/visibility and shows a sonner toast "Versi baru
@@ -159,14 +164,35 @@ don't strand cached stale chunks. `ServiceWorkerRefresher` re-registers
 ## Convex backend conventions used by these surfaces
 
 - All queries returning rows use `.withIndex(...)` and `.take(N)` —
-  no bare `.collect()` on large tables. `getSalesByBranch` and other
-  `*ByBranch` queries cap at 5000 rows / 52 weekly reports.
+  no bare `.collect()` on large tables. Default caps: 5000 rows /
+  52 weekly reports.
 - KPI thresholds + targets live in `convex/features/reports/kpiAnalytics.ts`
-  (`DEFAULT_KPIS`). 10 standard QSR KPIs seeded per-branch via
-  `seedDefaultKPITargets({branchId})` from `/operation/kpi-targets`.
+  (`DEFAULT_KPIS`). 10 standard QSR KPIs seeded via
+  `seedDefaultKPITargets()` from `/operation/kpi-targets`.
 - Audit log helper: `convex/shared/helpers.ts#insertAuditLog` —
   call from any mutation that mutates business data, viewable at
   `/operation/audit/logs`.
 - User preferences: `convex/features/auth/_schema.ts#userPreferences`
   (lazy-create on first write). Add new toggles by appending optional
   fields — no migration needed.
+
+## New (2026-05-23) — single-tenant migration
+
+Tables added per JSON spec adoption:
+- **`pockets` + `pocketFlows`** (cash ledger): brankas/dompet PIC/rekening
+  owner/etc. Every tx now should cite `pocketSourceId`. `pocketFlows`
+  records transfer between pockets.
+- **`staff` + HR**: separate dari `users` (login). New tables: `staff`,
+  `staffSchedules`, `staffPiket`, `staffPerformance`, `tunjanganKaryawan`,
+  `splLembur`.
+- **`waReportDaily`/`waPositionDaily`/`waOnlineDaily`**: parse SV WA
+  daily report → struktur, cross-check vs weekly xlsx (Tier 2 source).
+- **`accountingPeriods`**: period close (yearMonth + status open/locked/closed).
+- **`fixedAssets`** + **`glossaryTerms`** + **`inventoryTransformations`**
+  + **`baReimburse`**: CapEx, term dictionary, bahan→produk, petty cash
+  reimburse.
+
+Transactions table extended:
+- `pocketSourceId` (pockets), `paidByStaffId` + `receivedByStaffId` (staff)
+- `sourceTier`: enum `csv_verified/wa_chat/weekly_xlsx/photo_pdf/manual`
+  — data provenance hierarchy.

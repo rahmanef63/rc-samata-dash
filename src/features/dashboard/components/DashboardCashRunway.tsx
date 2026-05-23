@@ -3,17 +3,14 @@
 import { useQuery } from "convex/react";
 import { Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRpFull } from "@/shared/lib";
 
 export function DashboardCashRunway() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
   const data = useQuery(
     api.features.reports.dashboardQueries.getCashRunway,
-    effectiveBranchId ? { branchId: effectiveBranchId } : "skip",
+    {},
   );
 
   if (!data) {

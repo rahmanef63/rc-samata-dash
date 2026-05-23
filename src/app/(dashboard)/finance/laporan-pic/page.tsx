@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
 import { ClipboardList, Upload, History, AlertTriangle, GitMerge } from "lucide-react";
-import { api } from "../../../../../convex/_generated/api";
 import { ImportLaporanPic } from "@/features/laporan-pic/components/ImportLaporanPic";
 import { RiwayatTransaksi } from "@/features/laporan-pic/components/RiwayatTransaksi";
 import { AnomaliTab } from "@/features/laporan-pic/components/AnomaliTab";
@@ -20,13 +18,7 @@ const TABS: { key: Tab; label: string; icon: typeof Upload; desc: string }[] = [
 ];
 
 export default function LaporanPicPage() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
   const [tab, setTab] = useState<Tab>("riwayat");
-
-  if (!branchId) {
-    return <p className="p-8 text-center text-sm text-muted-foreground">Memuat cabang...</p>;
-  }
 
   const activeTab = TABS.find((t) => t.key === tab)!;
 
@@ -65,10 +57,10 @@ export default function LaporanPicPage() {
 
       <p className="text-[11px] text-muted-foreground italic">{activeTab.desc}</p>
 
-      {tab === "riwayat" && <RiwayatTransaksi branchId={branchId} />}
-      {tab === "import" && <ImportLaporanPic branchId={branchId} />}
-      {tab === "anomali" && <AnomaliTab branchId={branchId} />}
-      {tab === "matching" && <MatchingTab branchId={branchId} />}
+      {tab === "riwayat" && <RiwayatTransaksi />}
+      {tab === "import" && <ImportLaporanPic />}
+      {tab === "anomali" && <AnomaliTab />}
+      {tab === "matching" && <MatchingTab />}
     </div>
   );
 }

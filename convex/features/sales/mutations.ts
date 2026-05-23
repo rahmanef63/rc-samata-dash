@@ -17,7 +17,6 @@ export const create = mutation({
     settlementDate: v.optional(v.string()),
     referenceNo: v.string(),
     status: v.union(v.literal("recorded"), v.literal("settled"), v.literal("pending_settlement")),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -28,7 +27,6 @@ export const create = mutation({
     const id = await ctx.db.insert("dailySales", args);
     // Mirror ke Buku Besar SSOT — receipt kind (sales = income), direction=in.
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "receipt",
       direction: "in",
       date: args.businessDate,
@@ -45,7 +43,7 @@ export const create = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: id, action: "create",
       description: `Created sale ${args.businessDate} - ${args.channelName}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -65,7 +63,6 @@ export const update = mutation({
     settlementDate: v.optional(v.string()),
     referenceNo: v.string(),
     status: v.union(v.literal("recorded"), v.literal("settled"), v.literal("pending_settlement")),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
@@ -88,7 +85,7 @@ export const update = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: id, action: "update",
       description: `Updated sale ${data.businessDate}`,
-      actedBy: userId, branchId: data.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -145,7 +142,7 @@ export const remove = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailySales", entityId: args.id, action: "delete",
       description: `Deleted sale ${existing.businessDate} (${txDeleted} tx)`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },

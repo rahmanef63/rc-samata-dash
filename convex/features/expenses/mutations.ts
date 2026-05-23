@@ -17,7 +17,6 @@ export const create = mutation({
     paymentSource: paymentSourceValidator,
     status: approvalStatusValidator,
     hasAttachment: v.boolean(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -25,7 +24,6 @@ export const create = mutation({
     const id = await ctx.db.insert("expenses", args);
     // Mirror ke Buku Besar SSOT — expense kind, direction=out.
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "expense",
       direction: "out",
       date: args.expenseDate,
@@ -42,7 +40,7 @@ export const create = mutation({
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "create",
       description: `Created expense ${args.categoryName} - Rp${args.amount}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -61,7 +59,6 @@ export const update = mutation({
     paymentSource: paymentSourceValidator,
     status: approvalStatusValidator,
     hasAttachment: v.boolean(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, { id, ...data }) => {
     const userId = await requireAuth(ctx);
@@ -80,7 +77,7 @@ export const update = mutation({
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "update",
       description: `Updated expense ${data.categoryName}`,
-      actedBy: userId, branchId: data.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -136,7 +133,7 @@ export const patch = mutation({
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: id, action: "update",
       description: `Patched expense ${existing.categoryName}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -165,7 +162,7 @@ export const remove = mutation({
     await insertAuditLog(ctx, {
       entityType: "expenses", entityId: args.id, action: "delete",
       description: `Deleted expense ${existing.categoryName} (${lineItems.length} line items, ${txDeleted} tx)`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },
@@ -182,7 +179,7 @@ export const addLineItem = mutation({
     subtotal: v.number(),
   },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    await requireAuth(ctx);
     if (args.qty <= 0) throw new Error("qty must be > 0");
     if (args.unitPrice < 0) throw new Error("unitPrice must be >= 0");
     return await ctx.db.insert("expenseLineItems", args);

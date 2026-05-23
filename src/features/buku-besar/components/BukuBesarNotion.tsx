@@ -26,9 +26,9 @@ function buildDynamicOptions(values: Set<string>, palette: string[]): SelectOpti
 // Notion view (payables / vendors / expenses) — proves the wrapper is
 // fully reusable.
 
-export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
+export function BukuBesarNotion() {
   const txs = useQuery(api.features.transactions.queries.listTransactions, {
-    branchId, limit: 5000,
+    limit: 5000,
   }) as TxRow[] | undefined;
   const bulkPatch = useMutation(api.features.transactions.mutations.bulkPatchTransactions);
   const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactionsCascade);
@@ -62,7 +62,7 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
     if (!confirm("Backfill mirror legacy payables/receipts/transfers/closings ke transactions SSOT. Idempotent (aman re-run). Lanjut?")) return;
     setBusy(true);
     try {
-      const res = await backfill({ branchId });
+      const res = await backfill({});
       toast.success(`Backfill selesai · ${res.inserted} row di-mirror`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Backfill gagal");
@@ -86,20 +86,17 @@ export function BukuBesarNotion({ branchId }: { branchId: Id<"branches"> }) {
       rows={txs}
       onRowUpdate={async (rowId: string, column: string, value: PropertyValue) => {
         await bulkPatch({
-          branchId,
           patches: [{ id: rowId as Id<"transactions">, data: { [column]: value } }],
         });
       }}
       onBulkPatch={async (patches) => {
         const res = await bulkPatch({
-          branchId,
           patches: patches.map((p) => ({ id: p.id as Id<"transactions">, data: p.data })),
         });
         return res;
       }}
       onBulkDelete={async (ids) => {
         const res = await bulkDelete({
-          branchId,
           ids: ids as Id<"transactions">[],
         });
         // Cascade also wiped proyeksi (closings/expenses/sales/payables/etc).

@@ -2,8 +2,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-export const usePettyCashRequests = (branchId: string) =>
-  useQuery(api.features.pettyCash.queries.listByBranch, branchId ? { branchId: branchId as Id<"branches"> } : "skip");
+export const usePettyCashRequests = () =>
+  useQuery(api.features.pettyCash.queries.listByBranch, {});
 
 export const usePettyCashRequest = (id: string) =>
   useQuery(api.features.pettyCash.queries.getById, id ? { id: id as Id<"pettyCashRequests"> } : "skip");

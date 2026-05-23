@@ -2,9 +2,8 @@
 
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Minus, Target, AlertTriangle } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus, AlertTriangle } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope } from "../context/DateScopeContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
@@ -172,24 +171,12 @@ function KpiRichCard({ kpi, periodLabel }: { kpi: Kpi; periodLabel: string }) {
 }
 
 export function DashboardKpiRichGrid() {
-  const { branchId } = useBranchScope();
   const { granularity, startDate, endDate, rangeLabel } = useDateScope();
 
   const data = useQuery(
     api.features.reports.kpiAnalytics.getKpiDashboardRich,
-    branchId ? { branchId, startDate, endDate, granularity } : "skip",
+    { startDate, endDate, granularity },
   );
-
-  if (!branchId) {
-    return (
-      <Card className="p-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Target className="h-4 w-4" />
-          KPI target tidak tersedia untuk mode &quot;Semua cabang&quot; — pilih satu cabang.
-        </div>
-      </Card>
-    );
-  }
 
   if (!data) {
     return (

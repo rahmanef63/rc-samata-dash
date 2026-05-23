@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useAction, useQuery } from "convex/react";
-import { Database, Sparkles, Loader2, CheckCircle, RefreshCw, GitBranch, Wrench } from "lucide-react";
+import { Database, Sparkles, Loader2, CheckCircle, GitBranch, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
-import { useBranchScope } from "@/features/dashboard";
 
 type SeedResult = {
   expenseCategories: { inserted: number; total: number };
@@ -17,7 +16,6 @@ type SeedResult = {
 };
 
 export function MasterDataSeed() {
-  const { branchId } = useBranchScope();
   const runSeed = useAction(api.features.masterData.mutations.runFullMasterSeed);
   const runBackfill = useAction(api.features.reports.bridges.backfillAllReports);
   const runRepair = useAction(api.features.reports.bridges.repairLegacySourceReportId);
@@ -71,13 +69,9 @@ export function MasterDataSeed() {
   }
 
   async function handleSeed() {
-    if (!branchId) {
-      toast.error("Pilih cabang dulu di header sebelum seed.");
-      return;
-    }
     setRunning(true);
     try {
-      const out = await runSeed({ branchId });
+      const out = await runSeed({});
       setResult(out);
       const totalInserted =
         out.expenseCategories.inserted +
@@ -122,7 +116,7 @@ export function MasterDataSeed() {
           <button
             type="button"
             onClick={handleSeed}
-            disabled={running || !branchId}
+            disabled={running}
             className="inline-flex items-center gap-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-lg shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -154,13 +148,6 @@ export function MasterDataSeed() {
             );
           })}
         </div>
-
-        {!branchId && (
-          <p className="text-xs text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 flex items-center gap-2">
-            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-            Pilih cabang di header untuk bootstrap master produk &amp; bahan dari laporan yang sudah diupload.
-          </p>
-        )}
 
         <p className="text-[11px] text-muted-foreground italic">
           Tip: jalankan setiap habis upload laporan baru — bahan/produk yang muncul

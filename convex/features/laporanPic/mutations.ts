@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
-import { CSV_SHEET } from "../../shared/sheetNames";
 import { computePayableStatus, applyPayment } from "../../shared/payableStatus";
 import { LIMITS } from "../../shared/limits";
 import { PARTY } from "../../projectConstants";
@@ -20,7 +19,6 @@ import type { Id } from "../../_generated/dataModel";
 // commit if user manually re-categorizes anomalies.
 export const importLaporanPicLong = mutation({
   args: {
-    branchId: v.id("branches"),
     sourceFileName: v.optional(v.string()),
     sourceSheetName: v.optional(v.string()),
     rows: v.array(v.object({
@@ -37,7 +35,7 @@ export const importLaporanPicLong = mutation({
       anomalyFlag: v.optional(anomalyFlagValidator),
     })),
   },
-  handler: async (ctx, { branchId, rows, sourceFileName, sourceSheetName }) => {
+  handler: async (ctx, { rows, sourceFileName, sourceSheetName }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
@@ -46,7 +44,6 @@ export const importLaporanPicLong = mutation({
     const resolveVendor = vendorIdx.resolve;
 
     const openPayables = (await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .take(LIMITS.PAYABLES_PAGE))
       .filter((p) => p.status === "open" || p.status === "partial" || p.status === "overdue");
 
@@ -82,10 +79,9 @@ export const importLaporanPicLong = mutation({
             sourceFileName: sourceFileName ?? r.fileName,
             sourceSheetName,
             sourceRowNumber: rowNum,
-            branchId,
           });
           const txId = await mirrorTx(ctx, {
-            branchId, kind: "invoice", direction: "in",
+            kind: "invoice", direction: "in",
             date: r.paidDate, amount: r.amount, paidAmount: 0, status: "open",
             vendorId: vendor._id, payableId,
             counterparty: vendor.name, description: r.notes, reference: r.reference,
@@ -120,12 +116,11 @@ export const importLaporanPicLong = mutation({
             sourceFileName: sourceFileName ?? r.fileName,
             sourceSheetName,
             sourceRowNumber: rowNum,
-            branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
           const txId = await mirrorTx(ctx, {
-            branchId, kind: "payment", direction: "out",
+            kind: "payment", direction: "out",
             date: r.paidDate, amount: r.amount, status: payableId ? "linked" : "unlinked",
             payableId, receiptId,
             reference: r.reference, bankAccount: r.reference,
@@ -161,10 +156,9 @@ export const importLaporanPicLong = mutation({
             sourceFileName: sourceFileName ?? r.fileName,
             sourceSheetName,
             sourceRowNumber: rowNum,
-            branchId,
           });
           const txId = await mirrorTx(ctx, {
-            branchId, kind: "transfer", direction: "transfer",
+            kind: "transfer", direction: "transfer",
             date: r.paidDate, amount: r.amount, status: "completed",
             counterparty: direction === "branch_to_owner" ? PARTY.OWNER : PARTY.OWNER_INCOMING,
             description: r.notes, reference: r.reference, method: direction,
@@ -190,12 +184,11 @@ export const importLaporanPicLong = mutation({
             sourceFileName: sourceFileName ?? r.fileName,
             sourceSheetName,
             sourceRowNumber: rowNum,
-            branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
           const txId = await mirrorTx(ctx, {
-            branchId, kind: "anomaly", direction: "out",
+            kind: "anomaly", direction: "out",
             date: r.paidDate, amount: r.amount, status: "unlinked",
             receiptId,
             counterparty: r.vendorName,
@@ -220,7 +213,7 @@ export const importLaporanPicLong = mutation({
       entityId: "" as Id<"paymentReceipts">,
       action: "create",
       description: `Import laporan PIC (long) — ${payablesCreated} payable, ${receiptsCreated} bayar (${receiptsLinked} linked), ${transfersCreated} transfer owner, ${anomaliesCreated} anomali, ${unresolved} vendor unresolved`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return {
@@ -234,7 +227,6 @@ export const importLaporanPicLong = mutation({
 // ─── Import laporan-pic PIVOT CSV (MATCH_PIUTANG format) ────
 export const importLaporanPicPivot = mutation({
   args: {
-    branchId: v.id("branches"),
     sourceFileName: v.optional(v.string()),
     sourceSheetName: v.optional(v.string()),
     rows: v.array(v.object({
@@ -254,7 +246,7 @@ export const importLaporanPicPivot = mutation({
       sourceRowNumber: v.optional(v.number()),
     })),
   },
-  handler: async (ctx, { branchId, rows, sourceFileName, sourceSheetName }) => {
+  handler: async (ctx, { rows, sourceFileName, sourceSheetName }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
@@ -302,10 +294,9 @@ export const importLaporanPicPivot = mutation({
           sourceFileName: sourceFileName ?? r.refPdfFile,
           sourceSheetName,
           sourceRowNumber: rowNum,
-          branchId,
         });
         const txInvId = await mirrorTx(ctx, {
-          branchId, kind: "invoice", direction: "in",
+          kind: "invoice", direction: "in",
           date: r.invoiceDate, amount: r.amount, paidAmount, status,
           vendorId: vendor._id, payableId,
           counterparty: vendor.name, description,
@@ -331,12 +322,11 @@ export const importLaporanPicPivot = mutation({
             sourceFileName: sourceFileName ?? r.refPdfFile,
             sourceSheetName: sourceSheetName ? `${sourceSheetName}/payment` : "payment",
             sourceRowNumber: rowNum,
-            branchId,
             uploadedAt: now,
             uploadedBy: userId,
           });
           const txPayId = await mirrorTx(ctx, {
-            branchId, kind: "payment", direction: "out",
+            kind: "payment", direction: "out",
             date: r.paymentDate, amount: r.paymentAmount, status: "linked",
             payableId, receiptId, linkedTxId: txInvId,
             counterparty: vendor.name,
@@ -364,7 +354,7 @@ export const importLaporanPicPivot = mutation({
       entityId: "" as Id<"payables">,
       action: "create",
       description: `Import laporan PIC (pivot) — ${payablesCreated} payable + ${receiptsCreated} bayar, ${unresolved} vendor unresolved`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return {

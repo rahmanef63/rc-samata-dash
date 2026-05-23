@@ -3,32 +3,32 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
 
-// Returns the system-side numbers for a given (branch, date) so the
+// Returns the system-side numbers for a given date so the
 // UI can compare against the WhatsApp paste. Joins dailyCashSummary
 // + salesControl + productSales + bankStatementEntries + dailyClosings.
 export const getDailyCheckData = query({
-  args: { branchId: v.id("branches"), businessDate: v.string() },
-  handler: async (ctx, { branchId, businessDate }) => {
+  args: { businessDate: v.string() },
+  handler: async (ctx, { businessDate }) => {
     await requireAuth(ctx);
 
     const dailyCash = await ctx.db.query("dailyCashSummary")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
+      .withIndex("by_date", (q) => q.eq("businessDate", businessDate))
       .first();
 
     const salesControl = await ctx.db.query("salesControl")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
+      .withIndex("by_date", (q) => q.eq("businessDate", businessDate))
       .first();
 
     const productSalesRows = await ctx.db.query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
+      .withIndex("by_date", (q) => q.eq("businessDate", businessDate))
       .take(LIMITS.STAGING_PAGE);
 
     const dailyClosing = await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", businessDate))
+      .withIndex("by_date", (q) => q.eq("businessDate", businessDate))
       .first();
 
     const bankEntries = await ctx.db.query("bankStatementEntries")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("txDate", businessDate))
+      .withIndex("by_date", (q) => q.eq("txDate", businessDate))
       .take(LIMITS.CLOSINGS_PAGE);
 
     // Per-channel sales rollup from productSales
@@ -53,7 +53,7 @@ export const getDailyCheckData = query({
     // MTD: sum salesControl.netSales for same month up to date
     const ym = businessDate.slice(0, 7); // YYYY-MM
     const monthSalesControl = await ctx.db.query("salesControl")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.AUDIT_PAGE);
     const mtdCumulative = monthSalesControl
       .filter((s) => s.businessDate.startsWith(ym) && s.businessDate <= businessDate)
@@ -84,13 +84,12 @@ export const getDailyCheckData = query({
 
 export const listDailyReportValidations = query({
   args: {
-    branchId: v.id("branches"),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, { branchId, limit }) => {
+  handler: async (ctx, { limit }) => {
     await requireAuth(ctx);
     return await ctx.db.query("dailyReportValidations")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(limit ?? 50);
   },

@@ -6,7 +6,6 @@ import { Filter, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { useBranchScope } from "@/features/dashboard/context/BranchScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,12 +41,7 @@ function formatRelativeTime(iso: string): string {
 }
 
 export function AuditLogViewer() {
-  const { branchId, branches } = useBranchScope();
-  const effectiveBranchId = branchId ?? branches?.[0]?._id;
-  const logs = useQuery(
-    api.features.audit.queries.listByBranch,
-    effectiveBranchId ? { branchId: effectiveBranchId } : "skip",
-  );
+  const logs = useQuery(api.features.audit.queries.listByBranch, {});
   const removeOne = useMutation(api.features.audit.mutations.remove);
   const clearAll = useMutation(api.features.audit.mutations.clearByBranch);
 
@@ -56,16 +50,15 @@ export function AuditLogViewer() {
   const [purging, setPurging] = useState(false);
 
   async function handleClear() {
-    if (!effectiveBranchId) return;
     const n = logs?.length ?? 0;
     if (n === 0) {
       toast.info("Tidak ada log untuk dihapus");
       return;
     }
-    if (!confirm(`Hapus SEMUA ${n} log audit untuk cabang ini? Tidak bisa di-undo.`)) return;
+    if (!confirm(`Hapus SEMUA ${n} log audit? Tidak bisa di-undo.`)) return;
     setPurging(true);
     try {
-      const res = await clearAll({ branchId: effectiveBranchId });
+      const res = await clearAll({});
       toast.success(`${res.deleted} log audit dihapus`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal hapus log");
@@ -134,7 +127,7 @@ export function AuditLogViewer() {
           <button
             type="button"
             onClick={handleClear}
-            disabled={purging || !effectiveBranchId || (logs?.length ?? 0) === 0}
+            disabled={purging || (logs?.length ?? 0) === 0}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-rose-600 hover:bg-rose-700 text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Hapus semua log audit untuk cabang ini"
           >

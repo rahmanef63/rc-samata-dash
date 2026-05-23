@@ -16,12 +16,7 @@ import {
 import { ImportLinkButton } from "@/features/universal-import/components/ImportLinkButton";
 
 export default function VendorsListPage() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
-  const vendors = useQuery(
-    api.features.payables.queries.listVendorsWithAggregate,
-    branchId ? { branchId } : "skip",
-  );
+  const vendors = useQuery(api.features.payables.queries.listVendorsWithAggregate, {});
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [withOpenOnly, setWithOpenOnly] = useState(false);

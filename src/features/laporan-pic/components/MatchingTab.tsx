@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { GitMerge, Search, Download, CheckCircle, AlertTriangle } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useMatchingReport } from "../api";
 import { useTableState } from "@/shared/hooks/useTableState";
 import { SortableTh } from "@/shared/components";
@@ -26,8 +25,8 @@ type Row = {
   description: string;
 };
 
-export function MatchingTab({ branchId }: { branchId: Id<"branches"> }) {
-  const data = useMatchingReport(branchId);
+export function MatchingTab() {
+  const data = useMatchingReport();
   const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched" | "partial">("all");
 
   const rows: Row[] = useMemo(() => {

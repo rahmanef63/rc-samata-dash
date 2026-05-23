@@ -47,6 +47,7 @@ import type * as features_expenses__schema from "../features/expenses/_schema.js
 import type * as features_expenses__types from "../features/expenses/_types.js";
 import type * as features_expenses_mutations from "../features/expenses/mutations.js";
 import type * as features_expenses_queries from "../features/expenses/queries.js";
+import type * as features_hr__schema from "../features/hr/_schema.js";
 import type * as features_inventory__schema from "../features/inventory/_schema.js";
 import type * as features_inventory__types from "../features/inventory/_types.js";
 import type * as features_inventory_mutations from "../features/inventory/mutations.js";
@@ -67,6 +68,7 @@ import type * as features_pettyCash__schema from "../features/pettyCash/_schema.
 import type * as features_pettyCash__types from "../features/pettyCash/_types.js";
 import type * as features_pettyCash_mutations from "../features/pettyCash/mutations.js";
 import type * as features_pettyCash_queries from "../features/pettyCash/queries.js";
+import type * as features_pockets__schema from "../features/pockets/_schema.js";
 import type * as features_reports__schema from "../features/reports/_schema.js";
 import type * as features_reports_analytics from "../features/reports/analytics.js";
 import type * as features_reports_bridges from "../features/reports/bridges.js";
@@ -84,6 +86,7 @@ import type * as features_transactions__schema from "../features/transactions/_s
 import type * as features_transactions__types from "../features/transactions/_types.js";
 import type * as features_transactions_mutations from "../features/transactions/mutations.js";
 import type * as features_transactions_queries from "../features/transactions/queries.js";
+import type * as features_waAudit__schema from "../features/waAudit/_schema.js";
 import type * as http from "../http.js";
 import type * as projectConstants from "../projectConstants.js";
 import type * as shared_auth from "../shared/auth.js";
@@ -147,6 +150,7 @@ declare const fullApi: ApiFromModules<{
   "features/expenses/_types": typeof features_expenses__types;
   "features/expenses/mutations": typeof features_expenses_mutations;
   "features/expenses/queries": typeof features_expenses_queries;
+  "features/hr/_schema": typeof features_hr__schema;
   "features/inventory/_schema": typeof features_inventory__schema;
   "features/inventory/_types": typeof features_inventory__types;
   "features/inventory/mutations": typeof features_inventory_mutations;
@@ -167,6 +171,7 @@ declare const fullApi: ApiFromModules<{
   "features/pettyCash/_types": typeof features_pettyCash__types;
   "features/pettyCash/mutations": typeof features_pettyCash_mutations;
   "features/pettyCash/queries": typeof features_pettyCash_queries;
+  "features/pockets/_schema": typeof features_pockets__schema;
   "features/reports/_schema": typeof features_reports__schema;
   "features/reports/analytics": typeof features_reports_analytics;
   "features/reports/bridges": typeof features_reports_bridges;
@@ -184,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   "features/transactions/_types": typeof features_transactions__types;
   "features/transactions/mutations": typeof features_transactions_mutations;
   "features/transactions/queries": typeof features_transactions_queries;
+  "features/waAudit/_schema": typeof features_waAudit__schema;
   http: typeof http;
   projectConstants: typeof projectConstants;
   "shared/auth": typeof shared_auth;

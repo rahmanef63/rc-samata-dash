@@ -15,7 +15,6 @@ export const create = mutation({
     status: pettyCashStatusValidator,
     notes: v.string(),
     hasAttachment: v.boolean(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -24,7 +23,7 @@ export const create = mutation({
     await insertAuditLog(ctx, {
       entityType: "pettyCashRequests", entityId: id, action: "create",
       description: `Petty cash request Rp${args.requestedAmount} - ${args.purposeCategory}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -54,7 +53,7 @@ export const update = mutation({
     await insertAuditLog(ctx, {
       entityType: "pettyCashRequests", entityId: id, action: "update",
       description: `Updated petty cash request ${existing.purposeCategory}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -70,7 +69,7 @@ export const remove = mutation({
     await insertAuditLog(ctx, {
       entityType: "pettyCashRequests", entityId: args.id, action: "delete",
       description: `Deleted petty cash request ${existing.purposeCategory}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },

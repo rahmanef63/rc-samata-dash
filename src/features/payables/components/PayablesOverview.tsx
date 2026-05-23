@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
@@ -13,7 +12,6 @@ import type { Payable } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
 import { usePayables, useCreatePayable, useUpdatePayable, useDeletePayable } from "../api";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
@@ -67,13 +65,11 @@ const columns: Column<Payable>[] = [
 export function PayablesOverview() {
   const [todayMs] = useState(() => Date.now());
   const [sourceRow, setSourceRow] = useState<Payable | null>(null);
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 
-  const rawPayables = usePayables(currentBranchId || "");
-  const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  const rawPayables = usePayables();
+  const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, {});
   type ReportPayable = NonNullable<typeof reportPayables>[number];
 
   // Resolve vendorId from name for report-derived payables (no real
@@ -112,7 +108,6 @@ export function PayablesOverview() {
         : (p.dueDate && new Date(p.dueDate).getTime() < todayMs
             ? ("overdue" as const)
             : ("open" as const)),
-      branchId: p.branchId,
       _creationTime: p._creationTime,
       reportId: p.reportId,
       sourceFile: p.sourceFile,
@@ -141,12 +136,10 @@ export function PayablesOverview() {
   const table = useTableState(statusFilteredData, ["vendorName", "description", "status"]);
 
   const customCreate = async (data: Payable) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const vendor = rawVendors?.find(v => v.name === data.vendorName);
     await crud.onCreate({
       ...data,
-      branchId: currentBranchId,
-      vendorId: vendor?._id ?? currentBranchId,
+      vendorId: vendor?._id,
       paidAmount: Number(data.paidAmount) || 0,
       amount: Number(data.amount) || 0,
     });

@@ -10,9 +10,8 @@ export const inventoryTables = {
     unit: v.string(),
     minQty: v.number(),
     status: stockStatusValidator,
-    branchId: v.id("branches"),
     etlSource: etlSourceValidator,
-  }).index("by_branch", ["branchId"]),
+  }),
 
   stockMovements: defineTable({
     itemId: v.id("stockItems"),
@@ -22,7 +21,24 @@ export const inventoryTables = {
     unit: v.string(),
     date: v.string(),
     notes: v.string(),
-    branchId: v.id("branches"),
     etlSource: etlSourceValidator,
-  }).index("by_branch_item", ["branchId", "itemId"]),
+  }).index("by_item_date", ["itemId", "date"]),
+
+  /** Bahan baku transform → produk jadi (e.g. ayam mentah → ayam goreng). */
+  inventoryTransformations: defineTable({
+    date: v.string(),                          // YYYY-MM-DD
+    bahanInput: v.string(),                    // loose: TODO link masterIngredients
+    qtyInput: v.number(),
+    unitInput: v.string(),
+    produkOutput: v.string(),                  // loose: TODO link masterProducts/stockItems
+    qtyOutput: v.number(),
+    unitOutput: v.string(),
+    yieldRatio: v.optional(v.number()),        // qtyOutput / qtyInput
+    supervisorStaffId: v.optional(v.id("staff")),
+    areaManagerStaffId: v.optional(v.id("staff")),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_date", ["date"])
+    .index("by_supervisor_date", ["supervisorStaffId", "date"]),
 };

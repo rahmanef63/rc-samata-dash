@@ -4,21 +4,7 @@ import { requireAuth } from "../../shared/auth";
 import { normalizeItemName, findBestMatch } from "../../shared/helpers";
 import { LIMITS } from "../../shared/limits";
 
-export const listBranches = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAuth(ctx);
-    return await ctx.db.query("branches").take(50);
-  },
-});
-
-export const getBranch = query({
-  args: { id: v.id("branches") },
-  handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    return await ctx.db.get(args.id);
-  },
-});
+// NOTE: branches table dropped (single-tenant). Branch CRUD removed.
 
 export const listVendors = query({
   args: { activeOnly: v.optional(v.boolean()) },

@@ -13,17 +13,13 @@ import type { Id } from "../../_generated/dataModel";
  */
 export const getWeeklySalesTrend = query({
   args: {
-    branchId: v.id("branches"),
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, { branchId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db
-      .query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const sales = await ctx.db.query("productSales").collect();
 
     const byDate: Record<string, number> = {};
     for (const s of sales) {
@@ -47,14 +43,11 @@ export const getWeeklySalesTrend = query({
 });
 
 export const getWeeklySalesTrendInternal = internalQuery({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db
-      .query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const sales = await ctx.db.query("productSales").collect();
 
     const byDate: Record<string, number> = {};
     for (const s of sales) {
@@ -79,17 +72,13 @@ export const getWeeklySalesTrendInternal = internalQuery({
  */
 export const getMonthlySalesTrend = query({
   args: {
-    branchId: v.id("branches"),
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, { branchId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db
-      .query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const sales = await ctx.db.query("productSales").collect();
 
     const byDate: Record<string, number> = {};
     for (const sale of sales) {
@@ -112,14 +101,11 @@ export const getMonthlySalesTrend = query({
 });
 
 export const getMonthlySalesTrendInternal = internalQuery({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db
-      .query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const sales = await ctx.db.query("productSales").collect();
 
     const byDate: Record<string, number> = {};
     for (const sale of sales) {
@@ -142,14 +128,14 @@ export const getMonthlySalesTrendInternal = internalQuery({
  * Expense breakdown from foodCostSummary + LPKK expenses.
  */
 export const getExpenseBreakdown = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     // Get the latest report for aggregation
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(4); // Last 4 weekly reports ~ 1 month
 
@@ -158,10 +144,7 @@ export const getExpenseBreakdown = query({
     const reportIds = new Set(reports.map((r) => r._id));
 
     // Food cost summaries — sum usageValue per category
-    const fcSummaries = await ctx.db
-      .query("foodCostSummary")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
 
     const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
     const byCat: Record<string, number> = {};
@@ -170,10 +153,7 @@ export const getExpenseBreakdown = query({
     }
 
     // Also add incentives (payroll)
-    const incentives = await ctx.db
-      .query("employeeIncentives")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const incentives = await ctx.db.query("employeeIncentives").collect();
     const incFiltered = incentives.filter((i) => reportIds.has(i.reportId));
     const totalIncentive = incFiltered.reduce((s, i) => s + i.amount, 0);
     if (totalIncentive > 0) byCat["Insentif / Gaji"] = totalIncentive;
@@ -194,13 +174,13 @@ export const getExpenseBreakdown = query({
 });
 
 export const getExpenseBreakdownInternal = internalQuery({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(4);
 
@@ -208,10 +188,7 @@ export const getExpenseBreakdownInternal = internalQuery({
 
     const reportIds = new Set(reports.map((r) => r._id));
 
-    const fcSummaries = await ctx.db
-      .query("foodCostSummary")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
 
     const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
     const byCat: Record<string, number> = {};
@@ -219,10 +196,7 @@ export const getExpenseBreakdownInternal = internalQuery({
       byCat[f.category] = (byCat[f.category] ?? 0) + f.usageValue;
     }
 
-    const incentives = await ctx.db
-      .query("employeeIncentives")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const incentives = await ctx.db.query("employeeIncentives").collect();
     const incFiltered = incentives.filter((i) => reportIds.has(i.reportId));
     const totalIncentive = incFiltered.reduce((s, i) => s + i.amount, 0);
     if (totalIncentive > 0) byCat["Insentif / Gaji"] = totalIncentive;
@@ -247,20 +221,17 @@ export const getExpenseBreakdownInternal = internalQuery({
  * Uses dailyCashFlow + foodCostSummary.
  */
 export const getCashflowWaterfall = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     // Sum all cash flow entries
-    const cashFlows = await ctx.db
-      .query("dailyCashFlow")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
 
     // Get last 4 reports
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(4);
     const reportIds = new Set(reports.map((r) => r._id));
@@ -272,10 +243,7 @@ export const getCashflowWaterfall = query({
     const totalOtherOut = cfFiltered.reduce((s, cf) => s + cf.otherOutflow, 0);
 
     // COGS from food cost summary
-    const fcSummaries = await ctx.db
-      .query("foodCostSummary")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
     const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
     const totalCOGS = fcFiltered.reduce((s, f) => s + f.usageValue, 0);
 
@@ -294,18 +262,15 @@ export const getCashflowWaterfall = query({
 });
 
 export const getCashflowWaterfallInternal = internalQuery({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const cashFlows = await ctx.db
-      .query("dailyCashFlow")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
 
     const reports = await ctx.db
       .query("weeklyReports")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
+      .withIndex("by_uploadedAt")
       .order("desc")
       .take(4);
     const reportIds = new Set(reports.map((r) => r._id));
@@ -316,10 +281,7 @@ export const getCashflowWaterfallInternal = internalQuery({
     const totalOtherIn = cfFiltered.reduce((s, cf) => s + cf.otherInflow, 0);
     const totalOtherOut = cfFiltered.reduce((s, cf) => s + cf.otherOutflow, 0);
 
-    const fcSummaries = await ctx.db
-      .query("foodCostSummary")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
     const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
     const totalCOGS = fcFiltered.reduce((s, f) => s + f.usageValue, 0);
 
@@ -341,8 +303,8 @@ export const getCashflowWaterfallInternal = internalQuery({
  * Recent transactions — combines latest productSales + expenses.
  */
 export const getRecentTransactions = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     type Row = {
@@ -371,10 +333,7 @@ export const getRecentTransactions = query({
     };
 
     // Take a wider window so the client-side date filter has rows to keep.
-    const summaries = await ctx.db
-      .query("dailyCashSummary")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const summaries = await ctx.db.query("dailyCashSummary").collect();
     const latestSummaries = summaries
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
       .slice(0, 30);
@@ -396,10 +355,7 @@ export const getRecentTransactions = query({
       });
     }
 
-    const cashFlows = await ctx.db
-      .query("dailyCashFlow")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
     const latestCF = cashFlows
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
       .slice(0, 30);
@@ -430,8 +386,8 @@ export const getRecentTransactions = query({
 });
 
 export const getRecentTransactionsInternal = internalQuery({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const results: {
@@ -444,10 +400,7 @@ export const getRecentTransactionsInternal = internalQuery({
       direction: "in" | "out";
     }[] = [];
 
-    const summaries = await ctx.db
-      .query("dailyCashSummary")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const summaries = await ctx.db.query("dailyCashSummary").collect();
     const latestSummaries = summaries
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
       .slice(0, 3);
@@ -464,10 +417,7 @@ export const getRecentTransactionsInternal = internalQuery({
       });
     }
 
-    const cashFlows = await ctx.db
-      .query("dailyCashFlow")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
     const latestCF = cashFlows
       .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
       .slice(0, 3);
@@ -492,97 +442,19 @@ export const getRecentTransactionsInternal = internalQuery({
   },
 });
 
-// ─── Multi-branch comparison (added 2026-05-17) ──────────────
+// ─── Cash Runway ─────────────────────────────────────────────
 //
-// Returns per-branch aggregate of last 4 weekly reports:
-// omzet (revenue), COGS, food cost %, profit margin %.
-// Used by DashboardBranchCompare for owner cross-branch view.
-
-export const getBranchComparison = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAuth(ctx);
-    const branches = await ctx.db.query("branches").take(50);
-    const out: Array<{
-      branchId: string;
-      branchName: string;
-      revenue: number;
-      cogs: number;
-      foodCostPct: number;
-      profit: number;
-      profitMarginPct: number;
-    }> = [];
-
-    for (const b of branches) {
-      const reports = await ctx.db
-        .query("weeklyReports")
-        .withIndex("by_branch", (q) => q.eq("branchId", b._id))
-        .order("desc")
-        .take(4);
-      if (reports.length === 0) {
-        out.push({
-          branchId: String(b._id),
-          branchName: b.name,
-          revenue: 0,
-          cogs: 0,
-          foodCostPct: 0,
-          profit: 0,
-          profitMarginPct: 0,
-        });
-        continue;
-      }
-      const reportIds = new Set(reports.map((r) => r._id));
-
-      // Sum revenue from productSales (all-channel only)
-      let revenue = 0;
-      for (const r of reports) {
-        const sales = await ctx.db
-          .query("productSales")
-          .withIndex("by_report", (q) => q.eq("reportId", r._id))
-          .collect();
-        for (const s of sales) {
-          if (!s.channel || s.channel === "all") revenue += s.amount;
-        }
-      }
-
-      // Sum COGS from foodCostSummary
-      const fcAll = await ctx.db
-        .query("foodCostSummary")
-        .withIndex("by_branch_period", (q) => q.eq("branchId", b._id))
-        .collect();
-      const cogs = fcAll
-        .filter((f) => reportIds.has(f.reportId))
-        .reduce((s, f) => s + f.usageValue, 0);
-
-      const profit = revenue - cogs;
-      out.push({
-        branchId: String(b._id),
-        branchName: b.name,
-        revenue,
-        cogs,
-        foodCostPct: revenue > 0 ? (cogs / revenue) * 100 : 0,
-        profit,
-        profitMarginPct: revenue > 0 ? (profit / revenue) * 100 : 0,
-      });
-    }
-
-    return out.sort((a, b) => b.revenue - a.revenue);
-  },
-});
-
-// ─── Cash Runway (added 2026-05-17) ──────────────────────────
-//
-// Estimates how many days of cash on hand a branch has based on the
+// Estimates how many days of cash on hand based on the
 // latest closingBalance vs avg daily expense outflow over last 30 days.
 
 export const getCashRunway = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const cashFlows = await ctx.db
       .query("dailyCashFlow")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(60); /* ~2 months for stable avg */
 
@@ -620,11 +492,10 @@ export const getCashRunway = query({
 
 export const getFinancialTrend = query({
   args: {
-    branchId: v.id("branches"),
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
-  handler: async (ctx, { branchId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
     await requireAuth(ctx);
 
     const inRange = (dateStr: string): boolean => {
@@ -635,18 +506,9 @@ export const getFinancialTrend = query({
     };
 
     const [sales, fcSummary, salesCtrl] = await Promise.all([
-      ctx.db
-        .query("productSales")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-        .collect(),
-      ctx.db
-        .query("foodCostSummary")
-        .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-        .collect(),
-      ctx.db
-        .query("salesControl")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-        .collect(),
+      ctx.db.query("productSales").collect(),
+      ctx.db.query("foodCostSummary").collect(),
+      ctx.db.query("salesControl").collect(),
     ]);
 
     // Aggregate revenue per day

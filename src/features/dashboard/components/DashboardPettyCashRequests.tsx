@@ -13,16 +13,13 @@ import { itemVariants } from "@/shared/constants";
 import { formatRpFull } from "@/shared/lib";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardPettyCashRequests() {
   const router = useRouter();
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   const pettyCashData = useQuery(
     api.features.pettyCash.queries.listByBranch,
-    branchId ? { branchId } : "skip",
+    {},
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);

@@ -7,7 +7,6 @@ import { api } from "../../../../convex/_generated/api";
 import { MultiLineChart, type LineSeries, type ReferenceMark } from "@/shared/components";
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope } from "../context/DateScopeContext";
 
 type Tab = "foodCost" | "margin";
@@ -22,17 +21,15 @@ const MARGIN_KPI = "gross_margin_pct";
 
 export function DashboardKpiTrendChart() {
   const [tab, setTab] = useState<Tab>("foodCost");
-  const { branchId: scopeBranchId, branches } = useBranchScope();
   const { startDate, endDate, rangeLabel, granularity } = useDateScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
 
   const trend = useQuery(
     api.features.reports.dashboardQueries.getFinancialTrend,
-    branchId ? { branchId, startDate, endDate } : "skip",
+    { startDate, endDate },
   );
   const kpiData = useQuery(
     api.features.reports.kpiAnalytics.getKpiDashboardRich,
-    branchId ? { branchId, startDate, endDate, granularity } : "skip",
+    { startDate, endDate, granularity },
   );
 
   const isLoading = !trend || !kpiData;

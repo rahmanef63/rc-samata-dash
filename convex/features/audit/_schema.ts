@@ -10,6 +10,7 @@ export const auditTables = {
     description: v.string(),
     actedBy: v.string(),
     actedAt: v.string(),
-    branchId: v.optional(v.id("branches")),
-  }).index("by_branch", ["branchId"]),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_actedAt", ["actedAt"]),
 };

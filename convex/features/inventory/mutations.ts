@@ -11,7 +11,6 @@ export const createItem = mutation({
     unit: v.string(),
     minQty: v.number(),
     status: stockStatusValidator,
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -21,7 +20,7 @@ export const createItem = mutation({
     await insertAuditLog(ctx, {
       entityType: "stockItems", entityId: id, action: "create",
       description: `Created stock item ${args.name} (${args.currentQty} ${args.unit})`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -47,7 +46,7 @@ export const updateItem = mutation({
     await insertAuditLog(ctx, {
       entityType: "stockItems", entityId: id, action: "update",
       description: `Updated stock item ${existing.name}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -112,7 +111,7 @@ export const deleteItem = mutation({
     // Cascade delete movements
     const movements = await ctx.db
       .query("stockMovements")
-      .withIndex("by_branch_item", (q) => q.eq("branchId", item.branchId).eq("itemId", args.id))
+      .withIndex("by_item_date", (q) => q.eq("itemId", args.id))
       .collect();
     for (const m of movements) {
       await ctx.db.delete(m._id);
@@ -121,7 +120,7 @@ export const deleteItem = mutation({
     await insertAuditLog(ctx, {
       entityType: "stockItems", entityId: args.id, action: "delete",
       description: `Deleted stock item ${item.name} (${movements.length} movements)`,
-      actedBy: userId, branchId: item.branchId,
+      actedBy: userId,
     });
     return null;
   },
@@ -136,7 +135,6 @@ export const recordMovement = mutation({
     unit: v.string(),
     date: v.string(),
     notes: v.string(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -153,7 +151,7 @@ export const recordMovement = mutation({
     await insertAuditLog(ctx, {
       entityType: "stockMovements", entityId: movementId, action: "create",
       description: `${args.type} ${args.qty} ${args.unit} of ${args.itemName}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return movementId;
   },

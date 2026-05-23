@@ -1,17 +1,12 @@
 /**
  * Frontend API hooks for Master Data feature.
  * Connects to convex/features/masterData/* functions.
+ *
+ * Single-tenant — branches removed 2026-05-23.
  */
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-
-// ─── Branches ───────────────────────────────────────────────
-export const useBranches = () => useQuery(api.features.masterData.queries.listBranches);
-export const useBranch = (id: string) => useQuery(api.features.masterData.queries.getBranch, id ? { id: id as Id<"branches"> } : "skip");
-export const useCreateBranch = () => useMutation(api.features.masterData.mutations.createBranch);
-export const useUpdateBranch = () => useMutation(api.features.masterData.mutations.updateBranch);
-export const useDeleteBranch = () => useMutation(api.features.masterData.mutations.deleteBranch);
 
 // ─── Vendors ────────────────────────────────────────────────
 export const useVendors = (activeOnly?: boolean) =>

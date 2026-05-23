@@ -5,7 +5,6 @@ type ReportMeta = {
   fileName: string;
   periodStart: string;
   periodEnd: string;
-  branchId: string;
   uploadedAt: number;
   status: string;
   salesCount?: number;
@@ -13,6 +12,8 @@ type ReportMeta = {
   vendorCount?: number;
   inventoryCount?: number;
 };
+
+// branchId removed 2026-05-23 (single-tenant migration)
 
 type ExportPayload = {
   report: ReportMeta;
@@ -60,11 +61,11 @@ export function downloadReportAsXlsx(data: ExportPayload) {
     { key: "fileName",     value: data.report.fileName },
     { key: "periodStart",  value: data.report.periodStart },
     { key: "periodEnd",    value: data.report.periodEnd },
-    { key: "branchId",     value: data.report.branchId },
     { key: "uploadedAt",   value: new Date(data.report.uploadedAt).toISOString() },
     { key: "status",       value: data.report.status },
     { key: "reportId",     value: data.report._id },
   ];
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "INFO");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(counts), "RINGKASAN");
 

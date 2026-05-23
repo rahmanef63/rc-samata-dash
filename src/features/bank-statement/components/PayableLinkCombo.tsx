@@ -22,19 +22,17 @@ type Payable = {
 };
 
 export function PayableLinkCombo({
-  branchId,
   value,
   debit,
   counterpartyHint,
   onChange,
 }: {
-  branchId: Id<"branches">;
   value: Id<"payables"> | null;
   debit: number;
   counterpartyHint?: string;
   onChange: (id: Id<"payables"> | null) => void;
 }) {
-  const payables = useQuery(api.features.closing.queries.listOpenPayables, { branchId }) as
+  const payables = useQuery(api.features.closing.queries.listOpenPayables, {}) as
     | Payable[]
     | undefined;
   const [open, setOpen] = useState(false);

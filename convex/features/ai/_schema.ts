@@ -81,7 +81,6 @@ export const aiTables = {
   aiEmbeddings: defineTable({
     sourceTable: v.string(),            // "productSales", "costAnalysis", etc.
     sourceId: v.string(),               // ID of source document (string for flexibility)
-    branchId: v.id("branches"),
     reportId: v.optional(v.id("weeklyReports")),
     periodKey: v.string(),              // "2026-W12", "2026-03" for grouping
     textContent: v.string(),            // Human-readable text that was embedded
@@ -91,11 +90,11 @@ export const aiTables = {
   })
     .index("by_source", ["sourceTable", "sourceId"])
     .index("by_report", ["reportId"])
-    .index("by_period", ["branchId", "periodKey"])
+    .index("by_period", ["periodKey"])
     .vectorIndex("by_embedding", {
       vectorField: "embedding",
       dimensions: 1536,
-      filterFields: ["sourceTable", "branchId"],
+      filterFields: ["sourceTable"],
     }),
 
   aiChatSessions: defineTable({

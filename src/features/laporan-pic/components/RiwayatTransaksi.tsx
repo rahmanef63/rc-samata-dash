@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { History, Search, ExternalLink } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useRiwayatTransaksi } from "../api";
 import { useTableState } from "@/shared/hooks/useTableState";
 import { SortableTh } from "@/shared/components";
@@ -34,8 +33,8 @@ const KIND_LABEL: Record<Row["kind"], string> = {
   transfer_owner: "Transfer Owner",
 };
 
-export function RiwayatTransaksi({ branchId }: { branchId: Id<"branches"> }) {
-  const data = useRiwayatTransaksi(branchId);
+export function RiwayatTransaksi() {
+  const data = useRiwayatTransaksi();
   const [kindFilter, setKindFilter] = useState<"all" | Row["kind"]>("all");
   const [anomalyOnly, setAnomalyOnly] = useState(false);
 

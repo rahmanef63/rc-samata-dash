@@ -6,63 +6,25 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { formatLongDate, formatRpFull, getJakartaDateString } from "@/shared/lib";
-import { useBranchScope } from "../context/BranchScopeContext";
 
 export function DashboardKpiCards() {
   const router = useRouter();
 
-  const { branchId: scopeBranchId, branches: scopeBranches } = useBranchScope();
-  const branches = scopeBranches;
-  // "All branches" mode (null) falls back to first so single-branch
-  // operational KPIs stay populated. The 10 KPI Targets card handles "All".
-  const branchId = scopeBranchId ?? scopeBranches?.[0]?._id;
-
   const today = getJakartaDateString();
   const currentMonth = today.slice(0, 7);
 
-  const monthlyTrend = useQuery(
-    api.features.reports.dashboardQueries.getMonthlySalesTrend,
-    branchId ? { branchId } : "skip"
-  );
-  const rawSales = useQuery(
-    api.features.sales.queries.listByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const rawExpenses = useQuery(
-    api.features.expenses.queries.listByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const reportExpenses = useQuery(
-    api.features.reports.queries.getExpensesByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const rawPayables = useQuery(
-    api.features.payables.queries.listByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const reportPayables = useQuery(
-    api.features.reports.queries.getPayablesByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const rawPettyCash = useQuery(
-    api.features.pettyCash.queries.listByBranch,
-    branchId ? { branchId } : "skip"
-  );
-  const rawTransfers = useQuery(
-    api.features.closing.queries.listTransfers,
-    branchId ? { branchId } : "skip"
-  );
-  const rawStockItems = useQuery(
-    api.features.inventory.queries.listItems,
-    branchId ? { branchId } : "skip"
-  );
-  const rawClosings = useQuery(
-    api.features.closing.queries.listClosings,
-    branchId ? { branchId } : "skip"
-  );
+  const monthlyTrend = useQuery(api.features.reports.dashboardQueries.getMonthlySalesTrend, {});
+  const rawSales = useQuery(api.features.sales.queries.listByBranch, {});
+  const rawExpenses = useQuery(api.features.expenses.queries.listByBranch, {});
+  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, {});
+  const rawPayables = useQuery(api.features.payables.queries.listByBranch, {});
+  const reportPayables = useQuery(api.features.reports.queries.getPayablesByBranch, {});
+  const rawPettyCash = useQuery(api.features.pettyCash.queries.listByBranch, {});
+  const rawTransfers = useQuery(api.features.closing.queries.listTransfers, {});
+  const rawStockItems = useQuery(api.features.inventory.queries.listItems, {});
+  const rawClosings = useQuery(api.features.closing.queries.listClosings, {});
 
   const isLoading = [
-    branches,
     monthlyTrend,
     rawSales,
     rawExpenses,

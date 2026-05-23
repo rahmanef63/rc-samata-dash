@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import { useQuery, useConvex, useMutation } from "convex/react";
 import { toast } from "sonner";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { useBranchScope } from "@/features/dashboard";
 import { useFilteredByDate } from "@/shared/hooks";
 import { api } from "../../../../convex/_generated/api";
 import {
@@ -145,29 +144,14 @@ export default function ReportHub() {
     }
   }
 
-  // Respect the global header BranchSelector via useBranchScope.
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const branch =
-    (scopeBranchId && branches?.find((b) => b._id === scopeBranchId)) ||
-    branches?.[0] ||
-    null;
-  const branchId = branch?._id ?? null;
-
-  const rawReports = useQuery(
-    api.features.reports.queries.listWeeklyReports,
-    branchId ? { branchId } : "skip",
-  );
-  const rawMonthlySales = useQuery(
-    api.features.reports.dashboardQueries.getMonthlySalesTrend,
-    branchId ? { branchId } : "skip",
-  );
+  const rawReports = useQuery(api.features.reports.queries.listWeeklyReports, {});
+  const rawMonthlySales = useQuery(api.features.reports.dashboardQueries.getMonthlySalesTrend, {});
   const reports = useFilteredByDate(rawReports, "periodStart");
   const monthlySales = useFilteredByDate(rawMonthlySales, "date");
 
   const [search, setSearch] = useState("");
 
-  const isLoading =
-    !branches || (branchId && (!rawReports || !rawMonthlySales));
+  const isLoading = !rawReports || !rawMonthlySales;
 
   const filteredReports = useMemo(() => {
     if (!reports) return [];
@@ -204,8 +188,7 @@ export default function ReportHub() {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Semua Laporan</h1>
         <p className="text-sm text-muted-foreground">
-          {branch?.name ?? "Cabang"}
-          {branch?.location ? ` · ${branch.location}` : ""}
+          Semua laporan mingguan yang sudah di-upload
         </p>
       </div>
 

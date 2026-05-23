@@ -5,7 +5,6 @@ import { insertAuditLog } from "../../shared/helpers";
 
 export const saveDailyReportValidation = mutation({
   args: {
-    branchId: v.id("branches"),
     businessDate: v.string(),
     kind: v.union(
       v.literal("transferOnline"),
@@ -29,7 +28,7 @@ export const saveDailyReportValidation = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailyReportValidations", entityId: id, action: "create",
       description: `Validasi WA ${args.kind} ${args.businessDate} — ${args.matchedAll ? "MATCH" : "MISMATCH"}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -45,7 +44,7 @@ export const removeDailyReportValidation = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailyReportValidations", entityId: id, action: "delete",
       description: `Hapus validasi WA ${existing.kind} ${existing.businessDate}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },

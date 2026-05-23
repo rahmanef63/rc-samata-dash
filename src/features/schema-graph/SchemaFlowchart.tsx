@@ -55,6 +55,9 @@ const FEATURE_PALETTE: Record<string, { bg: string; border: string; text: string
   dailyReportValidation:{ bg: "#ecfeff", border: "#a5f3fc", text: "#164e63", accent: "#06b6d4" },
   auth:                 { bg: "#faf5ff", border: "#e9d5ff", text: "#581c87", accent: "#a855f7" },
   ai:                   { bg: "#fdf4ff", border: "#f5d0fe", text: "#701a75", accent: "#d946ef" },
+  pockets:              { bg: "#fffdea", border: "#fde047", text: "#713f12", accent: "#eab308" },
+  hr:                   { bg: "#f0f9ff", border: "#7dd3fc", text: "#0c4a6e", accent: "#0ea5e9" },
+  waAudit:              { bg: "#dcfce7", border: "#86efac", text: "#14532d", accent: "#22c55e" },
 };
 
 const DEFAULT_PALETTE = FEATURE_PALETTE.reports;

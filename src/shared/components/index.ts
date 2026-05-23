@@ -12,7 +12,6 @@ export { FAB } from "./FAB";
 export { ViewAllButton } from "./ViewAllButton";
 export { CrudDialog } from "./CrudDialog";
 export { DataTable } from "./DataTable";
-export { BranchSelector } from "./BranchSelector";
 export { DateRangePicker } from "./DateRangePicker";
 export { RowSourceDialog, deriveSourceFromEtl } from "./RowSourceDialog";
 export { MultiLineChart } from "./MultiLineChart";

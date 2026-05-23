@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
@@ -12,7 +11,6 @@ import type { PettyCashRequest } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
 import { usePettyCashRequests, useCreatePettyCashRequest, useUpdatePettyCashRequest, useDeletePettyCashRequest } from "../api";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 import { PETTY_CASH_CATEGORIES, PETTY_CASH_STATUSES } from "../../../../convex/features/pettyCash/_types";
 
@@ -57,11 +55,9 @@ const columns: Column<PettyCashRequest>[] = [
 
 export function PettyCashOverview() {
   const [sourceRow, setSourceRow] = useState<PettyCashRequest | null>(null);
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
-  const rawRequests = usePettyCashRequests(currentBranchId || "");
-  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  const rawRequests = usePettyCashRequests();
+  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, {});
   type ReportExpense = NonNullable<typeof reportExpenses>[number];
 
   const manualData = (rawRequests || []).map(r => ({ ...r, id: r._id })) as unknown as PettyCashRequest[];
@@ -76,7 +72,6 @@ export function PettyCashOverview() {
     actualAmount: e.amount ?? 0,
     notes: e.description ?? "",
     status: "closed" as const,
-    branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as PettyCashRequest[];
   const requestsAll = [...manualData, ...reportData];
@@ -93,10 +88,8 @@ export function PettyCashOverview() {
   const table = useTableState(requestsData, ["requestedBy", "purposeCategory", "notes", "status"]);
 
   const customCreate = async (data: PettyCashRequest) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     await crud.onCreate({
       ...data,
-      branchId: currentBranchId,
       approvedAmount: data.approvedAmount || 0,
       actualAmount: data.actualAmount || 0,
       hasAttachment: false,

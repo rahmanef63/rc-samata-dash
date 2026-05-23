@@ -17,32 +17,10 @@ import {
 } from "./_seedData";
 import { DEFAULT_INCOME_CHANNELS } from "../../projectConstants";
 
-// ─── Branches ───────────────────────────────────────────────
-export const createBranch = mutation({
-  args: { code: v.string(), name: v.string(), location: v.string(), isActive: v.boolean() },
-  handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
-    return await ctx.db.insert("branches", { ...args, uploadedBy: userId });
-  },
-});
-
-export const updateBranch = mutation({
-  args: { id: v.id("branches"), code: v.string(), name: v.string(), location: v.string(), isActive: v.boolean() },
-  handler: async (ctx, { id, ...data }) => {
-    await requireAuth(ctx);
-    await ctx.db.patch(id, data);
-    return id;
-  },
-});
-
-export const deleteBranch = mutation({
-  args: { id: v.id("branches") },
-  handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    await ctx.db.delete(args.id);
-    return null;
-  },
-});
+// NOTE: branches table dropped (single-tenant). Branch CRUD mutations removed:
+//   createBranch, updateBranch, deleteBranch, patchBranch.
+// Downstream callers in src/features/master-data/api/index.ts and various
+// page.tsx files still reference these — left untouched per migration plan.
 
 // ─── Vendors ────────────────────────────────────────────────
 export const createVendor = mutation({
@@ -210,23 +188,17 @@ export const deleteExpenseCategory = mutation({
  * Scans all unique product names, deduplicates by normalizedName, and inserts.
  */
 export const bootstrapMasterProducts = mutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
-    // Collect unique product names from sales + HPP
+    // Collect unique product names from sales + HPP (single-tenant — scan all)
     const nameSet = new Set<string>();
 
-    const sales = await ctx.db
-      .query("productSales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const sales = await ctx.db.query("productSales").take(LIMITS.SALES_PAGE);
     for (const s of sales) nameSet.add(s.productName.trim());
 
-    const hpp = await ctx.db
-      .query("productHPP")
-      .withIndex("by_branch_product", (q) => q.eq("branchId", branchId))
-      .collect();
+    const hpp = await ctx.db.query("productHPP").take(LIMITS.SALES_PAGE);
     for (const h of hpp) nameSet.add(h.productName.trim());
 
     // Get existing master products to avoid duplicates
@@ -262,52 +234,34 @@ export const bootstrapMasterProducts = mutation({
  * Bootstrap masterIngredients from vendor, inventory, costAnalysis, HPP ingredients.
  */
 export const bootstrapMasterIngredients = mutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const nameSet = new Set<string>();
 
     // Vendor purchases
-    const vendor = await ctx.db
-      .query("vendorPurchases")
-      .withIndex("by_branch_week", (q) => q.eq("branchId", branchId))
-      .collect();
+    const vendor = await ctx.db.query("vendorPurchases").take(LIMITS.STAGING_PAGE);
     for (const v of vendor) nameSet.add(v.commodityName.trim());
 
     // Inventory valuation
-    const inv = await ctx.db
-      .query("inventoryValuation")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const inv = await ctx.db.query("inventoryValuation").take(LIMITS.STAGING_PAGE);
     for (const i of inv) nameSet.add(i.itemName.trim());
 
     // Cost analysis
-    const ca = await ctx.db
-      .query("costAnalysis")
-      .withIndex("by_branch_period", (q) => q.eq("branchId", branchId))
-      .collect();
+    const ca = await ctx.db.query("costAnalysis").take(LIMITS.STAGING_PAGE);
     for (const c of ca) nameSet.add(c.itemName.trim());
 
     // Leftover items
-    const lo = await ctx.db
-      .query("leftoverItems")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const lo = await ctx.db.query("leftoverItems").take(LIMITS.STAGING_PAGE);
     for (const l of lo) nameSet.add(l.itemName.trim());
 
     // Credit purchases
-    const cp = await ctx.db
-      .query("creditPurchases")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const cp = await ctx.db.query("creditPurchases").take(LIMITS.STAGING_PAGE);
     for (const c of cp) nameSet.add(c.itemName.trim());
 
     // HPP ingredients
-    const hpp = await ctx.db
-      .query("productHPP")
-      .withIndex("by_branch_product", (q) => q.eq("branchId", branchId))
-      .collect();
+    const hpp = await ctx.db.query("productHPP").take(LIMITS.STAGING_PAGE);
     for (const h of hpp) {
       if (h.ingredients) {
         for (const ing of h.ingredients) nameSet.add(ing.name.trim());
@@ -506,23 +460,6 @@ export const patchExpenseCategory = mutation({
   },
 });
 
-export const patchBranch = mutation({
-  args: {
-    id: v.id("branches"),
-    code: v.optional(v.string()),
-    name: v.optional(v.string()),
-    location: v.optional(v.string()),
-    isActive: v.optional(v.boolean()),
-  },
-  handler: async (ctx, { id, ...data }) => {
-    await requireAuth(ctx);
-    const patch: Record<string, unknown> = {};
-    for (const [k, val] of Object.entries(data)) if (val !== undefined && val !== null) patch[k] = val;
-    if (Object.keys(patch).length > 0) await ctx.db.patch(id, patch);
-    return id;
-  },
-});
-
 export const deleteMasterIngredient = mutation({
   args: { id: v.id("masterIngredients") },
   handler: async (ctx, { id }) => {
@@ -624,8 +561,8 @@ export const seedSheetRegistry = mutation({
  * ingredients. Returns per-step counts so the Settings UI can show progress.
  */
 export const runFullMasterSeed = action({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }): Promise<{
+  args: {},
+  handler: async (ctx): Promise<{
     expenseCategories: { inserted: number; total: number };
     incomeChannels: { inserted: number; total: number };
     categoryRules: { inserted: number; total: number };
@@ -637,8 +574,8 @@ export const runFullMasterSeed = action({
     const incomeChannels = await ctx.runMutation(api.features.masterData.mutations.seedIncomeChannelsFull, {});
     const categoryRules = await ctx.runMutation(api.features.masterData.mutations.seedCategoryRules, {});
     const sheetRegistry = await ctx.runMutation(api.features.masterData.mutations.seedSheetRegistry, {});
-    const products = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterProducts, { branchId });
-    const ingredients = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterIngredients, { branchId });
+    const products = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterProducts, {});
+    const ingredients = await ctx.runMutation(api.features.masterData.mutations.bootstrapMasterIngredients, {});
     return { expenseCategories, incomeChannels, categoryRules, sheetRegistry, products, ingredients };
   },
 });

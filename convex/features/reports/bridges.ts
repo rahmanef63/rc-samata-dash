@@ -157,7 +157,7 @@ export const bridgeProductSalesToDailySales = mutation({
     for (const d of dateSet) {
       const existing = await ctx.db
         .query("dailySales")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("businessDate", d))
+        .withIndex("by_date", (q) => q.eq("businessDate", d))
         .collect();
       for (const e of existing) await ctx.db.delete(e._id);
     }
@@ -188,7 +188,6 @@ export const bridgeProductSalesToDailySales = mutation({
         settlementDate: undefined,
         referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
         status: "recorded" as const,
-        branchId: report.branchId,
         sourceReportId: reportId,
       });
       inserted++;
@@ -216,7 +215,7 @@ export const bridgeDailyCashFlowToClosings = mutation({
       // Idempotent: delete existing closing for (branch, date)
       const existing = await ctx.db
         .query("dailyClosings")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("businessDate", f.businessDate))
+        .withIndex("by_date", (q) => q.eq("businessDate", f.businessDate))
         .collect();
       for (const e of existing) await ctx.db.delete(e._id);
 
@@ -239,11 +238,9 @@ export const bridgeDailyCashFlowToClosings = mutation({
         sourceFileName: report.fileName,
         sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: inserted + 2,
-        branchId: report.branchId,
         sourceReportId: reportId,
       });
       const txId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "transfer", direction: "transfer",
         date: f.businessDate,
         amount: f.salesInflow,
@@ -297,14 +294,12 @@ export const bridgeCreditPurchasesToPayables = mutation({
       groups.set(key, g);
     }
 
-    // Wipe existing payables for this report (identified via etlSource)
+    // Wipe existing payables for this report (identified via sourceReportId)
     const existing = await ctx.db
       .query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
+      .withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId))
       .collect();
-    for (const e of existing) {
-      if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
-    }
+    for (const e of existing) await ctx.db.delete(e._id);
 
     let inserted = 0;
     let rowIdx = 0;
@@ -327,7 +322,6 @@ export const bridgeCreditPurchasesToPayables = mutation({
         sourceFileName: report.fileName,
         sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
-        branchId: report.branchId,
         sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
@@ -336,7 +330,6 @@ export const bridgeCreditPurchasesToPayables = mutation({
         },
       });
       const txId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "invoice", direction: "in",
         date: g.invoiceDate, amount: g.amount, paidAmount, status,
         vendorId, payableId,
@@ -379,10 +372,9 @@ export const bridgeInventoryToStock = mutation({
 
     let upserted = 0;
     for (const v of latest.values()) {
-      // Look up existing stockItem
+      // Look up existing stockItem by name
       const existing = await ctx.db
         .query("stockItems")
-        .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
         .filter((q: any) => q.eq(q.field("name"), v.itemName))
         .first();
 
@@ -404,8 +396,7 @@ export const bridgeInventoryToStock = mutation({
           unit: v.unit,
           minQty: 0,
           status,
-          branchId: report.branchId,
-        });
+          });
       }
       upserted++;
     }
@@ -435,17 +426,12 @@ export const bridgeCashFlowToExpenses = mutation({
       .withIndex("by_report", (q) => q.eq("reportId", reportId))
       .collect();
 
-    // Idempotent: clear ETL-tagged expenses for this report's branch dates
-    const datesIn = new Set(flows.map((f) => f.businessDate));
-    for (const d of datesIn) {
-      const existing = await ctx.db
-        .query("expenses")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", d))
-        .collect();
-      for (const e of existing) {
-        if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
-      }
-    }
+    // Idempotent: clear ETL-tagged expenses for this report
+    const existingExp = await ctx.db
+      .query("expenses")
+      .withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId))
+      .collect();
+    for (const e of existingExp) await ctx.db.delete(e._id);
 
     let inserted = 0;
     let rowIdx = 0;
@@ -461,7 +447,6 @@ export const bridgeCashFlowToExpenses = mutation({
         paymentSource: "petty_cash" as const,
         status: "approved" as const,
         hasAttachment: false,
-        branchId: report.branchId,
         sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
@@ -520,12 +505,8 @@ export const runBridgesForReport = action({
     const transfers = await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToOwnerTransfersInternal, { reportId });
     const incentives = await ctx.runMutation(internal.features.reports.bridges.bridgeIncentivesToExpensesInternal, { reportId });
 
-    // 3. Inventory movements per branch (compute deltas across reports)
-    const reportRow: any = await ctx.runQuery(internal.features.reports.bridges.getReportInternal, { reportId });
-    let movements: any = { inserted: 0 };
-    if (reportRow?.branchId) {
-      movements = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: reportRow.branchId });
-    }
+    // 3. Inventory movements (compute deltas across reports — single-tenant)
+    const movements = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, {});
 
     return { deriveVendors, sales, closings, payables, stock, expenses, transfers, incentives, movements };
   },
@@ -535,7 +516,7 @@ export const runBridgesForReport = action({
 
 export const backfillAllReports = action({
   args: {},
-  handler: async (ctx): Promise<{ reports: number; results: any[]; movementsByBranch: any[] }> => {
+  handler: async (ctx): Promise<{ reports: number; results: any[]; movements: any }> => {
     // 1. Seed master data first
     await ctx.runMutation(internal.features.reports.bridges.seedMasterDataInternal);
     await ctx.runMutation(internal.features.reports.bridges.deriveVendorsInternal);
@@ -544,9 +525,7 @@ export const backfillAllReports = action({
     const reports: any[] = await ctx.runQuery(internal.features.reports.bridges.listAllReportsInternal);
 
     const results: any[] = [];
-    const branchesTouched = new Set<string>();
     for (const r of reports) {
-      branchesTouched.add(r.branchId);
       const sales = await ctx.runMutation(internal.features.reports.bridges.bridgeProductSalesToDailySalesInternal, { reportId: r._id });
       const closings = await ctx.runMutation(internal.features.reports.bridges.bridgeDailyCashFlowToClosingsInternal, { reportId: r._id });
       const payables = await ctx.runMutation(internal.features.reports.bridges.bridgeCreditPurchasesToPayablesInternal, { reportId: r._id });
@@ -561,14 +540,10 @@ export const backfillAllReports = action({
       });
     }
 
-    // 3. After per-report inserts, compute inventory deltas across all reports per branch
-    const movementsByBranch: any[] = [];
-    for (const branchId of branchesTouched) {
-      const m = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: branchId as any });
-      movementsByBranch.push({ branchId, ...m });
-    }
+    // 3. After per-report inserts, compute inventory deltas across all reports (single-tenant)
+    const movements = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, {});
 
-    return { reports: reports.length, results, movementsByBranch };
+    return { reports: reports.length, results, movements };
   },
 });
 
@@ -671,7 +646,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
     for (const cs of cashSummaries) summByDate.set(cs.businessDate, cs);
     const dateSet = new Set(Array.from(groups.values()).map((g) => g.date));
     for (const d of dateSet) {
-      const existing = await ctx.db.query("dailySales").withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("businessDate", d)).collect();
+      const existing = await ctx.db.query("dailySales").withIndex("by_date", (q) => q.eq("businessDate", d)).collect();
       for (const e of existing) await ctx.db.delete(e._id);
     }
     let inserted = 0;
@@ -694,7 +669,7 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
         businessDate: g.date, channelId: chan.id, channelName: chan.name,
         grossAmount: g.gross, platformFee, promoCost, netAmount, cashReceivedAmount,
         settlementDate: undefined, referenceNo: `etl:${reportId}:${g.channel}:${g.date}`,
-        status: "recorded", branchId: report.branchId,
+        status: "recorded",
         sourceReportId: reportId,
         etlSource: {
           reportId,
@@ -710,7 +685,6 @@ export const bridgeProductSalesToDailySalesInternal = internalMutation({
       // Mirror to transactions (SSOT for Buku Besar) — kind=receipt (income), direction=in.
       // Idempotent via (sourceKind+sourceFileName+sourceSheetName+sourceRowNumber).
       const saleTxId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "receipt",
         direction: "in",
         date: g.date,
@@ -744,7 +718,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
     let inserted = 0;
     let rowIdx = 0;
     for (const f of flows) {
-      const existing = await ctx.db.query("dailyClosings").withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("businessDate", f.businessDate)).collect();
+      const existing = await ctx.db.query("dailyClosings").withIndex("by_date", (q) => q.eq("businessDate", f.businessDate)).collect();
       for (const e of existing) await ctx.db.delete(e._id);
       const expensesPaidCash = f.expenseOutflow + f.otherOutflow;
       const expectedCash = f.openingBalance + f.salesInflow + f.otherInflow - expensesPaidCash;
@@ -752,7 +726,7 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
       const closingId = await ctx.db.insert("dailyClosings", {
         businessDate: f.businessDate, openingCash: f.openingBalance, cashSales: f.salesInflow,
         nonCashSales: 0, expensesPaidCash, expectedCash, actualCash: f.closingBalance, difference,
-        status: "submitted", submittedBy: "system", submittedAt: new Date().toISOString(), branchId: report.branchId,
+        status: "submitted", submittedBy: "system", submittedAt: new Date().toISOString(),
         sourceFileName: report.fileName,
         sourceSheetName: SHEET.LAP_CF,
         sourceRowNumber: rowIdx + 2,
@@ -764,7 +738,6 @@ export const bridgeDailyCashFlowToClosingsInternal = internalMutation({
         },
       });
       const txId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "transfer", direction: "transfer",
         date: f.businessDate, amount: f.salesInflow, status: "submitted",
         counterparty: PARTY.CASHIER_SETORAN,
@@ -800,10 +773,8 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
       if (c.paidDate && (!g.paidDate || c.paidDate > g.paidDate)) g.paidDate = c.paidDate;
       groups.set(key, g);
     }
-    const existing = await ctx.db.query("payables").withIndex("by_branch", (q) => q.eq("branchId", report.branchId)).collect();
-    for (const e of existing) {
-      if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
-    }
+    const existing = await ctx.db.query("payables").withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId)).collect();
+    for (const e of existing) await ctx.db.delete(e._id);
     let inserted = 0;
     let rowIdx = 0;
     for (const g of groups.values()) {
@@ -819,7 +790,6 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         sourceFileName: report.fileName,
         sourceSheetName: SHEET.PEMBELIAN_KREDIT,
         sourceRowNumber: rowIdx + 2,
-        branchId: report.branchId,
         sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "creditPurchases", tabLabel: "Pembelian Kredit",
@@ -828,7 +798,6 @@ export const bridgeCreditPurchasesToPayablesInternal = internalMutation({
         },
       });
       const txId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "invoice", direction: "in",
         date: g.invoiceDate, amount: g.amount, paidAmount,
         status: status as "open" | "partial" | "paid" | "overdue",
@@ -863,7 +832,7 @@ export const bridgeInventoryToStockInternal = internalMutation({
     let upserted = 0;
     let rowIdx = 0;
     for (const v of latest.values()) {
-      const existing = await ctx.db.query("stockItems").withIndex("by_branch", (q) => q.eq("branchId", report.branchId)).filter((q: any) => q.eq(q.field("name"), v.itemName)).first();
+      const existing = await ctx.db.query("stockItems").filter((q: any) => q.eq(q.field("name"), v.itemName)).first();
       const status = v.qty <= 0 ? "Critical" : v.qty < 5 ? "Low" : "Stable";
       const etlSource = {
         reportId, stagingTable: "inventoryValuation", tabLabel: "Inventory",
@@ -873,7 +842,7 @@ export const bridgeInventoryToStockInternal = internalMutation({
       if (existing) {
         await ctx.db.patch(existing._id, { currentQty: v.qty, unit: v.unit, status, etlSource });
       } else {
-        await ctx.db.insert("stockItems", { name: v.itemName, currentQty: v.qty, unit: v.unit, minQty: 0, status, branchId: report.branchId, etlSource });
+        await ctx.db.insert("stockItems", { name: v.itemName, currentQty: v.qty, unit: v.unit, minQty: 0, status, etlSource });
       }
       upserted++;
       rowIdx++;
@@ -891,12 +860,8 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
     const cat = categories.find((c) => c.name === "Pengeluaran Kas Kecil") ?? categories.find((c) => c.type === "other") ?? categories[0];
     if (!cat) return { inserted: 0, reason: "no categories" };
     const flows = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect();
-    for (const f of flows) {
-      const existing = await ctx.db.query("expenses").withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", f.businessDate)).collect();
-      for (const e of existing) {
-        if (e.etlSource?.reportId === reportId) await ctx.db.delete(e._id);
-      }
-    }
+    const existingExp = await ctx.db.query("expenses").withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId)).collect();
+    for (const e of existingExp) await ctx.db.delete(e._id);
     let inserted = 0;
     let rowIdx = 0;
     for (const f of flows) {
@@ -909,7 +874,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
         expenseDate: f.businessDate, categoryId: cat._id, categoryName: cat.name,
         amount: totalOut,
         description: `Pengeluaran harian · ${breakdown}`,
-        paymentSource: "petty_cash", status: "approved", hasAttachment: false, branchId: report.branchId,
+        paymentSource: "petty_cash", status: "approved", hasAttachment: false,
         sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "dailyCashFlow", tabLabel: "Arus Kas",
@@ -919,7 +884,6 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
       });
       // Mirror ke transactions (SSOT Buku Besar) — kind=expense, direction=out.
       const expTxId = await mirrorTx(ctx, {
-        branchId: report.branchId,
         kind: "expense",
         direction: "out",
         date: f.businessDate,
@@ -945,14 +909,11 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
 // ─── Bridge 6: inventoryValuation across reports → stockMovements ─
 
 export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }): Promise<any> => {
-    // Cross-report: take ALL valuations for branch ordered by valuationDate,
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    // Cross-report (single-tenant): take ALL valuations ordered by valuationDate,
     // group by itemName, compute delta between consecutive snapshots.
-    const valuations = await ctx.db
-      .query("inventoryValuation")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
-      .collect();
+    const valuations = await ctx.db.query("inventoryValuation").collect();
 
     // group by item
     const byItem = new Map<string, any[]>();
@@ -963,10 +924,7 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
     }
 
     // Wipe ETL-tagged movements (identified via etlSource)
-    const existing = await ctx.db
-      .query("stockMovements")
-      .filter((q: any) => q.eq(q.field("branchId"), branchId))
-      .collect();
+    const existing = await ctx.db.query("stockMovements").collect();
     for (const e of existing) {
       if (e.etlSource !== undefined) await ctx.db.delete(e._id);
     }
@@ -977,7 +935,6 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
       // Look up stockItems id for the FK
       const stockItem = await ctx.db
         .query("stockItems")
-        .withIndex("by_branch", (q) => q.eq("branchId", branchId))
         .filter((q: any) => q.eq(q.field("name"), itemName))
         .first();
       if (!stockItem) continue;
@@ -998,7 +955,6 @@ export const bridgeInventoryDeltasToMovementsInternal = internalMutation({
           unit: cur.unit,
           date: cur.valuationDate,
           notes: `Dari ${prev.valuationDate} (${prev.qty} ${prev.unit}) → ${cur.valuationDate} (${cur.qty} ${cur.unit})`,
-          branchId,
           etlSource: {
             reportId: cur.reportId,
             stagingTable: "inventoryValuation",
@@ -1053,13 +1009,11 @@ export const bridgeCashFlowToOwnerTransfersInternal = internalMutation({
           sourceFileName: report.fileName,
           sourceSheetName: SHEET.LAP_CF,
           sourceRowNumber: rowIdx + 2,
-          branchId: report.branchId,
-          reportId,
+            reportId,
           description,
         });
         const txId = await mirrorTx(ctx, {
-          branchId: report.branchId,
-          kind: "transfer", direction: "transfer",
+            kind: "transfer", direction: "transfer",
           date: f.businessDate, amount: f.otherInflow, status: "completed",
           counterparty: PARTY.OWNER_INCOMING,
           description, reference: `IN-${f.businessDate}`,
@@ -1102,10 +1056,10 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
     // Idempotent: clear ETL-tagged incentive expenses for this report
     const existing = await ctx.db
       .query("expenses")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId).eq("expenseDate", report.periodStart))
+      .withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId))
       .collect();
     for (const e of existing) {
-      if (e.etlSource?.reportId === reportId && e.etlSource?.stagingTable === "employeeIncentives") {
+      if (e.etlSource?.stagingTable === "employeeIncentives") {
         await ctx.db.delete(e._id);
       }
     }
@@ -1123,7 +1077,6 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
       paymentSource: "owner_direct" as const,
       status: "approved" as const,
       hasAttachment: false,
-      branchId: report.branchId,
       sourceReportId: reportId,
       etlSource: {
         reportId, stagingTable: "employeeIncentives", tabLabel: "Insentif",
@@ -1232,9 +1185,7 @@ export const runFullRebuild = action({
     await ctx.runMutation(internal.features.reports.bridges.seedMasterDataInternal);
     await ctx.runMutation(internal.features.reports.bridges.deriveVendorsInternal);
     const reports: any[] = await ctx.runQuery(internal.features.reports.bridges.listAllReportsInternal);
-    const branchesTouched = new Set<string>();
     for (const r of reports) {
-      branchesTouched.add(r.branchId);
       await ctx.runMutation(internal.features.reports.bridges.bridgeProductSalesToDailySalesInternal, { reportId: r._id });
       await ctx.runMutation(internal.features.reports.bridges.bridgeDailyCashFlowToClosingsInternal, { reportId: r._id });
       await ctx.runMutation(internal.features.reports.bridges.bridgeCreditPurchasesToPayablesInternal, { reportId: r._id });
@@ -1243,13 +1194,9 @@ export const runFullRebuild = action({
       await ctx.runMutation(internal.features.reports.bridges.bridgeCashFlowToOwnerTransfersInternal, { reportId: r._id });
       await ctx.runMutation(internal.features.reports.bridges.bridgeIncentivesToExpensesInternal, { reportId: r._id });
     }
-    const movementsByBranch: any[] = [];
-    for (const branchId of branchesTouched) {
-      const m = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, { branchId: branchId as any });
-      movementsByBranch.push({ branchId, ...m });
-    }
+    const movements = await ctx.runMutation(internal.features.reports.bridges.bridgeInventoryDeltasToMovementsInternal, {});
 
-    return { migration, wipe, reports: reports.length, movementsByBranch };
+    return { migration, wipe, reports: reports.length, movements };
   },
 });
 

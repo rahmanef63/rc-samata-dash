@@ -11,15 +11,14 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName, matchItemNames } from "../../shared/helpers";
 
-async function fetchData(ctx: any, tableName: string, args: { reportId?: string; branchId?: string; timeFilter?: string }) {
+async function fetchData(ctx: any, tableName: string, args: { reportId?: string; timeFilter?: string }) {
   if (args.reportId && args.reportId !== "all") {
     return ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", args.reportId)).collect();
   }
-  if (!args.branchId) return [];
   // Bounded: last 52 reports + 5000 rows total to stay under Convex 8192.
   const reports = await ctx.db
     .query("weeklyReports")
-    .withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any))
+    .withIndex("by_uploadedAt")
     .order("desc")
     .take(52);
   const ROW_CAP = 5000;
@@ -63,17 +62,17 @@ function hasReadableItemName(name: unknown): name is string {
 // ─── 1. Overview KPI ──────────────────────────────────────────
 
 export const getAnalyticsOverview = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [sales, fcSummary, salesCtrl, leftover, invVal, hpp] = await Promise.all([
-      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, timeFilter }),
     ]);
 
     // Revenue from sales (channel = undefined means "all"/dine-in)
@@ -138,13 +137,13 @@ export const getAnalyticsOverview = query({
 // ─── 2. Product Profitability ─────────────────────────────────
 
 export const getProductProfitability = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [hpp, sales] = await Promise.all([
-      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, timeFilter }),
     ]);
 
     // Aggregate sales by product name
@@ -223,13 +222,13 @@ export const getProductProfitability = query({
 // ─── 3. Purchase Efficiency ───────────────────────────────────
 
 export const getPurchaseEfficiency = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [vendor, costAn] = await Promise.all([
-      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "vendorPurchases", { reportId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, timeFilter }),
     ]);
 
     type EfficiencyItem = {
@@ -321,14 +320,14 @@ export const getPurchaseEfficiency = query({
 // ─── 4. Waste Analysis ────────────────────────────────────────
 
 export const getWasteAnalysis = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [leftover, invVal, hpp] = await Promise.all([
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, timeFilter }),
     ]);
 
     // Build price map from inventory valuation and HPP
@@ -408,14 +407,14 @@ export const getWasteAnalysis = query({
 });
 
 export const getWasteAnalysisInternal = internalQuery({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [leftover, invVal, hpp] = await Promise.all([
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, timeFilter }),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -496,13 +495,13 @@ export const getWasteAnalysisInternal = internalQuery({
 // ─── 5. Cash Flow Summary ─────────────────────────────────────
 
 export const getCashFlowSummary = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [cashFlow, cashSummary] = await Promise.all([
-      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "dailyCashSummary", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "dailyCashFlow", { reportId, timeFilter }),
+      fetchData(ctx, "dailyCashSummary", { reportId, timeFilter }),
     ]);
 
     // Build commission map from kas periode
@@ -580,15 +579,15 @@ export const getCashFlowSummary = query({
 // ─── 6. Priority Items ────────────────────────────────────────
 
 export const getPriorityItems = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
     const [leftover, hpp, vendor, costAn] = await Promise.all([
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "productHPP", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "vendorPurchases", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "productHPP", { reportId, timeFilter }),
+      fetchData(ctx, "vendorPurchases", { reportId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, timeFilter }),
     ]);
 
     // Build item universe (all unique items across tables)

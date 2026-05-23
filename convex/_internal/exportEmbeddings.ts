@@ -28,7 +28,6 @@ export default internalQuery({
         _creationTime: row._creationTime,
         sourceTable: row.sourceTable,
         sourceId: row.sourceId,
-        branchId: row.branchId,
         reportId: row.reportId ?? null,
         periodKey: row.periodKey,
         textContent: row.textContent,

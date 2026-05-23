@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { itemVariants } from "@/shared/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useBranchScope } from "../context/BranchScopeContext";
 import { useDateScope } from "../context/DateScopeContext";
 import { useFilteredByDate } from "@/shared/hooks";
 import { formatRpFull } from "@/shared/lib";
@@ -36,12 +35,10 @@ export function DashboardRecentTransactions() {
   const router = useRouter();
   const [selected, setSelected] = useState<TransactionItem | null>(null);
 
-  const { branchId: scopeBranchId, branches } = useBranchScope();
   const { setGranularity, rangeLabel } = useDateScope();
-  const branchId = scopeBranchId ?? branches?.[0]?._id;
   const rawTransactions = useQuery(
     api.features.reports.dashboardQueries.getRecentTransactions,
-    branchId ? { branchId } : "skip",
+    {},
   );
   const transactions = useFilteredByDate(rawTransactions, "time");
 

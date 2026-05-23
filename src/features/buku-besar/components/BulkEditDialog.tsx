@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Save, X as XIcon, Loader2 } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useBulkPatch } from "../api";
 import type { BukuBesarRow } from "./BukuBesarTable";
@@ -57,12 +56,10 @@ export function BulkEditDialog({
   open,
   onClose,
   rows,
-  branchId,
 }: {
   open: boolean;
   onClose: () => void;
   rows: BukuBesarRow[];
-  branchId: Id<"branches">;
 }) {
   const bulkPatch = useBulkPatch();
   const [field, setField] = useState<EditableField["key"]>("date");
@@ -87,7 +84,7 @@ export function BulkEditDialog({
         return;
       }
 
-      const res = await bulkPatch({ branchId, patches });
+      const res = await bulkPatch({ patches });
       toast.success(`${res.updated} row di-update`);
       if (res.errors.length > 0) {
         toast.message(`${res.errors.length} row error`);

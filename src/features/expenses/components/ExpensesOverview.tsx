@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
 import { SectionHeader, DataTable, CrudDialog, ProgressBar, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
@@ -12,7 +11,6 @@ import { paymentSourceLabels } from "../lib";
 import { formatRpFull } from "@/shared/lib";
 import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from "../api";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const columns: Column<Expense>[] = [
@@ -28,14 +26,12 @@ const columns: Column<Expense>[] = [
 
 export function ExpensesOverview() {
   const [sourceRow, setSourceRow] = useState<Expense | null>(null);
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
 
   const rawCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
 
-  const rawExpenses = useExpenses(currentBranchId || "");
-  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  const rawExpenses = useExpenses();
+  const reportExpenses = useQuery(api.features.reports.queries.getExpensesByBranch, {});
   type ReportExpense = NonNullable<typeof reportExpenses>[number];
 
   const manualExpenses = (rawExpenses || []).map(e => ({ ...e, id: e._id })) as unknown as Expense[];
@@ -50,7 +46,6 @@ export function ExpensesOverview() {
     vendorName: "",
     hasAttachment: false,
     status: "approved" as const,
-    branchId: e.branchId,
     _creationTime: e._creationTime,
   })) as unknown as Expense[];
   const expensesAll = [...manualExpenses, ...reportData];
@@ -91,13 +86,11 @@ export function ExpensesOverview() {
   ];
 
   const customCreate = async (data: Expense) => {
-    if (!currentBranchId) { toast.error("Cabang belum tersedia."); return; }
     const category = rawCategories?.find(c => c.name === data.categoryName);
     const vendor = rawVendors?.find(v => v.name === data.vendorName);
     await crud.onCreate({
       ...data,
-      branchId: currentBranchId,
-      categoryId: category?._id ?? currentBranchId, // fallback to avoid null
+      categoryId: category?._id,
       vendorId: vendor?._id ?? undefined,
       vendorName: vendor?.name ?? data.vendorName ?? undefined,
       hasAttachment: false,

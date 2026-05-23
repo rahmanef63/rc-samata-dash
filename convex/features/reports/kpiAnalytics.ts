@@ -11,17 +11,16 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { normalizeItemName } from "../../shared/helpers";
 
-async function fetchData(ctx: any, tableName: string, args: { reportId?: string; branchId?: string; timeFilter?: string }) {
+async function fetchData(ctx: any, tableName: string, args: { reportId?: string; timeFilter?: string }) {
   if (args.reportId && args.reportId !== "all") {
     return ctx.db.query(tableName as any).withIndex("by_report", (q: any) => q.eq("reportId", args.reportId)).collect();
   }
-  if (!args.branchId) return [];
   // Bounded loop: last 52 reports + 5000 rows total. Convex caps per-query
-  // returns at 8192; without this an old branch with many uploaded weeks
-  // crashed KPI dashboard with "Array length too long".
+  // returns at 8192; without this many uploaded weeks crashed KPI dashboard
+  // with "Array length too long".
   const reports = await ctx.db
     .query("weeklyReports")
-    .withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId as any))
+    .withIndex("by_uploadedAt")
     .order("desc")
     .take(52);
   const ROW_CAP = 5000;
@@ -70,22 +69,18 @@ const DEFAULT_KPIS = [
 // ─── Seed Default KPI Targets ────────────────────────────────
 
 export const seedDefaultKPITargets = mutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
-    // Check if targets already exist for this branch
-    const existing = await ctx.db
-      .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .first();
+    // Check if targets already exist
+    const existing = await ctx.db.query("kpiTargets").first();
 
     if (existing) return { seeded: false, message: "KPI targets already exist" };
 
     const today = new Date().toISOString().split("T")[0];
     for (const kpi of DEFAULT_KPIS) {
       await ctx.db.insert("kpiTargets", {
-        branchId,
         effectiveFrom: today,
         ...kpi,
       });
@@ -114,16 +109,13 @@ export const updateKPITarget = mutation({
   },
 });
 
-// ─── List KPI targets for branch ─────────────────────────────
+// ─── List KPI targets ─────────────────────────────────────────
 
 export const listKPITargets = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    return ctx.db
-      .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .collect();
+    return ctx.db.query("kpiTargets").collect();
   },
 });
 
@@ -150,24 +142,12 @@ function evaluateKPI(
 }
 
 export const getKPIDashboard = query({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
-    let targetBranchId = branchId;
-    
-    if (reportId && reportId !== "all") {
-      const report = await ctx.db.get(reportId as any) as any;
-      if (report) targetBranchId = report.branchId;
-    }
-
-    if (!targetBranchId) return { kpis: [], hasTargets: false };
-
     // Get targets
-    const targets = await ctx.db
-      .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", targetBranchId))
-      .collect();
+    const targets = await ctx.db.query("kpiTargets").collect();
 
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
@@ -182,14 +162,14 @@ export const getKPIDashboard = query({
       cashFlow,
       incentives,
     ] = await Promise.all([
-      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "employeeIncentives", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, timeFilter }),
+      fetchData(ctx, "dailyCashFlow", { reportId, timeFilter }),
+      fetchData(ctx, "employeeIncentives", { reportId, timeFilter }),
     ]);
 
     // ── Compute actuals ──
@@ -289,23 +269,11 @@ export const getKPIDashboard = query({
 });
 
 export const getKPIDashboardInternal = internalQuery({
-  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), branchId: v.optional(v.id("branches")), timeFilter: v.optional(v.string()) },
-  handler: async (ctx, { reportId, branchId, timeFilter }) => {
+  args: { reportId: v.optional(v.union(v.id("weeklyReports"), v.literal("all"))), timeFilter: v.optional(v.string()) },
+  handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
-    let targetBranchId = branchId;
-    
-    if (reportId && reportId !== "all") {
-      const report = await ctx.db.get(reportId as any) as any;
-      if (report) targetBranchId = report.branchId;
-    }
-
-    if (!targetBranchId) return { kpis: [], hasTargets: false };
-
-    const targets = await ctx.db
-      .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", targetBranchId))
-      .collect();
+    const targets = await ctx.db.query("kpiTargets").collect();
 
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
@@ -319,14 +287,14 @@ export const getKPIDashboardInternal = internalQuery({
       cashFlow,
       incentives,
     ] = await Promise.all([
-      fetchData(ctx, "productSales", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "foodCostSummary", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "salesControl", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "leftoverItems", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "inventoryValuation", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "costAnalysis", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "dailyCashFlow", { reportId, branchId, timeFilter }),
-      fetchData(ctx, "employeeIncentives", { reportId, branchId, timeFilter }),
+      fetchData(ctx, "productSales", { reportId, timeFilter }),
+      fetchData(ctx, "foodCostSummary", { reportId, timeFilter }),
+      fetchData(ctx, "salesControl", { reportId, timeFilter }),
+      fetchData(ctx, "leftoverItems", { reportId, timeFilter }),
+      fetchData(ctx, "inventoryValuation", { reportId, timeFilter }),
+      fetchData(ctx, "costAnalysis", { reportId, timeFilter }),
+      fetchData(ctx, "dailyCashFlow", { reportId, timeFilter }),
+      fetchData(ctx, "employeeIncentives", { reportId, timeFilter }),
     ]);
 
     const allChannelSales = sales.filter((s: any) => !s.channel || s.channel === "all");
@@ -407,19 +375,18 @@ export const getKPIDashboardInternal = internalQuery({
 //
 // Returns each of 10 KPIs with actual / prior / average / ideal / target.
 // ideal = DEFAULT_KPIS targetValue (industry standard).
-// target = kpiTargets.targetValue (branch target).
+// target = kpiTargets.targetValue (configured target).
 // deltaPct = (actual - prior) / |prior| * 100.
 
 async function fetchByDateRange(
   ctx: any,
   tableName: string,
-  branchId: string,
   startMs: number,
   endMs: number,
 ): Promise<any[]> {
   const reports = await ctx.db
     .query("weeklyReports")
-    .withIndex("by_branch", (q: any) => q.eq("branchId", branchId))
+    .withIndex("by_uploadedAt")
     .order("desc")
     .take(104);
 
@@ -453,20 +420,19 @@ type KpiActuals = Record<string, number>;
 
 async function computeActuals(
   ctx: any,
-  branchId: string,
   startMs: number,
   endMs: number,
 ): Promise<KpiActuals> {
   const [sales, fcSummary, salesCtrl, leftover, invVal, costAn, cashFlow, incentives] =
     await Promise.all([
-      fetchByDateRange(ctx, "productSales", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "foodCostSummary", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "salesControl", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "leftoverItems", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "inventoryValuation", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "costAnalysis", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "dailyCashFlow", branchId, startMs, endMs),
-      fetchByDateRange(ctx, "employeeIncentives", branchId, startMs, endMs),
+      fetchByDateRange(ctx, "productSales", startMs, endMs),
+      fetchByDateRange(ctx, "foodCostSummary", startMs, endMs),
+      fetchByDateRange(ctx, "salesControl", startMs, endMs),
+      fetchByDateRange(ctx, "leftoverItems", startMs, endMs),
+      fetchByDateRange(ctx, "inventoryValuation", startMs, endMs),
+      fetchByDateRange(ctx, "costAnalysis", startMs, endMs),
+      fetchByDateRange(ctx, "dailyCashFlow", startMs, endMs),
+      fetchByDateRange(ctx, "employeeIncentives", startMs, endMs),
     ]);
 
   const allChannelSales = sales.filter((s: any) => !s.channel || s.channel === "all");
@@ -582,7 +548,6 @@ function avgWindows(granularity: string): number {
 
 export const getKpiDashboardRich = query({
   args: {
-    branchId: v.id("branches"),
     startDate: v.number(),
     endDate: v.number(),
     granularity: v.union(
@@ -593,22 +558,19 @@ export const getKpiDashboardRich = query({
       v.literal("year"),
     ),
   },
-  handler: async (ctx, { branchId, startDate, endDate, granularity }) => {
+  handler: async (ctx, { startDate, endDate, granularity }) => {
     await requireAuth(ctx);
 
-    const targets = await ctx.db
-      .query("kpiTargets")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .collect();
+    const targets = await ctx.db.query("kpiTargets").collect();
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
-    const current = roundActuals(await computeActuals(ctx, branchId, startDate, endDate));
+    const current = roundActuals(await computeActuals(ctx, startDate, endDate));
     const prior_ = shiftRange(granularity, startDate, endDate, 1);
-    const prior = roundActuals(await computeActuals(ctx, branchId, prior_.start, prior_.end));
+    const prior = roundActuals(await computeActuals(ctx, prior_.start, prior_.end));
 
     const N = avgWindows(granularity);
     const avgRange = shiftRange(granularity, startDate, endDate, N);
-    const avgRaw = await computeActuals(ctx, branchId, avgRange.start, endDate);
+    const avgRaw = await computeActuals(ctx, avgRange.start, endDate);
     const avg = roundActuals({
       food_cost_pct: avgRaw.food_cost_pct,
       gross_margin_pct: avgRaw.gross_margin_pct,

@@ -14,32 +14,31 @@ const kindValidator = v.union(
 
 export const listTransactions = query({
   args: {
-    branchId: v.id("branches"),
     kind: v.optional(kindValidator),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, { branchId, kind, limit }) => {
+  handler: async (ctx, { kind, limit }) => {
     await requireAuth(ctx);
     const cap = limit ?? 5000;
     if (kind) {
       return await ctx.db.query("transactions")
-        .withIndex("by_branch_kind", (q) => q.eq("branchId", branchId).eq("kind", kind))
+        .withIndex("by_kind", (q) => q.eq("kind", kind))
         .order("desc")
         .take(cap);
     }
     return await ctx.db.query("transactions")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .order("desc")
       .take(cap);
   },
 });
 
 export const countTransactions = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     const all = await ctx.db.query("transactions")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.TX_PAGE);
     const counts: Record<string, number> = {
       invoice: 0, payment: 0, receipt: 0, transfer: 0, expense: 0, anomaly: 0,

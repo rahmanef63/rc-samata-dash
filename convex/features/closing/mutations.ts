@@ -31,14 +31,12 @@ export const createClosing = mutation({
     status: closingStatusValidator,
     submittedBy: v.string(),
     submittedAt: v.string(),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     const id = await ctx.db.insert("dailyClosings", args);
     // Mirror ke Buku Besar SSOT — direction in (cash deposit ke kas).
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "receipt",
       direction: "in",
       date: args.businessDate,
@@ -52,18 +50,17 @@ export const createClosing = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailyClosings", entityId: id, action: "create",
       description: `Created closing ${args.businessDate} - diff Rp${args.difference}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
 });
 
 // ─── Bulk closing import from CSV ────────────────────────────
-// Upsert by (branchId, businessDate). If existing row for the date is
-// already "verified" it is skipped (errors reported back to caller).
+// Upsert by businessDate. If existing row for the date is already
+// "verified" it is skipped (errors reported back to caller).
 export const importDailyClosings = mutation({
   args: {
-    branchId: v.id("branches"),
     submittedBy: v.string(),
     rows: v.array(v.object({
       businessDate: v.string(),
@@ -77,7 +74,7 @@ export const importDailyClosings = mutation({
       note: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { branchId, submittedBy, rows }) => {
+  handler: async (ctx, { submittedBy, rows }) => {
     const userId = await requireAuth(ctx);
     const now = new Date().toISOString();
 
@@ -88,7 +85,7 @@ export const importDailyClosings = mutation({
 
     for (const r of rows) {
       const existing = await ctx.db.query("dailyClosings")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", branchId).eq("businessDate", r.businessDate))
+        .withIndex("by_date", (q) => q.eq("businessDate", r.businessDate))
         .first();
 
       if (existing) {
@@ -120,11 +117,9 @@ export const importDailyClosings = mutation({
           status: "submitted" as const,
           submittedBy,
           submittedAt: now,
-          branchId,
         });
         // Mirror bulk import row ke Buku Besar SSOT.
         const txId = await mirrorTx(ctx, {
-          branchId,
           kind: "receipt",
           direction: "in",
           date: r.businessDate,
@@ -144,7 +139,7 @@ export const importDailyClosings = mutation({
       entityId: "" as Id<"dailyClosings">,
       action: "create",
       description: `Import CSV setoran — ${inserted} insert, ${updated} update, ${skipped} skip`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { inserted, updated, skipped, skipDetails };
@@ -179,7 +174,7 @@ export const updateClosing = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailyClosings", entityId: id, action: "update",
       description: `Updated closing ${existing.businessDate}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -203,7 +198,7 @@ export const removeClosing = mutation({
     await insertAuditLog(ctx, {
       entityType: "dailyClosings", entityId: id, action: "delete",
       description: `Deleted closing ${existing.businessDate}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },
@@ -218,7 +213,6 @@ export const createTransfer = mutation({
     amount: v.number(),
     referenceNo: v.string(),
     status: transferStatusValidator,
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -226,7 +220,6 @@ export const createTransfer = mutation({
     const id = await ctx.db.insert("ownerTransfers", args);
     // Mirror ke Buku Besar SSOT — transfer kind, direction follows arg.
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "transfer",
       direction: args.direction === "owner_to_branch" ? "in" : "out",
       date: args.transferDate,
@@ -241,7 +234,7 @@ export const createTransfer = mutation({
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: id, action: "create",
       description: `Transfer ${args.direction} Rp${args.amount}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -282,7 +275,7 @@ export const updateTransfer = mutation({
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: id, action: "update",
       description: `Updated transfer ${existing.transferDate} Rp${existing.amount}`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -303,7 +296,7 @@ export const removeTransfer = mutation({
     await insertAuditLog(ctx, {
       entityType: "ownerTransfers", entityId: args.id, action: "delete",
       description: `Deleted transfer ${existing.transferDate} Rp${existing.amount} (${txDeleted} tx)`,
-      actedBy: userId, branchId: existing.branchId,
+      actedBy: userId,
     });
     return null;
   },
@@ -331,7 +324,6 @@ export const createPaymentReceipt = mutation({
     proofStorageId: v.optional(v.id("_storage")),
     proofFileName: v.optional(v.string()),
     proofMimeType: v.optional(v.string()),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -348,7 +340,6 @@ export const createPaymentReceipt = mutation({
     }
     // Mirror ke Buku Besar SSOT — receipt kind, direction=out (kas keluar bayar).
     const txId = await mirrorTx(ctx, {
-      branchId: args.branchId,
       kind: "payment",
       direction: "out",
       date: args.paidDate,
@@ -368,7 +359,7 @@ export const createPaymentReceipt = mutation({
     await insertAuditLog(ctx, {
       entityType: "paymentReceipts", entityId: id, action: "create",
       description: `Bukti bayar Rp${args.amount} (${args.paidBy}) ${args.paidDate}`,
-      actedBy: userId, branchId: args.branchId,
+      actedBy: userId,
     });
     return id;
   },
@@ -381,7 +372,6 @@ export const createPaymentReceipt = mutation({
 // found, receipt is recorded standalone (payableId unset).
 export const importPaymentReceiptsBulk = mutation({
   args: {
-    branchId: v.id("branches"),
     rows: v.array(v.object({
       paidDate: v.string(),
       amount: v.number(),
@@ -393,15 +383,13 @@ export const importPaymentReceiptsBulk = mutation({
       fileName: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { branchId, rows }) => {
+  handler: async (ctx, { rows }) => {
     const userId = await requireAuth(ctx);
 
     // Cache: vendor name → vendorId, latest open payable per vendor.
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const vendorIdx = buildVendorIndex(vendors);
-    const allPayables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.PAYABLES_PAGE);
+    const allPayables = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const openPayables = allPayables.filter((p) =>
       p.status === "open" || p.status === "partial" || p.status === "overdue",
     );
@@ -436,13 +424,11 @@ export const importPaymentReceiptsBulk = mutation({
           reference: r.reference,
           notes: r.notes,
           proofFileName: r.fileName,
-          branchId,
           uploadedAt: now,
           uploadedBy: userId,
         });
         // Mirror ke Buku Besar SSOT — payment kind, direction=out.
         const txId = await mirrorTx(ctx, {
-          branchId,
           kind: "payment",
           direction: "out",
           date: r.paidDate,
@@ -485,7 +471,7 @@ export const importPaymentReceiptsBulk = mutation({
       entityId: "" as Id<"paymentReceipts">,
       action: "create",
       description: `Bulk import bukti bayar — ${inserted} insert (${linked} dilink ke payable), ${errors.length} error`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { inserted, linked, errors };
@@ -556,7 +542,7 @@ export const removePaymentReceipt = mutation({
     await ctx.db.delete(id);
     await insertAuditLog(ctx, {
       entityType: "paymentReceipts", entityId: id, action: "delete",
-      description: `Hapus bukti bayar Rp${r.amount} (${txDeleted} tx)`, actedBy: userId, branchId: r.branchId,
+      description: `Hapus bukti bayar Rp${r.amount} (${txDeleted} tx)`, actedBy: userId,
     });
     return null;
   },
@@ -571,7 +557,6 @@ export const createBankStatementBatch = mutation({
     periodEnd: v.string(),
     fileName: v.string(),
     fileStorageId: v.optional(v.id("_storage")),
-    branchId: v.id("branches"),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -636,7 +621,7 @@ export const removeBankStatementBatch = mutation({
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: id, action: "delete",
       description: `Hapus batch statement ${b.accountKind} ${b.fileName} — ${entries.length} entry + ${txDeleted} tx mirror, ${linkedPayableIds.size} payable direkomputasi`,
-      actedBy: userId, branchId: b.branchId,
+      actedBy: userId,
     });
     return { entriesDeleted: entries.length, txDeleted, payablesRecomputed: linkedPayableIds.size };
   },
@@ -694,7 +679,6 @@ export const importBankStatementEntries = mutation({
         fileName: `statement-import-${batch.accountKind}-${batch.fileName}`,
         rowsApplied: 0, rowsRejected: 0,
         summary: `links applied during statement import (${batch.accountKind})`,
-        branchId: batch.branchId,
         uploadedAt: Date.now(), uploadedBy: userId,
       });
       return linkBatchId;
@@ -728,7 +712,6 @@ export const importBankStatementEntries = mutation({
         payableId: r.payableId,
         isValidated: r.payableId ? true : undefined,
         batchId,
-        branchId: batch.branchId,
       });
       inserted.push({ entryId, r });
       closing = r.balance > 0 ? r.balance : closing + r.credit - r.debit;
@@ -736,7 +719,6 @@ export const importBankStatementEntries = mutation({
       // ── Mirror to transactions SSOT ──────────────────────
       const cls = inferTxKind(r.category, r.debit, r.credit);
       const txId = await mirrorTx(ctx, {
-        branchId: batch.branchId,
         kind: cls.kind, direction: cls.direction,
         date: r.txDate, amount: cls.amount,
         status: r.payableId ? "linked" : "unlinked",
@@ -763,13 +745,13 @@ export const importBankStatementEntries = mutation({
           entryType: "bank_entry", entryId, batchId: lb,
           field: "payableId",
           beforeValue: undefined, afterValue: r.payableId,
-          branchId: batch.branchId, changedAt: now,
+          changedAt: now,
         });
         await ctx.db.insert("validationLogs", {
           entryType: "bank_entry", entryId, batchId: lb,
           field: "isValidated",
           beforeValue: "false", afterValue: "true",
-          branchId: batch.branchId, changedAt: now,
+          changedAt: now,
         });
         touchedPayableIds.add(r.payableId);
         linkApplied++;
@@ -782,7 +764,7 @@ export const importBankStatementEntries = mutation({
         const payable = await ctx.db.get(r.payableId);
         if (payable && cp) {
           const existingAlias = await ctx.db.query("vendorBankAliases")
-            .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId).eq("alias", cp))
+            .withIndex("by_alias", (q) => q.eq("alias", cp))
             .first();
           if (existingAlias) {
             await ctx.db.patch(existingAlias._id, {
@@ -795,7 +777,6 @@ export const importBankStatementEntries = mutation({
               vendorId: payable.vendorId,
               alias: cp,
               source: "statement" as const,
-              branchId: batch.branchId,
               lastSeenAt: now,
               seenCount: 1,
             });
@@ -811,7 +792,7 @@ export const importBankStatementEntries = mutation({
         const matchedVendor = vendorIdx.resolve(cp);
         if (matchedVendor) {
           const existing = await ctx.db.query("vendorBankAliases")
-            .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId).eq("alias", cp))
+            .withIndex("by_alias", (q) => q.eq("alias", cp))
             .first();
           if (existing) {
             await ctx.db.patch(existing._id, {
@@ -823,7 +804,6 @@ export const importBankStatementEntries = mutation({
               vendorId: matchedVendor._id,
               alias: cp,
               source: "statement" as const,
-              branchId: batch.branchId,
               lastSeenAt: Date.now(),
               seenCount: 1,
             });
@@ -848,14 +828,12 @@ export const importBankStatementEntries = mutation({
     //   3. Don't double-link: skip payables already linked by another
     //      entry in this same import pass.
     const TOL = MATCH.TOLERANCE_RP;
-    const openPayablesAll = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", batch.branchId))
-      .take(LIMITS.PAYABLES_PAGE);
+    const openPayablesAll = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const openPayables = openPayablesAll.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated,
     );
     const aliases = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", batch.branchId))
+      .withIndex("by_alias")
       .take(LIMITS.ALIASES_PAGE);
     type AliasIdx = { name: string; vendorId: string };
     const aliasIndex: AliasIdx[] = [];
@@ -896,13 +874,13 @@ export const importBankStatementEntries = mutation({
         entryType: "bank_entry", entryId, batchId: lb,
         field: "payableId",
         beforeValue: undefined, afterValue: candidate._id,
-        branchId: batch.branchId, changedAt: now,
+        changedAt: now,
       });
       await ctx.db.insert("validationLogs", {
         entryType: "bank_entry", entryId, batchId: lb,
         field: "isValidated",
         beforeValue: "false", afterValue: "true",
-        branchId: batch.branchId, changedAt: now,
+        changedAt: now,
       });
       await ctx.db.patch(entryId, {
         payableId: candidate._id,
@@ -933,7 +911,7 @@ export const importBankStatementEntries = mutation({
           entryType: "payable", entryId: pidStr, batchId: linkBatchId,
           field: "paidAmount",
           beforeValue: String(oldPaid), afterValue: String(newPaid),
-          branchId: batch.branchId, changedAt: now,
+          changedAt: now,
         });
       }
       if (newStatus !== p.status && linkBatchId) {
@@ -941,7 +919,7 @@ export const importBankStatementEntries = mutation({
           entryType: "payable", entryId: pidStr, batchId: linkBatchId,
           field: "status",
           beforeValue: p.status, afterValue: newStatus,
-          branchId: batch.branchId, changedAt: now,
+          changedAt: now,
         });
       }
       if (newPaid !== oldPaid || newStatus !== p.status) {
@@ -970,7 +948,7 @@ export const importBankStatementEntries = mutation({
     await insertAuditLog(ctx, {
       entityType: "bankStatementBatches", entityId: batchId, action: "update",
       description: `Parsed ${rows.length} entries (${batch.accountKind}) from ${batch.fileName}${linkSummary ? ` · ${linkSummary}` : ""}`,
-      actedBy: userId, branchId: batch.branchId,
+      actedBy: userId,
     });
 
     return {
@@ -995,18 +973,17 @@ const validationUpdateValidator = v.object({
 
 export const applyValidationBatch = mutation({
   args: {
-    branchId: v.id("branches"),
     fileName: v.string(),
     fileStorageId: v.optional(v.id("_storage")),
     updates: v.array(validationUpdateValidator),
   },
-  handler: async (ctx, { branchId, fileName, fileStorageId, updates }) => {
+  handler: async (ctx, { fileName, fileStorageId, updates }) => {
     const userId = await requireAuth(ctx);
 
     const batchId = await ctx.db.insert("validationBatches", {
       fileName, fileStorageId,
       rowsApplied: 0, rowsRejected: 0,
-      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+      uploadedAt: Date.now(), uploadedBy: userId,
     });
 
     let applied = 0;
@@ -1034,7 +1011,7 @@ export const applyValidationBatch = mutation({
             await ctx.db.insert("validationLogs", {
               entryType: "bank_entry", entryId: u.entryId, batchId, field: "paymentReference",
               beforeValue: cur.paymentReference, afterValue: u.paymentReference,
-              branchId, changedAt: now,
+              changedAt: now,
             });
             patch.paymentReference = u.paymentReference;
           }
@@ -1046,7 +1023,7 @@ export const applyValidationBatch = mutation({
                 entryType: "bank_entry", entryId: u.entryId, batchId, field: "payableId",
                 beforeValue: cur.payableId as string | undefined,
                 afterValue: newPayableId as string | undefined,
-                branchId, changedAt: now,
+                changedAt: now,
               });
               patch.payableId = newPayableId;
             }
@@ -1057,7 +1034,7 @@ export const applyValidationBatch = mutation({
               entryType: "bank_entry", entryId: u.entryId, batchId, field: "isValidated",
               beforeValue: String(cur.isValidated ?? false),
               afterValue: String(u.isValidated),
-              branchId, changedAt: now,
+              changedAt: now,
             });
             patch.isValidated = u.isValidated;
           }
@@ -1075,7 +1052,7 @@ export const applyValidationBatch = mutation({
             await ctx.db.insert("validationLogs", {
               entryType: "payable", entryId: u.entryId, batchId, field: "paymentReference",
               beforeValue: cur.paymentReference, afterValue: u.paymentReference,
-              branchId, changedAt: now,
+              changedAt: now,
             });
             patch.paymentReference = u.paymentReference;
           }
@@ -1084,7 +1061,7 @@ export const applyValidationBatch = mutation({
               entryType: "payable", entryId: u.entryId, batchId, field: "isValidated",
               beforeValue: String(cur.isValidated ?? false),
               afterValue: String(u.isValidated),
-              branchId, changedAt: now,
+              changedAt: now,
             });
             patch.isValidated = u.isValidated;
           }
@@ -1125,7 +1102,7 @@ export const applyValidationBatch = mutation({
           entryType: "payable", entryId: pidStr, batchId,
           field: "paidAmount",
           beforeValue: String(oldPaid), afterValue: String(newPaid),
-          branchId, changedAt: now,
+          changedAt: now,
         });
       }
       if (newStatus !== p.status) {
@@ -1133,7 +1110,7 @@ export const applyValidationBatch = mutation({
           entryType: "payable", entryId: pidStr, batchId,
           field: "status",
           beforeValue: p.status, afterValue: newStatus,
-          branchId, changedAt: now,
+          changedAt: now,
         });
       }
       if (newPaid !== oldPaid || newStatus !== p.status) {
@@ -1146,7 +1123,7 @@ export const applyValidationBatch = mutation({
     await insertAuditLog(ctx, {
       entityType: "validationBatches", entityId: batchId, action: "create",
       description: `Apply validation ${fileName} — ${applied} applied / ${rejected} rejected`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { batchId, applied, rejected };
@@ -1166,27 +1143,25 @@ export const applyValidationBatch = mutation({
 //      set isValidated=true on both sides.
 
 export const autoMatchPayables = mutation({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }): Promise<any> => {
+  args: {},
+  handler: async (ctx): Promise<any> => {
     const userId = await requireAuth(ctx);
 
     // 1. Load unvalidated bank entries (payable_payment category)
     const allBank = await ctx.db.query("bankStatementEntries")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.BANK_ENTRIES_PAGE);
     const banks = allBank.filter((b) => b.category === "payable_payment" && !b.isValidated && b.debit > 0);
 
     // 2. Load open/partial/overdue payables
-    const allPay = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.PAYABLES_PAGE);
+    const allPay = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const payables = allPay.filter((p) =>
       (p.status === "open" || p.status === "partial" || p.status === "overdue") && !p.isValidated
     );
 
     // 3. Build vendor lookup: alias → vendorId, vendor name → vendorId
     const aliases = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
+      .withIndex("by_alias")
       .take(LIMITS.ALIASES_PAGE);
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const aliasMap = new Map<string, string>();
@@ -1217,7 +1192,7 @@ export const autoMatchPayables = mutation({
     const batchId = await ctx.db.insert("validationBatches", {
       fileName: `auto-match-${new Date().toISOString().slice(0, 16)}.json`,
       rowsApplied: 0, rowsRejected: 0,
-      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+      uploadedAt: Date.now(), uploadedBy: userId,
       summary: "auto rule-based match",
     });
 
@@ -1259,19 +1234,19 @@ export const autoMatchPayables = mutation({
         entryType: "bank_entry", entryId: b._id, batchId,
         field: "paymentReference",
         beforeValue: b.paymentReference, afterValue: ref,
-        branchId, changedAt: now,
+        changedAt: now,
       });
       await ctx.db.insert("validationLogs", {
         entryType: "bank_entry", entryId: b._id, batchId,
         field: "payableId",
         beforeValue: b.payableId as string | undefined, afterValue: payableId,
-        branchId, changedAt: now,
+        changedAt: now,
       });
       await ctx.db.insert("validationLogs", {
         entryType: "bank_entry", entryId: b._id, batchId,
         field: "isValidated",
         beforeValue: String(!!b.isValidated), afterValue: "true",
-        branchId, changedAt: now,
+        changedAt: now,
       });
       await ctx.db.patch(b._id, {
         payableId: payableId as Id<"payables">,
@@ -1288,7 +1263,7 @@ export const autoMatchPayables = mutation({
           entryType: "payable", entryId: p._id, batchId,
           field: "paymentReference",
           beforeValue: cur.paymentReference, afterValue: ref,
-          branchId, changedAt: now,
+          changedAt: now,
         });
       }
       if (!cur.isValidated) {
@@ -1296,7 +1271,7 @@ export const autoMatchPayables = mutation({
           entryType: "payable", entryId: p._id, batchId,
           field: "isValidated",
           beforeValue: "false", afterValue: "true",
-          branchId, changedAt: now,
+          changedAt: now,
         });
       }
       await ctx.db.patch(p._id, { paymentReference: ref, isValidated: true });
@@ -1362,7 +1337,7 @@ export const autoMatchPayables = mutation({
     await insertAuditLog(ctx, {
       entityType: "validationBatches", entityId: batchId, action: "create",
       description: `Auto-match: ${applied} cells applied across ${banksByVendor.size} vendors`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { batchId, applied, rejected, vendorsTouched: banksByVendor.size, orphanBanks: orphanBanks.length };
@@ -1401,21 +1376,20 @@ export const learnVendorAlias = mutation({
   args: {
     vendorId: v.id("vendors"),
     alias: v.string(),
-    branchId: v.id("branches"),
   },
-  handler: async (ctx, { vendorId, alias, branchId }) => {
+  handler: async (ctx, { vendorId, alias }) => {
     await requireAuth(ctx);
     const norm = normalizeAlias(alias);
     if (!norm) return { ok: false };
     const existing = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", norm))
+      .withIndex("by_alias", (q) => q.eq("alias", norm))
       .first();
     if (existing) {
       await ctx.db.patch(existing._id, { vendorId, lastSeenAt: Date.now(), seenCount: existing.seenCount + 1 });
     } else {
       await ctx.db.insert("vendorBankAliases", {
         vendorId, alias: norm, source: "manual" as const,
-        branchId, lastSeenAt: Date.now(), seenCount: 1,
+        lastSeenAt: Date.now(), seenCount: 1,
       });
     }
     return { ok: true };
@@ -1427,21 +1401,20 @@ export const learnVendorAlias = mutation({
 
 export const commitAutoMatchSuggestions = mutation({
   args: {
-    branchId: v.id("branches"),
     matches: v.array(v.object({
       payableId: v.id("payables"),
       bankEntryIds: v.array(v.id("bankStatementEntries")),
     })),
     fileName: v.optional(v.string()),
   },
-  handler: async (ctx, { branchId, matches, fileName }) => {
+  handler: async (ctx, { matches, fileName }) => {
     const userId = await requireAuth(ctx);
 
     const batchId = await ctx.db.insert("validationBatches", {
       fileName: fileName ?? `auto-match-${new Date().toISOString().slice(0, 16)}`,
       rowsApplied: 0, rowsRejected: 0,
       summary: `${matches.length} payables · accepted via preview`,
-      branchId, uploadedAt: Date.now(), uploadedBy: userId,
+      uploadedAt: Date.now(), uploadedBy: userId,
     });
 
     const now = Date.now();
@@ -1478,19 +1451,19 @@ export const commitAutoMatchSuggestions = mutation({
             entryType: "bank_entry", entryId: bid, batchId,
             field: "paymentReference",
             beforeValue: cur.paymentReference, afterValue: ref,
-            branchId, changedAt: now,
+            changedAt: now,
           });
           await ctx.db.insert("validationLogs", {
             entryType: "bank_entry", entryId: bid, batchId,
             field: "payableId",
             beforeValue: cur.payableId as string | undefined, afterValue: m.payableId,
-            branchId, changedAt: now,
+            changedAt: now,
           });
           await ctx.db.insert("validationLogs", {
             entryType: "bank_entry", entryId: bid, batchId,
             field: "isValidated",
             beforeValue: String(!!cur.isValidated), afterValue: "true",
-            branchId, changedAt: now,
+            changedAt: now,
           });
           await ctx.db.patch(bid, {
             payableId: m.payableId,
@@ -1503,7 +1476,7 @@ export const commitAutoMatchSuggestions = mutation({
             const aliasNorm = normalizeAlias(cur.counterparty);
             if (aliasNorm) {
               const existingAlias = await ctx.db.query("vendorBankAliases")
-                .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId).eq("alias", aliasNorm))
+                .withIndex("by_alias", (q) => q.eq("alias", aliasNorm))
                 .first();
               if (existingAlias) {
                 await ctx.db.patch(existingAlias._id, {
@@ -1516,7 +1489,7 @@ export const commitAutoMatchSuggestions = mutation({
                   vendorId: payable.vendorId,
                   alias: aliasNorm,
                   source: "validation" as const,
-                  branchId, lastSeenAt: now, seenCount: 1,
+                  lastSeenAt: now, seenCount: 1,
                 });
               }
             }
@@ -1530,7 +1503,7 @@ export const commitAutoMatchSuggestions = mutation({
             entryType: "payable", entryId: m.payableId, batchId,
             field: "paymentReference",
             beforeValue: payable.paymentReference, afterValue: ref,
-            branchId, changedAt: now,
+            changedAt: now,
           });
         }
         if (!payable.isValidated) {
@@ -1538,7 +1511,7 @@ export const commitAutoMatchSuggestions = mutation({
             entryType: "payable", entryId: m.payableId, batchId,
             field: "isValidated",
             beforeValue: "false", afterValue: "true",
-            branchId, changedAt: now,
+            changedAt: now,
           });
         }
 
@@ -1551,7 +1524,7 @@ export const commitAutoMatchSuggestions = mutation({
             entryType: "payable", entryId: m.payableId, batchId,
             field: "paidAmount",
             beforeValue: String(oldPaid), afterValue: String(newPaid),
-            branchId, changedAt: now,
+            changedAt: now,
           });
         }
         if (newStatus !== payable.status) {
@@ -1559,7 +1532,7 @@ export const commitAutoMatchSuggestions = mutation({
             entryType: "payable", entryId: m.payableId, batchId,
             field: "status",
             beforeValue: payable.status, afterValue: newStatus,
-            branchId, changedAt: now,
+            changedAt: now,
           });
         }
 
@@ -1579,7 +1552,7 @@ export const commitAutoMatchSuggestions = mutation({
     await insertAuditLog(ctx, {
       entityType: "validationBatches", entityId: batchId, action: "create",
       description: `Approve auto-match: ${matches.length} payables, ${applied} cells applied`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
     return { batchId, applied, rejected };
   },
@@ -1704,7 +1677,7 @@ export const deleteValidationBatch = mutation({
     await insertAuditLog(ctx, {
       entityType: "validationBatches", entityId: batchId, action: "delete",
       description: `Undo & hapus batch validasi ${batch.fileName} — ${reverted} entry direvert (${logs.length} log)`,
-      actedBy: userId, branchId: batch.branchId,
+      actedBy: userId,
     });
 
     return { reverted, logsDeleted: logs.length, payablesRecomputed: touchedPayableIds.size };

@@ -26,14 +26,13 @@ const sourceTableValidator = v.union(
 //     expensesPaidCash, actualCash, status
 export const bulkPatch = mutation({
   args: {
-    branchId: v.id("branches"),
     patches: v.array(v.object({
       id: v.string(),
       sourceTable: sourceTableValidator,
       data: v.any(),
     })),
   },
-  handler: async (ctx, { branchId, patches }) => {
+  handler: async (ctx, { patches }) => {
     const userId = await requireAuth(ctx);
 
     let updated = 0;
@@ -108,7 +107,7 @@ export const bulkPatch = mutation({
       entityId: "" as Id<"payables">,
       action: "update",
       description: `Bulk patch — ${updated} row updated, ${errors.length} error`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { updated, errors };
@@ -119,13 +118,12 @@ export const bulkPatch = mutation({
 // NOT cascade to its receipts here (recommend the user un-link first).
 export const bulkDelete = mutation({
   args: {
-    branchId: v.id("branches"),
     targets: v.array(v.object({
       id: v.string(),
       sourceTable: sourceTableValidator,
     })),
   },
-  handler: async (ctx, { branchId, targets }) => {
+  handler: async (ctx, { targets }) => {
     const userId = await requireAuth(ctx);
 
     let deleted = 0;
@@ -153,7 +151,7 @@ export const bulkDelete = mutation({
       entityId: "" as Id<"payables">,
       action: "delete",
       description: `Bulk delete — ${deleted} row, ${errors.length} error`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { deleted, errors };

@@ -10,7 +10,6 @@ import type { TxKind, TxDirection, SourceKind } from "./_types";
 // the txId so caller can stamp transactionId on the source row.
 
 export type MirrorArgs = {
-  branchId: Id<"branches">;
   kind: TxKind;
   direction: TxDirection;
   date: string;

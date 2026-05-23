@@ -12,10 +12,6 @@ const DashboardKpiRichGrid = dynamic(
   () => import("./DashboardKpiRichGrid").then((m) => m.DashboardKpiRichGrid),
   { loading: () => <Skeleton className="h-80 w-full rounded-xl" />, ssr: false },
 );
-const DashboardBranchCompare = dynamic(
-  () => import("./DashboardBranchCompare").then((m) => m.DashboardBranchCompare),
-  { loading: () => TALL_FALLBACK, ssr: false },
-);
 const DashboardCashRunway = dynamic(
   () => import("./DashboardCashRunway").then((m) => m.DashboardCashRunway),
   { loading: () => CARD_FALLBACK, ssr: false },
@@ -78,10 +74,7 @@ export default function DashboardPage() {
           <DashboardKpiRichGrid />
         </div>
 
-        <div className="lg:col-span-7">
-          <DashboardBranchCompare />
-        </div>
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-12">
           <DashboardCashRunway />
         </div>
 

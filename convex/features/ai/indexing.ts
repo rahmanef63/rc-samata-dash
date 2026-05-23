@@ -95,7 +95,6 @@ export const storeEmbeddings = internalMutation({
       v.object({
         sourceTable: v.string(),
         sourceId: v.string(),
-        branchId: v.id("branches"),
         reportId: v.optional(v.id("weeklyReports")),
         periodKey: v.string(),
         textContent: v.string(),
@@ -238,7 +237,6 @@ export const indexReportData = action({
       const batch = allTexts.slice(i, i + STORE_BATCH).map((item, j) => ({
         sourceTable: item.sourceTable,
         sourceId: item.sourceId,
-        branchId: report.branchId,
         reportId,
         periodKey,
         textContent: item.textContent,

@@ -25,11 +25,9 @@ type AccountKind = "owner" | "pic";
 type PaidBy = "owner" | "pic";
 
 export default function OwnerTransferPage() {
-  const branches = useQuery(api.features.masterData.queries.listBranches);
-  const branchId = branches?.[0]?._id;
-  const receipts = useQuery(api.features.closing.queries.listPaymentReceipts, branchId ? { branchId, limit: 1000 } : "skip");
-  const ownerBatches = useQuery(api.features.closing.queries.listBankStatementBatches, branchId ? { branchId, accountKind: "owner" as const } : "skip");
-  const picBatches = useQuery(api.features.closing.queries.listBankStatementBatches, branchId ? { branchId, accountKind: "pic" as const } : "skip");
+  const receipts = useQuery(api.features.closing.queries.listPaymentReceipts, { limit: 1000 });
+  const ownerBatches = useQuery(api.features.closing.queries.listBankStatementBatches, { accountKind: "owner" as const });
+  const picBatches = useQuery(api.features.closing.queries.listBankStatementBatches, { accountKind: "pic" as const });
 
   const recAmount = useMemo(() => (receipts ?? []).reduce((s, r) => s + r.amount, 0), [receipts]);
   const ownerTx = useMemo(() => (ownerBatches ?? []).reduce((s, b) => s + b.rowCount, 0), [ownerBatches]);
@@ -86,31 +84,27 @@ export default function OwnerTransferPage() {
         </TabsList>
 
         <TabsContent value="receipts">
-          {branchId ? <ReceiptsSection branchId={branchId} /> : <SkeletonText />}
+          <ReceiptsSection />
         </TabsContent>
         <TabsContent value="owner">
-          {branchId ? <StatementSection branchId={branchId} accountKind="owner" /> : <SkeletonText />}
+          <StatementSection accountKind="owner" />
         </TabsContent>
         <TabsContent value="pic">
-          {branchId ? <StatementSection branchId={branchId} accountKind="pic" /> : <SkeletonText />}
+          <StatementSection accountKind="pic" />
         </TabsContent>
         <TabsContent value="validator">
-          {branchId ? <ValidatorSection branchId={branchId} /> : <SkeletonText />}
+          <ValidatorSection />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function SkeletonText() {
-  return <p className="text-sm text-muted-foreground">Memuat cabang...</p>;
-}
-
 // ─── Bukti Bayar Piutang section ───────────────────────────
 
-function ReceiptsSection({ branchId }: { branchId: Id<"branches"> }) {
-  const receipts = useQuery(api.features.closing.queries.listPaymentReceipts, { branchId, limit: 50 });
-  const openPayables = useQuery(api.features.closing.queries.listOpenPayables, { branchId });
+function ReceiptsSection() {
+  const receipts = useQuery(api.features.closing.queries.listPaymentReceipts, { limit: 50 });
+  const openPayables = useQuery(api.features.closing.queries.listOpenPayables, {});
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
   const createReceipt = useMutation(api.features.closing.mutations.createPaymentReceipt);
   const removeReceipt = useMutation(api.features.closing.mutations.removePaymentReceipt);
@@ -165,7 +159,6 @@ function ReceiptsSection({ branchId }: { branchId: Id<"branches"> }) {
         reference: form.reference || undefined,
         notes: form.notes || undefined,
         proofStorageId, proofFileName, proofMimeType,
-        branchId,
       });
       toast.success("Bukti bayar tersimpan");
       reset();
@@ -357,8 +350,8 @@ function ReceiptRow({ receipt, onDelete }: { receipt: any; onDelete: () => void 
 
 // ─── Bank Statement section ─────────────────────────────────
 
-function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">; accountKind: AccountKind }) {
-  const batches = useQuery(api.features.closing.queries.listBankStatementBatches, { branchId, accountKind });
+function StatementSection({ accountKind }: { accountKind: AccountKind }) {
+  const batches = useQuery(api.features.closing.queries.listBankStatementBatches, { accountKind });
   const generateUrl = useMutation(api.features.closing.mutations.generateProofUploadUrl);
   const createBatch = useMutation(api.features.closing.mutations.createBankStatementBatch);
   const removeBatch = useMutation(api.features.closing.mutations.removeBankStatementBatch);
@@ -401,7 +394,7 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
       const { storageId } = await r.json() as { storageId: Id<"_storage"> };
       const batchId = await createBatch({
         accountKind, periodStart, periodEnd,
-        fileName: parsed.file.name, fileStorageId: storageId, branchId,
+        fileName: parsed.file.name, fileStorageId: storageId,
       });
       const res = await importEntries({
         batchId,
@@ -490,7 +483,6 @@ function StatementSection({ branchId, accountKind }: { branchId: Id<"branches">;
           {parsed && (
             <StatementImportPreview
               rows={parsed.rows}
-              branchId={branchId}
               fileName={parsed.file.name}
               uploading={uploading}
               onRowsChange={(rows) => setParsed({ ...parsed, rows })}
@@ -997,9 +989,9 @@ function parseCsvLine(line: string): string[] {
   return out;
 }
 
-function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
-  const candidates = useQuery(api.features.closing.queries.listValidationCandidates, { branchId });
-  const batches = useQuery(api.features.closing.queries.listValidationBatches, { branchId, limit: 20 });
+function ValidatorSection() {
+  const candidates = useQuery(api.features.closing.queries.listValidationCandidates, {});
+  const batches = useQuery(api.features.closing.queries.listValidationBatches, { limit: 20 });
   const applyBatch = useMutation(api.features.closing.mutations.applyValidationBatch);
   const commitMatches = useMutation(api.features.closing.mutations.commitAutoMatchSuggestions);
   const deleteBatch = useMutation(api.features.closing.mutations.deleteValidationBatch);
@@ -1036,7 +1028,7 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
   // Only fetch preview when user opens it
   const preview = useQuery(
     api.features.closing.queries.previewAutoMatch,
-    previewMode === "auto" ? { branchId } : "skip",
+    previewMode === "auto" ? {} : "skip",
   );
 
   // Init approved set when preview loads
@@ -1076,7 +1068,6 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
     setCommitting(true);
     try {
       const res = await commitMatches({
-        branchId,
         matches: filtered.map((s) => ({
           payableId: s.payableId as Id<"payables">,
           bankEntryIds: s.bankEntryIds as Id<"bankStatementEntries">[],
@@ -1105,7 +1096,6 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
       const r = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": pendingCsv.file.type || "text/csv" }, body: pendingCsv.file });
       const { storageId } = await r.json() as { storageId: Id<"_storage"> };
       const res = await applyBatch({
-        branchId,
         fileName: pendingCsv.fileName,
         fileStorageId: storageId,
         updates: filtered,
@@ -1315,7 +1305,6 @@ function ValidatorSection({ branchId }: { branchId: Id<"branches"> }) {
         return (
           <ValidationLogSheet
             batchId={openBatchLogId}
-            branchId={branchId}
             fileName={batch?.fileName}
             rowsApplied={batch?.rowsApplied ?? 0}
             isDeleting={deletingBatchId === openBatchLogId}
@@ -1445,17 +1434,16 @@ function StatCard({ label, value, color = "" }: { label: string; value: number; 
 }
 
 function ValidationLogSheet({
-  batchId, branchId, fileName, rowsApplied, isDeleting, onDelete, onClose,
+  batchId, fileName, rowsApplied, isDeleting, onDelete, onClose,
 }: {
   batchId: Id<"validationBatches">;
-  branchId: Id<"branches">;
   fileName?: string;
   rowsApplied?: number;
   isDeleting?: boolean;
   onDelete?: () => void;
   onClose: () => void;
 }) {
-  const logs = useQuery(api.features.closing.queries.listValidationLogs, { branchId, batchId });
+  const logs = useQuery(api.features.closing.queries.listValidationLogs, { batchId });
   return (
     <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">

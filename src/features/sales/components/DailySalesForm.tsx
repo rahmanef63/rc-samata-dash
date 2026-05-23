@@ -11,10 +11,8 @@ import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/h
 import type { DailySale } from "@/shared/types";
 import { salesChannels, subTabs, formatRpFull } from "../lib";
 import { labelChannel } from "../constants/channels";
-import { toast } from "sonner";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
-import { useBranchScope } from "@/features/dashboard";
 import { api } from "../../../../convex/_generated/api";
 
 const fields: FieldConfig[] = [
@@ -45,12 +43,8 @@ export function DailySalesForm() {
   const [sub, setSub] = useState(0);
   const [sourceRow, setSourceRow] = useState<DailySale | null>(null);
 
-  // Auto-detect a branch ID for demo purposes
-  const { branchId: scopeBranchId, branches } = useBranchScope();
-  const currentBranchId = scopeBranchId ?? branches?.[0]?._id;
-
-  const rawSales = useDailySales(currentBranchId || "");
-  const reportSales = useQuery(api.features.reports.queries.getSalesByBranch, currentBranchId ? { branchId: currentBranchId } : "skip");
+  const rawSales = useDailySales();
+  const reportSales = useQuery(api.features.reports.queries.getSalesByBranch, {});
   type ReportSale = NonNullable<typeof reportSales>[number];
 
   // Merge manual entries + uploaded report data (transformed to DailySale shape)
@@ -67,7 +61,6 @@ export function DailySalesForm() {
     cashReceivedAmount: 0,
     status: "recorded" as const,
     referenceNo: s.productName ?? "",
-    branchId: s.branchId,
     _creationTime: s._creationTime,
   })) as unknown as DailySale[];
   const salesAll = [...manualData, ...reportData];
@@ -81,12 +74,9 @@ export function DailySalesForm() {
     updateMutation: updateSale,
     deleteMutation: deleteSale,
   });
-  // Auto-inject branchId for creates
   const customCrudCreate = async (data: DailySale) => {
-    if(!currentBranchId) { toast.error("Cabang belum tersedia. Tambahkan di Master Data."); return; }
     await crud.onCreate({
       ...data,
-      branchId: currentBranchId,
       netAmount: data.grossAmount - (data.platformFee || 0) - (data.promoCost || 0),
     });
   };

@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useAnomalyReceipts } from "../api";
 import { formatRpFull } from "@/shared/lib";
 import { cn } from "@/lib/utils";
@@ -21,8 +20,8 @@ const ANOMALY_CLS: Record<string, string> = {
   partial: "bg-orange-100 text-orange-700",
 };
 
-export function AnomaliTab({ branchId }: { branchId: Id<"branches"> }) {
-  const list = useAnomalyReceipts(branchId);
+export function AnomaliTab() {
+  const list = useAnomalyReceipts();
 
   const grouped = useMemo(() => {
     const map: Record<string, typeof list extends (infer T)[] | undefined ? T[] : never> =

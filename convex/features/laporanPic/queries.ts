@@ -3,24 +3,20 @@ import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
 
-// Riwayat chronological — union of payables + paymentReceipts + ownerTransfers
-// across a given branch. UI groups + filters client-side; we just give the
-// raw stream so different tabs can reuse it.
+// Riwayat chronological — union of payables + paymentReceipts + ownerTransfers.
+// UI groups + filters client-side; we just give the raw stream so different
+// tabs can reuse it.
 export const listRiwayatTransaksi = query({
-  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
-  handler: async (ctx, { branchId, limit }) => {
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
     await requireAuth(ctx);
     const cap = limit ?? 2000;
 
-    const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(cap);
+    const payables = await ctx.db.query("payables").take(cap);
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(cap);
-    const transfers = await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(cap);
+    const transfers = await ctx.db.query("ownerTransfers").take(cap);
 
     return { payables, receipts, transfers };
   },
@@ -29,11 +25,11 @@ export const listRiwayatTransaksi = query({
 // Anomaly receipts — flagged at import time. UI shows these so user
 // can clean up MISLABEL / DUPLIKAT / NOT_TRANSFER rows.
 export const listAnomalyReceipts = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
     const all = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.RECEIPTS_PAGE);
     return all.filter((r) => r.anomalyFlag && r.anomalyFlag !== "ok");
   },
@@ -43,14 +39,12 @@ export const listAnomalyReceipts = query({
 // from current data state. Mirrors the user's offline MATCH_PIUTANG
 // CSV so they can export back the system-of-record version.
 export const listMatchingReport = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.PAYABLES_PAGE);
+    const payables = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
+      .withIndex("by_date")
       .take(LIMITS.RECEIPTS_PAGE);
     const receiptsByPayable = new Map<string, typeof receipts>();
     for (const r of receipts) {

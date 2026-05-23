@@ -74,8 +74,8 @@ function payableToPage(p: PayableRow): Page {
   };
 }
 
-export function PayablesNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.payables.queries.listByBranch, { branchId }) as PayableRow[] | undefined;
+export function PayablesNotionView() {
+  const rows = useQuery(api.features.payables.queries.listByBranch, {}) as PayableRow[] | undefined;
   const update = useMutation(api.features.payables.mutations.update);
   const remove = useMutation(api.features.payables.mutations.remove);
 

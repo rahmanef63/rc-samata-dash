@@ -18,7 +18,6 @@ import {
 // rows when xlsx imported twice.
 export const upsertTransaction = mutation({
   args: {
-    branchId: v.id("branches"),
     kind: kindValidator,
     direction: directionValidator,
     date: v.string(),
@@ -87,13 +86,12 @@ export const upsertTransaction = mutation({
 // ─── Bulk patch — used by Buku Besar bulk edit ──────────────
 export const bulkPatchTransactions = mutation({
   args: {
-    branchId: v.id("branches"),
     patches: v.array(v.object({
       id: v.id("transactions"),
       data: v.any(),
     })),
   },
-  handler: async (ctx, { branchId, patches }) => {
+  handler: async (ctx, { patches }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
     let updated = 0;
@@ -126,7 +124,7 @@ export const bulkPatchTransactions = mutation({
       entityId: "" as Id<"transactions">,
       action: "update",
       description: `Bulk patch transactions — ${updated} updated, ${errors.length} error`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
     return { updated, errors };
   },
@@ -134,10 +132,9 @@ export const bulkPatchTransactions = mutation({
 
 export const bulkDeleteTransactions = mutation({
   args: {
-    branchId: v.id("branches"),
     ids: v.array(v.id("transactions")),
   },
-  handler: async (ctx, { branchId, ids }) => {
+  handler: async (ctx, { ids }) => {
     const userId = await requireAuth(ctx);
     let deleted = 0;
     let cleared = 0;
@@ -177,26 +174,22 @@ export const bulkDeleteTransactions = mutation({
           cleared++;
         }
         // bankStatementEntries can also bridge-FK back to us.
-        const bankEntries = await ctx.db.query("bankStatementEntries")
-          .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).collect();
+        const bankEntries = await ctx.db.query("bankStatementEntries").collect();
         for (const be of bankEntries) {
           if (be.transactionId === id) {
             await ctx.db.patch(be._id, { transactionId: undefined });
             cleared++;
           }
         }
-        // ownerTransfers + dailyClosings bridge — small per-branch
-        // tables; scan + patch.
-        const transfers = await ctx.db.query("ownerTransfers")
-          .withIndex("by_branch", (q) => q.eq("branchId", branchId)).collect();
+        // ownerTransfers + dailyClosings bridge — scan + patch.
+        const transfers = await ctx.db.query("ownerTransfers").collect();
         for (const t of transfers) {
           if (t.transactionId === id) {
             await ctx.db.patch(t._id, { transactionId: undefined });
             cleared++;
           }
         }
-        const closings = await ctx.db.query("dailyClosings")
-          .withIndex("by_branch_date", (q) => q.eq("branchId", branchId)).collect();
+        const closings = await ctx.db.query("dailyClosings").collect();
         for (const c of closings) {
           if (c.transactionId === id) {
             await ctx.db.patch(c._id, { transactionId: undefined });
@@ -212,7 +205,7 @@ export const bulkDeleteTransactions = mutation({
       entityId: "" as Id<"transactions">,
       action: "delete",
       description: `Bulk delete transactions — ${deleted}/${ids.length} (${cleared} bridge FKs cleared)`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
     return { deleted, bridgeFksCleared: cleared };
   },
@@ -232,10 +225,9 @@ export const bulkDeleteTransactions = mutation({
  */
 export const bulkDeleteTransactionsCascade = mutation({
   args: {
-    branchId: v.id("branches"),
     ids: v.array(v.id("transactions")),
   },
-  handler: async (ctx, { branchId, ids }) => {
+  handler: async (ctx, { ids }) => {
     const userId = await requireAuth(ctx);
     let txDeleted = 0;
     let projDeleted = 0;
@@ -317,7 +309,7 @@ export const bulkDeleteTransactionsCascade = mutation({
       entityId: "" as Id<"transactions">,
       action: "delete",
       description: `Cascade delete tx — ${txDeleted}/${ids.length} tx + ${projDeleted} proyeksi rows`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
     return { txDeleted, projDeleted };
   },
@@ -329,8 +321,8 @@ export const bulkDeleteTransactionsCascade = mutation({
 // mirrored (idempotent via bridge FK columns). Run after deploy to
 // hydrate the unified table from historical data.
 export const backfillTransactions = mutation({
-  args: { branchId: v.id("branches"), limit: v.optional(v.number()) },
-  handler: async (ctx, { branchId, limit }) => {
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
     const cap = limit ?? LIMITS.PAYABLES_PAGE;
@@ -338,14 +330,12 @@ export const backfillTransactions = mutation({
 
     // 1. payables → kind=invoice, direction=in
     const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const p of payables) {
       if (p.transactionId) continue;
       const txId = await ctx.db.insert("transactions", {
         kind: "invoice" as const,
         direction: "in" as const,
-        branchId,
         date: p.invoiceDate,
         amount: p.amount,
         paidAmount: p.paidAmount,
@@ -367,7 +357,6 @@ export const backfillTransactions = mutation({
 
     // 2. paymentReceipts → kind=payment (or anomaly if flagged)
     const receipts = await ctx.db.query("paymentReceipts")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const r of receipts) {
       if (r.transactionId) continue;
@@ -375,7 +364,6 @@ export const backfillTransactions = mutation({
       const txId = await ctx.db.insert("transactions", {
         kind: (isAnomaly ? "anomaly" : "payment") as "anomaly" | "payment",
         direction: "out" as const,
-        branchId,
         date: r.paidDate,
         amount: r.amount,
         status: r.payableId ? "linked" : "unlinked",
@@ -401,14 +389,12 @@ export const backfillTransactions = mutation({
 
     // 3. ownerTransfers → kind=transfer
     const transfers = await ctx.db.query("ownerTransfers")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const t of transfers) {
       if (t.transactionId) continue;
       const txId = await ctx.db.insert("transactions", {
         kind: "transfer" as const,
         direction: "transfer" as const,
-        branchId,
         date: t.transferDate,
         amount: t.amount,
         status: t.status,
@@ -427,14 +413,12 @@ export const backfillTransactions = mutation({
 
     // 4. dailyClosings → kind=transfer (setoran)
     const closings = await ctx.db.query("dailyClosings")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const c of closings) {
       if (c.transactionId) continue;
       const txId = await ctx.db.insert("transactions", {
         kind: "transfer" as const,
         direction: "transfer" as const,
-        branchId,
         date: c.businessDate,
         amount: c.cashSales + c.nonCashSales,
         status: c.status,
@@ -450,14 +434,12 @@ export const backfillTransactions = mutation({
 
     // 5. dailySales → kind=receipt direction=in
     const sales = await ctx.db.query("dailySales")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const s of sales) {
       if (s.transactionId) continue;
       const txId = await ctx.db.insert("transactions", {
         kind: "receipt" as const,
         direction: "in" as const,
-        branchId,
         date: s.businessDate,
         amount: s.netAmount,
         status: s.status,
@@ -475,14 +457,12 @@ export const backfillTransactions = mutation({
 
     // 6. expenses → kind=expense direction=out
     const expenses = await ctx.db.query("expenses")
-      .withIndex("by_branch_date", (q) => q.eq("branchId", branchId))
       .take(cap);
     for (const e of expenses) {
       if (e.transactionId) continue;
       const txId = await ctx.db.insert("transactions", {
         kind: "expense" as const,
         direction: "out" as const,
-        branchId,
         date: e.expenseDate,
         amount: e.amount,
         status: e.status,
@@ -503,7 +483,7 @@ export const backfillTransactions = mutation({
       entityId: "" as Id<"transactions">,
       action: "create",
       description: `Backfill transactions — ${inserted} rows mirrored`,
-      actedBy: userId, branchId,
+      actedBy: userId,
     });
 
     return { inserted };

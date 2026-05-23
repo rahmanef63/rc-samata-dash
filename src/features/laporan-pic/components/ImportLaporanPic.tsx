@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Upload, Loader2, AlertTriangle, FileText } from "lucide-react";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { useImportLong, useImportPivot } from "../api";
 import { parseLaporanPicCsv, classifyTransaksi, type TransaksiRow, type MatchPiutangRow, type Classification } from "../parsers";
 import { formatRpFull } from "@/shared/lib";
@@ -31,7 +30,7 @@ const CLASS_CLS: Record<Classification, string> = {
   anomaly: "bg-red-100 text-red-700",
 };
 
-export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
+export function ImportLaporanPic() {
   const importLong = useImportLong();
   const importPivot = useImportPivot();
   const [parsed, setParsed] = useState<ParsedState>(null);
@@ -96,7 +95,7 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
       if (parsed.kind === "long") {
         const rowsWithIdx = parsed.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 2 }));
         const res = await importLong({
-          branchId, rows: rowsWithIdx,
+          rows: rowsWithIdx,
           sourceFileName: fileName || undefined,
           sourceSheetName: SHEET_TAGS.TRANSAKSI,
         });
@@ -109,7 +108,7 @@ export function ImportLaporanPic({ branchId }: { branchId: Id<"branches"> }) {
       } else {
         const rowsWithIdx = parsed.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 2 }));
         const res = await importPivot({
-          branchId, rows: rowsWithIdx,
+          rows: rowsWithIdx,
           sourceFileName: fileName || undefined,
           sourceSheetName: SHEET_TAGS.MATCH_PIUTANG,
         });

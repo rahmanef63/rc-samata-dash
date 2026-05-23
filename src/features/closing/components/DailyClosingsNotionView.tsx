@@ -50,8 +50,8 @@ function toPage(r: Row): Page {
   };
 }
 
-export function DailyClosingsNotionView({ branchId }: { branchId: Id<"branches"> }) {
-  const rows = useQuery(api.features.closing.queries.listClosings, { branchId }) as Row[] | undefined;
+export function DailyClosingsNotionView() {
+  const rows = useQuery(api.features.closing.queries.listClosings, {}) as Row[] | undefined;
   const patch = useMutation(api.features.closing.mutations.updateClosing);
   const removeClosing = useMutation(api.features.closing.mutations.removeClosing);
 

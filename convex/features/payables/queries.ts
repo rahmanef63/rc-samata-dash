@@ -4,10 +4,10 @@ import { requireAuth } from "../../shared/auth";
 import { LIMITS } from "../../shared/limits";
 
 export const listByBranch = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
-    return await ctx.db.query("payables").withIndex("by_branch", (q) => q.eq("branchId", args.branchId)).order("desc").take(100);
+    return await ctx.db.query("payables").order("desc").take(100);
   },
 });
 
@@ -40,17 +40,13 @@ export const listPayments = query({
 // /finance/vendors list can show "Total Piutang", "Overdue", "Last
 // Invoice" without N+1 client queries.
 export const listVendorsWithAggregate = query({
-  args: { branchId: v.id("branches") },
-  handler: async (ctx, { branchId }) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAuth(ctx);
 
     const vendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
-    const payables = await ctx.db.query("payables")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.PAYABLES_PAGE);
-    const aliases = await ctx.db.query("vendorBankAliases")
-      .withIndex("by_branch_alias", (q) => q.eq("branchId", branchId))
-      .take(LIMITS.ALIASES_PAGE);
+    const payables = await ctx.db.query("payables").take(LIMITS.PAYABLES_PAGE);
+    const aliases = await ctx.db.query("vendorBankAliases").take(LIMITS.ALIASES_PAGE);
 
     const payablesByVendor = new Map<string, typeof payables>();
     for (const p of payables) {
@@ -86,8 +82,8 @@ export const listVendorsWithAggregate = query({
 
 // ─── Vendor detail: piutang + payments + aliases + linked statement entries
 export const getVendorDetail = query({
-  args: { vendorId: v.id("vendors"), branchId: v.id("branches") },
-  handler: async (ctx, { vendorId, branchId }) => {
+  args: { vendorId: v.id("vendors") },
+  handler: async (ctx, { vendorId }) => {
     await requireAuth(ctx);
 
     const vendor = await ctx.db.get(vendorId);
@@ -96,7 +92,6 @@ export const getVendorDetail = query({
     const payables = await ctx.db.query("payables")
       .withIndex("by_vendor", (q) => q.eq("vendorId", vendorId))
       .take(LIMITS.PAYABLES_PAGE);
-    const scopedPayables = payables.filter((p) => p.branchId === branchId);
 
     const payments: Array<{
       payableId: string;
@@ -118,7 +113,7 @@ export const getVendorDetail = query({
       paymentReference?: string;
     }> = [];
 
-    for (const p of scopedPayables) {
+    for (const p of payables) {
       const pays = await ctx.db.query("payablePayments")
         .withIndex("by_payable", (q) => q.eq("payableId", p._id))
         .take(200);
@@ -153,14 +148,13 @@ export const getVendorDetail = query({
     const aliases = await ctx.db.query("vendorBankAliases")
       .withIndex("by_vendor", (q) => q.eq("vendorId", vendorId))
       .take(500);
-    const scopedAliases = aliases.filter((a) => a.branchId === branchId);
 
     return {
       vendor,
-      payables: scopedPayables,
+      payables,
       payments,
       linkedBankEntries,
-      aliases: scopedAliases,
+      aliases,
     };
   },
 });

@@ -5,11 +5,10 @@ import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { Upload, Loader2, AlertTriangle, FileText } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { formatRpFull } from "@/shared/lib";
 import { parsePayablesCsv, buildPayablesCsvTemplate, type PayableCsvRow } from "../parsers/parsePayablesCsv";
 
-export function BulkPayablesImport({ branchId }: { branchId: Id<"branches"> }) {
+export function BulkPayablesImport() {
   const importBulk = useMutation(api.features.payables.mutations.importPayablesBulk);
   const [rows, setRows] = useState<PayableCsvRow[]>([]);
   const [errors, setErrors] = useState<{ line: number; message: string }[]>([]);
@@ -43,7 +42,7 @@ export function BulkPayablesImport({ branchId }: { branchId: Id<"branches"> }) {
     if (rows.length === 0) return;
     setCommitting(true);
     try {
-      const res = await importBulk({ branchId, rows });
+      const res = await importBulk({ rows });
       let msg = `Penagihan tersimpan — ${res.inserted} insert`;
       if (res.errors.length > 0) msg += ` · ${res.errors.length} error`;
       if (res.unresolvedVendors.length > 0) {

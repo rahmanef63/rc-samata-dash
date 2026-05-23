@@ -9,5 +9,4 @@ export { DashboardKpiTrendChart } from "./DashboardKpiTrendChart";
 export { DashboardKpiRichGrid } from "./DashboardKpiRichGrid";
 export { DashboardAnalysisDrill } from "./DashboardAnalysisDrill";
 export { DashboardTopProducts } from "./DashboardTopProducts";
-export { DashboardBranchCompare } from "./DashboardBranchCompare";
 export { DashboardCashRunway } from "./DashboardCashRunway";

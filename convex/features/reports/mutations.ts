@@ -124,7 +124,6 @@ export const generateReportUploadUrl = mutation({
 
 export const createWeeklyReport = mutation({
   args: {
-    branchId: v.id("branches"),
     fileName: v.string(),
     fileStorageId: v.optional(v.id("_storage")),
     periodStart: v.string(),
@@ -147,10 +146,9 @@ export const createWeeklyReport = mutation({
 export const importLPKKBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(lpkkItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     const categories = await ctx.db.query("expenseCategories").take(500);
     const byLabel = new Map(categories.map((c) => [c.name.toLowerCase().trim(), c]));
@@ -193,7 +191,6 @@ export const importLPKKBatch = mutation({
         paymentSource: "petty_cash",
         status: "draft",
         hasAttachment: false,
-        branchId,
         sourceReportId: reportId,
         etlSource: {
           reportId, stagingTable: "lpkk", tabLabel: "Kas Kecil",
@@ -213,15 +210,14 @@ export const importLPKKBatch = mutation({
 export const importProductSalesBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(productSaleItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.qty <= 0) continue;
-      await ctx.db.insert("productSales", { ...item, reportId, branchId });
+      await ctx.db.insert("productSales", { ...item, reportId });
       count++;
     }
     return count;
@@ -233,15 +229,14 @@ export const importProductSalesBatch = mutation({
 export const importVendorPurchasesBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     weekStart: v.string(),
     items: v.array(vendorPurchaseItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, weekStart, items }) => {
+  handler: async (ctx, { reportId, weekStart, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
-      await ctx.db.insert("vendorPurchases", { ...item, weekStart, reportId, branchId });
+      await ctx.db.insert("vendorPurchases", { ...item, weekStart, reportId });
       count++;
     }
     return count;
@@ -253,11 +248,10 @@ export const importVendorPurchasesBatch = mutation({
 export const importInventoryValuationBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     valuationDate: v.string(),
     items: v.array(inventoryValuationItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, valuationDate, items }) => {
+  handler: async (ctx, { reportId, valuationDate, items }) => {
     await requireAuth(ctx);
     const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
@@ -269,7 +263,6 @@ export const importInventoryValuationBatch = mutation({
         categoryId,
         valuationDate,
         reportId,
-        branchId,
       });
       count++;
     }
@@ -282,15 +275,14 @@ export const importInventoryValuationBatch = mutation({
 export const importLeftOverBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(leftoverItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.qty <= 0) continue;
-      await ctx.db.insert("leftoverItems", { ...item, reportId, branchId });
+      await ctx.db.insert("leftoverItems", { ...item, reportId });
       count++;
     }
     return count;
@@ -302,15 +294,14 @@ export const importLeftOverBatch = mutation({
 export const importDailyCashSummaryBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(dailyCashSummaryItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.grossSales <= 0) continue;
-      await ctx.db.insert("dailyCashSummary", { ...item, reportId, branchId });
+      await ctx.db.insert("dailyCashSummary", { ...item, reportId });
       count++;
     }
     return count;
@@ -322,15 +313,14 @@ export const importDailyCashSummaryBatch = mutation({
 export const importSalesControlBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(salesControlItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.netSales <= 0) continue;
-      await ctx.db.insert("salesControl", { ...item, reportId, branchId });
+      await ctx.db.insert("salesControl", { ...item, reportId });
       count++;
     }
     return count;
@@ -342,15 +332,14 @@ export const importSalesControlBatch = mutation({
 export const importCreditPurchasesBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(creditPurchaseItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.totalAmount <= 0) continue;
-      await ctx.db.insert("creditPurchases", { ...item, reportId, branchId });
+      await ctx.db.insert("creditPurchases", { ...item, reportId });
       count++;
     }
     return count;
@@ -379,10 +368,9 @@ const ownerTransferItemValidator = v.object({
 export const importOwnerTransfersBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(ownerTransferItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     // Idempotent re-import: wipe any prior owner transfers tied to this report.
     const existing = await ctx.db
@@ -397,7 +385,6 @@ export const importOwnerTransfersBatch = mutation({
       await ctx.db.insert("ownerTransfers", {
         ...item,
         reportId,
-        branchId,
         status: "completed",
       });
       count++;
@@ -423,11 +410,10 @@ const foodCostSummaryItemValidator = v.object({
 export const importFoodCostSummaryBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     items: v.array(foodCostSummaryItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+  handler: async (ctx, { reportId, periodStart, items }) => {
     await requireAuth(ctx);
     const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
@@ -438,7 +424,6 @@ export const importFoodCostSummaryBatch = mutation({
         categoryId,
         periodStart,
         reportId,
-        branchId,
       });
       count++;
     }
@@ -460,11 +445,10 @@ const transferItemValidator = v.object({
 export const importTransferItemsBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     items: v.array(transferItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+  handler: async (ctx, { reportId, periodStart, items }) => {
     await requireAuth(ctx);
     const catLookup = await buildCategoryLookup(ctx);
     let count = 0;
@@ -476,7 +460,6 @@ export const importTransferItemsBatch = mutation({
         categoryId,
         periodStart,
         reportId,
-        branchId,
       });
       count++;
     }
@@ -511,16 +494,15 @@ const productHPPItemValidator = v.object({
 export const importProductHPPBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     items: v.array(productHPPItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+  handler: async (ctx, { reportId, periodStart, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.totalHPP <= 0) continue;
-      await ctx.db.insert("productHPP", { ...item, periodStart, reportId, branchId });
+      await ctx.db.insert("productHPP", { ...item, periodStart, reportId });
       count++;
     }
     return count;
@@ -546,15 +528,14 @@ const costAnalysisItemValidator = v.object({
 export const importCostAnalysisBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     items: v.array(costAnalysisItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+  handler: async (ctx, { reportId, periodStart, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
-      await ctx.db.insert("costAnalysis", { ...item, periodStart, reportId, branchId });
+      await ctx.db.insert("costAnalysis", { ...item, periodStart, reportId });
       count++;
     }
     return count;
@@ -576,15 +557,14 @@ const dailyCashFlowItemValidator = v.object({
 export const importDailyCashFlowBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     items: v.array(dailyCashFlowItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, items }) => {
+  handler: async (ctx, { reportId, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.openingBalance === 0 && item.salesInflow === 0 && item.closingBalance === 0) continue;
-      await ctx.db.insert("dailyCashFlow", { ...item, reportId, branchId });
+      await ctx.db.insert("dailyCashFlow", { ...item, reportId });
       count++;
     }
     return count;
@@ -603,16 +583,15 @@ const incentiveItemValidator = v.object({
 export const importEmployeeIncentivesBatch = mutation({
   args: {
     reportId: v.id("weeklyReports"),
-    branchId: v.id("branches"),
     periodStart: v.string(),
     items: v.array(incentiveItemValidator),
   },
-  handler: async (ctx, { reportId, branchId, periodStart, items }) => {
+  handler: async (ctx, { reportId, periodStart, items }) => {
     await requireAuth(ctx);
     let count = 0;
     for (const item of items) {
       if (item.amount <= 0) continue;
-      await ctx.db.insert("employeeIncentives", { ...item, periodStart, reportId, branchId });
+      await ctx.db.insert("employeeIncentives", { ...item, periodStart, reportId });
       count++;
     }
     return count;
@@ -681,12 +660,11 @@ const productChangeItemValidator = v.object({
 
 export const importProductChangesBatch = mutation({
   args: {
-    branchId: v.id("branches"),
     fileName: v.string(),
     periodLabel: v.string(),
     items: v.array(productChangeItemValidator),
   },
-  handler: async (ctx, { branchId, fileName, periodLabel, items }) => {
+  handler: async (ctx, { fileName, periodLabel, items }) => {
     await requireAuth(ctx);
     let count = 0;
     const uploadedAt = Date.now();
@@ -694,7 +672,6 @@ export const importProductChangesBatch = mutation({
       if (item.totalPrice <= 0) continue;
       await ctx.db.insert("productChanges", {
         ...item,
-        branchId,
         fileName,
         periodLabel,
         uploadedAt,
@@ -706,14 +683,12 @@ export const importProductChangesBatch = mutation({
 });
 
 export const deleteProductChanges = mutation({
-  args: { branchId: v.id("branches"), periodLabel: v.string() },
-  handler: async (ctx, { branchId, periodLabel }) => {
+  args: { periodLabel: v.string() },
+  handler: async (ctx, { periodLabel }) => {
     await requireAuth(ctx);
     const rows = await ctx.db
       .query("productChanges")
-      .withIndex("by_branch_period", (q) =>
-        q.eq("branchId", branchId).eq("periodLabel", periodLabel)
-      )
+      .withIndex("by_period", (q) => q.eq("periodLabel", periodLabel))
       .collect();
     for (const row of rows) await ctx.db.delete(row._id);
     return rows.length;
@@ -740,19 +715,17 @@ const allowanceItemValidator = v.object({
 
 export const importAllowancesBatch = mutation({
   args: {
-    branchId: v.id("branches"),
     fileName: v.string(),
     periodLabel: v.string(),
     items: v.array(allowanceItemValidator),
   },
-  handler: async (ctx, { branchId, fileName, periodLabel, items }) => {
+  handler: async (ctx, { fileName, periodLabel, items }) => {
     await requireAuth(ctx);
     let count = 0;
     const uploadedAt = Date.now();
     for (const item of items) {
       await ctx.db.insert("employeeAllowances", {
         ...item,
-        branchId,
         fileName,
         periodLabel,
         uploadedAt,
@@ -764,12 +737,11 @@ export const importAllowancesBatch = mutation({
 });
 
 export const deleteAllowances = mutation({
-  args: { branchId: v.id("branches"), periodLabel: v.string() },
-  handler: async (ctx, { branchId, periodLabel }) => {
+  args: { periodLabel: v.string() },
+  handler: async (ctx, { periodLabel }) => {
     await requireAuth(ctx);
     const rows = await ctx.db
       .query("employeeAllowances")
-      .withIndex("by_branch", (q) => q.eq("branchId", branchId))
       .filter((q) => q.eq(q.field("periodLabel"), periodLabel))
       .collect();
     for (const row of rows) await ctx.db.delete(row._id);
@@ -840,18 +812,14 @@ export const deleteWeeklyReport = mutation({
     // Legacy fallback: rows bridged BEFORE sourceReportId field existed only
     // carry the link inside nested etlSource object (or — in case of dailySales
     // public bridge — only via the `referenceNo: etl:${reportId}:*` prefix).
-    // Scan branch-scoped index + filter. Bounded by single branch + report's
-    // typical period (≤ 31 dates × dozens of rows), tetap cheap.
+    // Single-tenant now — full table scans bounded by typical row counts.
     const report = await ctx.db.get(reportId);
-    if (report?.branchId) {
+    {
       let legacyDeleted = 0;
       const expectedRefPrefix = `etl:${reportId}:`;
 
-      // expenses (by_branch_date — iterate all dates on branch, filter etlSource)
-      const legacyExpenses = await ctx.db
-        .query("expenses")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
-        .collect();
+      // expenses — filter etlSource
+      const legacyExpenses = await ctx.db.query("expenses").collect();
       for (const e of legacyExpenses) {
         if (e.sourceReportId) continue;
         if (e.etlSource?.reportId === reportId) {
@@ -860,11 +828,8 @@ export const deleteWeeklyReport = mutation({
         }
       }
 
-      // payables (by_branch)
-      const legacyPayables = await ctx.db
-        .query("payables")
-        .withIndex("by_branch", (q) => q.eq("branchId", report.branchId))
-        .collect();
+      // payables
+      const legacyPayables = await ctx.db.query("payables").collect();
       for (const p of legacyPayables) {
         if (p.sourceReportId) continue;
         if (p.etlSource?.reportId === reportId) {
@@ -873,12 +838,9 @@ export const deleteWeeklyReport = mutation({
         }
       }
 
-      // dailySales (by_branch_date). Two legacy markers possible — etlSource
-      // (internal bridge) atau referenceNo `etl:${reportId}:*` (public bridge).
-      const legacySales = await ctx.db
-        .query("dailySales")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
-        .collect();
+      // dailySales. Two legacy markers possible — etlSource (internal bridge)
+      // atau referenceNo `etl:${reportId}:*` (public bridge).
+      const legacySales = await ctx.db.query("dailySales").collect();
       for (const s of legacySales) {
         if (s.sourceReportId) continue;
         const matchEtl = s.etlSource?.reportId === reportId;
@@ -889,12 +851,9 @@ export const deleteWeeklyReport = mutation({
         }
       }
 
-      // dailyClosings (by_branch_date). User complaint: "Setoran Harian tidak
-      // ter-hapus" — gap utama. Legacy rows hanya punya etlSource.reportId.
-      const legacyClosings = await ctx.db
-        .query("dailyClosings")
-        .withIndex("by_branch_date", (q) => q.eq("branchId", report.branchId))
-        .collect();
+      // dailyClosings. User complaint: "Setoran Harian tidak ter-hapus" —
+      // gap utama. Legacy rows hanya punya etlSource.reportId.
+      const legacyClosings = await ctx.db.query("dailyClosings").collect();
       for (const c of legacyClosings) {
         if (c.sourceReportId) continue;
         if (c.etlSource?.reportId === reportId) {
