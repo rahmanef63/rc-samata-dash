@@ -46,6 +46,12 @@ type ParsedDataForValidation = {
   sheetRegistry?: Array<{ sheetNamePattern: string; isParsed: boolean; isActive: boolean }>;
   /** DB-backed category rules — predicts server-side upgrade so "Lain-lain" count is accurate even when parser used static fallback. */
   categoryRules?: Array<{ keyword: string; label: string; type: string; priority: number; isActive: boolean }>;
+  /** Cross-file HPP pool — unique product names from productHPP across ALL
+   *  prior reports. Validator merges ini ke HPP set sebelum coverage check
+   *  so produk yang sudah punya HPP di file lama gak di-warn. */
+  globalHppNames?: string[];
+  /** Cross-file Cost Analysis pool — sama pattern dengan globalHppNames. */
+  globalCostAnalysisNames?: string[];
 };
 
 /** Shift YYYY-MM-DD by N days. Returns same format. */
@@ -207,7 +213,12 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
   const allSales = [...data.penjualan, ...data.platformSales];
   const revenueSales = allSales.filter((s) => !isNonRevenueProduct(s.productName, s.amount));
   const salesProductNames = [...new Set(revenueSales.map((s) => normalize(s.productName)))];
-  const hppProductNames = new Set(data.hppProduk.map((h) => normalize(h.productName)));
+  // Merge file-local HPP + cross-file HPP pool (productHPP across all reports)
+  // — a product yang sudah punya HPP di upload sebelumnya gak perlu di-warn.
+  const hppProductNames = new Set([
+    ...data.hppProduk.map((h) => normalize(h.productName)),
+    ...(data.globalHppNames ?? []).map((n) => normalize(n)),
+  ]);
 
   const salesWithoutHPP = salesProductNames.filter((n) => !nameMatches(n, hppProductNames));
   if (salesWithoutHPP.length > 0) {
@@ -226,7 +237,12 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
   //    cost analysis cross-check.
   const vendorIngredients = data.vendor.filter((v) => !isNonIngredientVendorItem(v.commodityName));
   const vendorNames = [...new Set(vendorIngredients.map((v) => normalize(v.commodityName)))];
-  const caNames = new Set(data.costAnalysis.map((c) => normalize(c.itemName)));
+  // Merge file-local + cross-file Cost Analysis pool — vendor item yang sudah
+  // pernah punya cost analysis di file lama gak perlu di-warn.
+  const caNames = new Set([
+    ...data.costAnalysis.map((c) => normalize(c.itemName)),
+    ...(data.globalCostAnalysisNames ?? []).map((n) => normalize(n)),
+  ]);
 
   const vendorWithoutCA = vendorNames.filter((n) => !nameMatches(n, caNames));
   if (vendorWithoutCA.length > 5) {

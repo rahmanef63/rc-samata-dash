@@ -221,6 +221,29 @@ export const getProductHPP = query({
   },
 });
 
+/** Unique product names across ALL reports' productHPP — used by upload
+ *  validator so a product yang sudah punya HPP di file lama gak di-warn
+ *  saat upload file baru tanpa HPP. */
+export const listAllHppProductNames = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    const rows = await ctx.db.query("productHPP").take(5000);
+    return [...new Set(rows.map((r) => r.productName))];
+  },
+});
+
+/** Unique cost analysis item names across ALL reports — same cross-file
+ *  enrichment as listAllHppProductNames but for vendor cost analysis. */
+export const listAllCostAnalysisItemNames = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
+    const rows = await ctx.db.query("costAnalysis").take(5000);
+    return [...new Set(rows.map((r) => r.itemName))];
+  },
+});
+
 export const getCostAnalysis = query({
   args: { reportId: v.id("weeklyReports") },
   handler: async (ctx, { reportId }) => {

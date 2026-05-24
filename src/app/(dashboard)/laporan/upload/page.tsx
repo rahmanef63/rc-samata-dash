@@ -364,9 +364,15 @@ export default function LaporanUploadPage() {
   const categoryRules = useQuery(api.features.masterData.queries.listCategoryRules, { activeOnly: true });
   const categoryRulesRef = useRef<typeof categoryRules>(undefined);
   categoryRulesRef.current = categoryRules;
+  const globalHppNames = useQuery(api.features.reports.queries.listAllHppProductNames, {});
+  const globalHppNamesRef = useRef<typeof globalHppNames>(undefined);
+  globalHppNamesRef.current = globalHppNames;
+  const globalCostAnalysisNames = useQuery(api.features.reports.queries.listAllCostAnalysisItemNames, {});
+  const globalCostAnalysisNamesRef = useRef<typeof globalCostAnalysisNames>(undefined);
+  globalCostAnalysisNamesRef.current = globalCostAnalysisNames;
 
-  // Re-validate kalau rules / sheetRegistry baru loaded SETELAH parse selesai —
-  // covers race condition cold-page + immediate upload.
+  // Re-validate kalau rules / sheetRegistry / global pool baru loaded SETELAH
+  // parse selesai — covers race condition cold-page + immediate upload.
   useEffect(() => {
     if (!parsed) return;
     const warnings = validateParsedData(
@@ -374,6 +380,8 @@ export default function LaporanUploadPage() {
         ...parsed,
         sheetRegistry: sheetRegistry ?? [],
         categoryRules: categoryRules ?? [],
+        globalHppNames: globalHppNames ?? [],
+        globalCostAnalysisNames: globalCostAnalysisNames ?? [],
       },
       parsed.fileName,
     );
@@ -383,7 +391,7 @@ export default function LaporanUploadPage() {
     });
     // parsed reference stable per upload; we only want to re-fire when DB data arrives
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryRules, sheetRegistry]);
+  }, [categoryRules, sheetRegistry, globalHppNames, globalCostAnalysisNames]);
   const importLPKK        = useMutation(api.features.reports.mutations.importLPKKBatch);
   const importSales       = useMutation(api.features.reports.mutations.importProductSalesBatch);
   const importVendor      = useMutation(api.features.reports.mutations.importVendorPurchasesBatch);
@@ -405,6 +413,7 @@ export default function LaporanUploadPage() {
   const updateValidation  = useMutation(api.features.reports.mutations.updateValidationStatus);
   const indexReport       = useAction(api.features.ai.indexing.indexReportData);
   const aiConfig          = useQuery(api.features.ai.queries.getAiConfig);
+  const runMasterSeed     = useAction(api.features.masterData.mutations.runFullMasterSeed);
 
   // ─── Parse file ─────────────────────────────────────────────
 
@@ -478,6 +487,8 @@ export default function LaporanUploadPage() {
           ...data,
           sheetRegistry: sheetRegistryRef.current ?? [],
           categoryRules: categoryRulesRef.current ?? [],
+          globalHppNames: globalHppNamesRef.current ?? [],
+          globalCostAnalysisNames: globalCostAnalysisNamesRef.current ?? [],
         },
         file.name,
       );
@@ -689,6 +700,26 @@ export default function LaporanUploadPage() {
       setLastReportId(reportId);
       setStep("done");
       toast.success("Import berhasil!");
+
+      // Auto-sync master data (idempotent) — bootstrap produk/bahan baru
+      // dari file ini ke master, sehingga upload berikutnya yang missing HPP
+      // tetap bisa cross-check via global pool. Silent — gak block UI.
+      runMasterSeed({})
+        .then((out) => {
+          const total =
+            out.expenseCategories.inserted +
+            out.incomeChannels.inserted +
+            out.categoryRules.inserted +
+            out.sheetRegistry.inserted +
+            out.products.inserted +
+            out.ingredients.inserted;
+          if (total > 0) {
+            toast.success(`Master data tersinkron: +${total} entry baru`);
+          }
+        })
+        .catch((e) => {
+          console.error("auto-seed error", e);
+        });
 
       // Auto-index for AI if provider has embedding model
       if (aiConfig?.provider?.embeddingModel) {
