@@ -105,6 +105,10 @@ function normalize(name: string): string {
  *  - "SAOS *" / "SAMBAL *" — condiments add-on, biasanya bundled
  *  - "TAMBAH *" — extra add-on, bundled
  *  - Beverage resale (TEH BOTOL/MILO/S-TEE/AIR MINERAL/ES TEH/dst) — no recipe
+ *  - "PAKET *" / "BASSORO *" / "FAMILY BUCKET *" / "BUCKET *" — combo items.
+ *    HPP combo = sum komponen (paha + nasi + minum + cover + saos) yang owner
+ *    biasanya gak hitung di Excel template. Margin combo bisa di-derive dari
+ *    komponen di laporan analitik kalau perlu — gak perlu warn di upload time.
  */
 function isNonRevenueProduct(productName: string, amount: number): boolean {
   if (amount <= 0) return true;
@@ -120,6 +124,7 @@ function isNonRevenueProduct(productName: string, amount: number): boolean {
     )
   )
     return true;
+  if (/^(PAKET|BASSORO|FAMILY\s+BUCKET|BUCKET\s)/.test(up)) return true;
   return false;
 }
 
