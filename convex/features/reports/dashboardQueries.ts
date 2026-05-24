@@ -564,3 +564,223 @@ export const getFinancialTrend = query({
     });
   },
 });
+
+// ─── Cashflow detail — income per channel + expense per category + piutang ────
+//
+// Three sibling queries powering /finance/cashflow. All accept optional
+// startDate/endDate (ms) for DateScope. Default = all data.
+
+const inRangeFn = (startDate?: number, endDate?: number) => (dateStr: string): boolean => {
+  if (startDate == null || endDate == null) return true;
+  const t = Date.parse(dateStr);
+  if (!Number.isFinite(t)) return false;
+  return t >= startDate && t < endDate;
+};
+
+export const getIncomeByChannel = query({
+  args: {
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { startDate, endDate }) => {
+    await requireAuth(ctx);
+    const inRange = inRangeFn(startDate, endDate);
+
+    const sales = await ctx.db.query("dailySales").take(5000);
+
+    type Row = {
+      channelId: string;
+      channelName: string;
+      gross: number;
+      net: number;
+      cashReceived: number;
+      platformFee: number;
+      promoCost: number;
+      txCount: number;
+    };
+    const byChannel = new Map<string, Row>();
+
+    for (const s of sales) {
+      if (!inRange(s.businessDate)) continue;
+      const key = s.channelId;
+      let row = byChannel.get(key);
+      if (!row) {
+        row = {
+          channelId: key,
+          channelName: s.channelName,
+          gross: 0,
+          net: 0,
+          cashReceived: 0,
+          platformFee: 0,
+          promoCost: 0,
+          txCount: 0,
+        };
+        byChannel.set(key, row);
+      }
+      row.gross += s.grossAmount;
+      row.net += s.netAmount;
+      row.cashReceived += s.cashReceivedAmount;
+      row.platformFee += s.platformFee;
+      row.promoCost += s.promoCost;
+      row.txCount += 1;
+    }
+
+    const rows = Array.from(byChannel.values()).sort((a, b) => b.gross - a.gross);
+    const totals = rows.reduce(
+      (acc, r) => ({
+        gross: acc.gross + r.gross,
+        net: acc.net + r.net,
+        cashReceived: acc.cashReceived + r.cashReceived,
+        platformFee: acc.platformFee + r.platformFee,
+        promoCost: acc.promoCost + r.promoCost,
+        txCount: acc.txCount + r.txCount,
+      }),
+      { gross: 0, net: 0, cashReceived: 0, platformFee: 0, promoCost: 0, txCount: 0 },
+    );
+    return { rows, totals };
+  },
+});
+
+export const getExpenseByCategory = query({
+  args: {
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { startDate, endDate }) => {
+    await requireAuth(ctx);
+    const inRange = inRangeFn(startDate, endDate);
+
+    const expenses = await ctx.db.query("expenses").take(5000);
+
+    type Row = {
+      categoryId: string;
+      categoryName: string;
+      total: number;
+      ownerDirect: number;
+      pettyCash: number;
+      payable: number;
+      txCount: number;
+    };
+    const byCat = new Map<string, Row>();
+
+    for (const e of expenses) {
+      if (!inRange(e.expenseDate)) continue;
+      const key = e.categoryId;
+      let row = byCat.get(key);
+      if (!row) {
+        row = {
+          categoryId: key,
+          categoryName: e.categoryName,
+          total: 0,
+          ownerDirect: 0,
+          pettyCash: 0,
+          payable: 0,
+          txCount: 0,
+        };
+        byCat.set(key, row);
+      }
+      row.total += e.amount;
+      if (e.paymentSource === "owner_direct") row.ownerDirect += e.amount;
+      else if (e.paymentSource === "petty_cash") row.pettyCash += e.amount;
+      else if (e.paymentSource === "payable") row.payable += e.amount;
+      row.txCount += 1;
+    }
+
+    const rows = Array.from(byCat.values()).sort((a, b) => b.total - a.total);
+    const totals = rows.reduce(
+      (acc, r) => ({
+        total: acc.total + r.total,
+        ownerDirect: acc.ownerDirect + r.ownerDirect,
+        pettyCash: acc.pettyCash + r.pettyCash,
+        payable: acc.payable + r.payable,
+        txCount: acc.txCount + r.txCount,
+      }),
+      { total: 0, ownerDirect: 0, pettyCash: 0, payable: 0, txCount: 0 },
+    );
+    return { rows, totals };
+  },
+});
+
+export const getPiutangPaymentsByVendor = query({
+  args: {
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { startDate, endDate }) => {
+    await requireAuth(ctx);
+    const inRange = inRangeFn(startDate, endDate);
+
+    const payments = await ctx.db.query("payablePayments").take(5000);
+
+    // Build payable→vendor lookup so we can group by vendor without N+1.
+    const payableIds = Array.from(new Set(payments.map((p) => p.payableId)));
+    const payableMap = new Map<string, { vendorId: string; vendorName: string; amount: number; paidAmount: number; status: string }>();
+    for (const pid of payableIds) {
+      const p = await ctx.db.get(pid);
+      if (p) {
+        payableMap.set(pid, {
+          vendorId: p.vendorId,
+          vendorName: p.vendorName,
+          amount: p.amount,
+          paidAmount: p.paidAmount,
+          status: p.status,
+        });
+      }
+    }
+
+    type Row = {
+      vendorId: string;
+      vendorName: string;
+      paidThisPeriod: number;
+      outstandingNow: number;
+      paymentCount: number;
+      payableCount: number;
+    };
+    const byVendor = new Map<string, Row>();
+    const seenPayables = new Map<string, Set<string>>(); // vendor → payable set
+
+    for (const pm of payments) {
+      if (!inRange(pm.paymentDate)) continue;
+      const p = payableMap.get(pm.payableId);
+      if (!p) continue;
+      let row = byVendor.get(p.vendorId);
+      if (!row) {
+        row = {
+          vendorId: p.vendorId,
+          vendorName: p.vendorName,
+          paidThisPeriod: 0,
+          outstandingNow: 0,
+          paymentCount: 0,
+          payableCount: 0,
+        };
+        byVendor.set(p.vendorId, row);
+        seenPayables.set(p.vendorId, new Set());
+      }
+      row.paidThisPeriod += pm.amount;
+      row.paymentCount += 1;
+      seenPayables.get(p.vendorId)!.add(pm.payableId);
+    }
+
+    // Compute outstanding (amount - paidAmount) per vendor across all *touched* payables.
+    for (const [vendorId, payableSet] of seenPayables.entries()) {
+      const row = byVendor.get(vendorId)!;
+      row.payableCount = payableSet.size;
+      for (const pid of payableSet) {
+        const p = payableMap.get(pid);
+        if (p) row.outstandingNow += Math.max(0, p.amount - p.paidAmount);
+      }
+    }
+
+    const rows = Array.from(byVendor.values()).sort((a, b) => b.paidThisPeriod - a.paidThisPeriod);
+    const totals = rows.reduce(
+      (acc, r) => ({
+        paidThisPeriod: acc.paidThisPeriod + r.paidThisPeriod,
+        outstandingNow: acc.outstandingNow + r.outstandingNow,
+        paymentCount: acc.paymentCount + r.paymentCount,
+        payableCount: acc.payableCount + r.payableCount,
+      }),
+      { paidThisPeriod: 0, outstandingNow: 0, paymentCount: 0, payableCount: 0 },
+    );
+    return { rows, totals };
+  },
+});
