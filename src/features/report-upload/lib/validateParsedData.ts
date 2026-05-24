@@ -97,6 +97,8 @@ function normalize(name: string): string {
  *  - "KOIN *" — non-food revenue (kiddy ride)
  *  - amount = 0 — gak ada sales aktual
  *  - "SAOS *" / "SAMBAL *" — condiments add-on, biasanya bundled
+ *  - "TAMBAH *" — extra add-on, bundled
+ *  - Beverage resale (TEH BOTOL/MILO/S-TEE/AIR MINERAL/ES TEH/dst) — no recipe
  */
 function isNonRevenueProduct(productName: string, amount: number): boolean {
   if (amount <= 0) return true;
@@ -105,11 +107,51 @@ function isNonRevenueProduct(productName: string, amount: number): boolean {
   if (up.startsWith("KOIN ")) return true;
   if (/^SAOS\s/.test(up)) return true;
   if (/^SAMBAL\s/.test(up)) return true;
+  if (/^TAMBAH\s/.test(up)) return true;
+  if (
+    /^(AIR\s+MINERAL|TEH\s+BOTOL|FRUIT\s+TEA|S[-\s]?TEE|ES\s+TEH|MILO|THAI\s+GREEN|MILKY\s+MANGO|TBO\b|TEH\s+SOSRO|MILKSHAKE)/.test(
+      up,
+    )
+  )
+    return true;
   return false;
 }
 
-/** Permissive containment check — HPP "PAKET SEGAR 1" matches sales
- *  "PAKET SEGAR 1 TAKE AWAY (ES TEH / S-TEE)" and vice versa. */
+/** Vendor items yang bukan ingredient — skip dari Cost Analysis coverage warning.
+ *  Packaging/supplies/office/utility/promo gak butuh cross-check dengan
+ *  Cost Analysis sheet (mereka consumables/services, bukan bahan baku).
+ */
+function isNonIngredientVendorItem(name: string): boolean {
+  const up = name.toUpperCase().trim();
+  if (/^(PLASTIK|BOX|COVER|CUP|KANTONG|PAPER|SEDOTAN|ALAS)\b/.test(up)) return true;
+  if (/^(TISSUE|SENDOK|TUSUK|HAND\s+GLOVE|CABLE\s+TIE|ISOLASI|PEMBERSIH)\b/.test(up)) return true;
+  if (/^(NOTA|FOTOCOPY|ATK|STRUK)\b/.test(up)) return true;
+  if (/^(GAS\s+ELPIJI|TRANSPORT)\b/.test(up)) return true;
+  if (/^(TOPI|BALON|KARTU\s+UNDANGAN)\b/.test(up)) return true;
+  if (up === "ES" || up === "NASGOR DLL") return true;
+  return false;
+}
+
+/** Token-overlap fallback — catches "PAKET GEPREK BAWANG 1" ↔ HPP "GEPREK BAWANG".
+ *  Stopwords + number-only + short tokens dropped. Require ≥2 shared distinguishing tokens. */
+function tokenOverlap(salesNorm: string, hppNames: Set<string>): boolean {
+  const STOPWORDS = new Set(["PAKET", "TAKE", "AWAY", "DENGAN", "DAN", "ATAU"]);
+  const salesTokens = salesNorm
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+$/.test(t));
+  if (salesTokens.length < 2) return false;
+  for (const h of hppNames) {
+    const hppTokens = new Set(
+      h.split(/\s+/).filter((t) => t.length >= 3 && !STOPWORDS.has(t)),
+    );
+    if (hppTokens.size < 2) continue;
+    const shared = salesTokens.filter((t) => hppTokens.has(t));
+    if (shared.length >= 2) return true;
+  }
+  return false;
+}
+
+/** Permissive containment check + token-overlap fallback for PAKET variants. */
 function nameMatches(salesNorm: string, hppNames: Set<string>): boolean {
   if (hppNames.has(salesNorm)) return true;
   for (const h of hppNames) {
@@ -117,7 +159,7 @@ function nameMatches(salesNorm: string, hppNames: Set<string>): boolean {
     if (salesNorm.startsWith(h) || h.startsWith(salesNorm)) return true;
     if (salesNorm.includes(h) || h.includes(salesNorm)) return true;
   }
-  return false;
+  return tokenOverlap(salesNorm, hppNames);
 }
 
 export function validateParsedData(data: ParsedDataForValidation, fileName?: string): ValidationWarning[] {
@@ -179,8 +221,11 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     });
   }
 
-  // 4. Vendor items without cost analysis
-  const vendorNames = [...new Set(data.vendor.map((v) => normalize(v.commodityName)))];
+  // 4. Vendor items without cost analysis — filter non-ingredient items
+  //    (packaging/supplies/office/utility/promo) since they never need
+  //    cost analysis cross-check.
+  const vendorIngredients = data.vendor.filter((v) => !isNonIngredientVendorItem(v.commodityName));
+  const vendorNames = [...new Set(vendorIngredients.map((v) => normalize(v.commodityName)))];
   const caNames = new Set(data.costAnalysis.map((c) => normalize(c.itemName)));
 
   const vendorWithoutCA = vendorNames.filter((n) => !nameMatches(n, caNames));
@@ -313,16 +358,35 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     }
     return true;
   };
-  const lpkkLainLain = (data.lpkk ?? []).filter((l) => willStayLainLain(l.categoryLabel, l.description));
+  const lpkkLainLainAll = (data.lpkk ?? []).filter((l) => willStayLainLain(l.categoryLabel, l.description));
   const weeklyFcLainLain = (data.weeklyFc ?? []).filter((w) => willStayLainLain(w.category, w.itemName));
-  if (lpkkLainLain.length > 0 || weeklyFcLainLain.length > 0) {
+
+  // Split LPKK Lain-lain into empty-description (data quality issue,
+  // owner harus fix di Excel) vs inference-failed (owner pilih manual di UI).
+  const isEmptyDesc = (d: string) => !d || d === "—" || d.trim() === "";
+  const lpkkEmpty = lpkkLainLainAll.filter((l) => isEmptyDesc(l.description));
+  const lpkkInferFail = lpkkLainLainAll.filter((l) => !isEmptyDesc(l.description));
+
+  if (lpkkEmpty.length > 0) {
+    const all = lpkkEmpty.map((l) => `· ${l.expenseDate} — ${formatRp(l.amount)}`);
+    warnings.push({
+      severity: "warning",
+      category: "Deskripsi Kosong",
+      message: `${lpkkEmpty.length} baris Kas Kecil tanpa deskripsi (amount > 0)`,
+      tip: "Sheet LPKK punya baris dengan jumlah > 0 tapi kolom Deskripsi kosong. Buka file Excel asli, isi deskripsi di kolom yang sesuai (kolom 14 / 'Deskripsi'), lalu upload ulang. Tanpa deskripsi, kategori inference gak bisa jalan dan baris masuk 'Lain-lain'.",
+      details: all.slice(0, 5),
+      fullDetails: all,
+    });
+  }
+
+  if (lpkkInferFail.length > 0 || weeklyFcLainLain.length > 0) {
     const details: string[] = [];
     const fullDetails: string[] = [];
-    if (lpkkLainLain.length > 0) {
-      const head = `Kas Kecil: ${lpkkLainLain.length} baris tanpa kategori spesifik`;
+    if (lpkkInferFail.length > 0) {
+      const head = `Kas Kecil: ${lpkkInferFail.length} baris tanpa kategori spesifik`;
       details.push(head);
       fullDetails.push(head);
-      const all = lpkkLainLain.map((l) => `· ${l.expenseDate} — ${l.description} (${formatRp(l.amount)})`);
+      const all = lpkkInferFail.map((l) => `· ${l.expenseDate} — ${l.description} (${formatRp(l.amount)})`);
       details.push(...all.slice(0, 5));
       fullDetails.push(...all);
     }
@@ -337,7 +401,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     warnings.push({
       severity: "warning",
       category: "Kategori",
-      message: `${lpkkLainLain.length + weeklyFcLainLain.length} baris masuk ke "Lain-lain"`,
+      message: `${lpkkInferFail.length + weeklyFcLainLain.length} baris masuk ke "Lain-lain"`,
       tip: "Inferensi otomatis gagal menebak kategori. Buka tab terkait di preview, klik kolom Kategori di tiap baris, lalu pilih kategori yang benar SEBELUM klik Import. Data masih bisa di-import tanpa diubah.",
       details,
       fullDetails,
