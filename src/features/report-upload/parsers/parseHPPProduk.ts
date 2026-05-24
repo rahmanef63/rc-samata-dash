@@ -1,15 +1,19 @@
 /**
  * Parser sheet "HITUNGAN HPP PRODUK" + "FOOD COST ITEM KELAS 2/3A/3B/4"
  *
- * Struktur HITUNGAN HPP PRODUK (~320 rows):
- *   - Product header row (nama produk di col 0/1, biasanya bold/merged)
- *   - Ingredient rows di bawahnya: nama bahan, qty, satuan, harga/unit, subtotal
- *   - Total HPP row di akhir setiap blok produk
+ * Layout RC Samata = HORIZONTAL multi-column:
+ *   - Setiap ~3 kolom = satu blok produk (col c = label, c+1 = value, c+2 = blank)
+ *   - Banyak produk berdampingan per baris
+ *   - Tipe HPP yang relevan:
+ *       "HPP <NAMA>"   — raw product (DADA, P.ATAS, P.BAWAH, SAYAP, dll)
+ *       "HPP NON CVR"  — paket tanpa pembungkus cover
+ *       "HPP + COVER"  — paket dengan pembungkus cover
+ *       "HPP 1 PORSI"  — per-portion recipe (ingredient/saos)
+ *       "HPP 1 RESEP"  — recipe total
  *
- * State machine approach:
- *   scanning → detect product header → in_product → collect ingredients → emit
- *
- * FOOD COST ITEM KELAS sheets: identik strukturnya tapi dengan harga jual berbeda.
+ *   Product name buat "NON CVR"/"+ COVER" = walk UP kolom yg sama, ambil
+ *   1-2 header (label tanpa value di kolom value) sebelum hit ingredient
+ *   atau HPP lain.
  */
 
 import { getSheetRows, toNumber } from "../lib/xlsxHelpers";
@@ -45,12 +49,95 @@ function detectClass(sheetName: string): ProductHPPItem["pricingClass"] {
   return "standard";
 }
 
+// Generic recipe labels yang BUKAN nama produk — skip
+const GENERIC_HPP_NAMES = new Set([
+  "1 PORSI", "1 RESEP", "1 LITER", "1 PCK", "1 PACK",
+  "NON CVR", "+ COVER", "1 PORSI+TIMUN", "15 PORSI",
+  "20 PORSI", "30 PORSI",
+]);
+
+// Expand RC Samata-specific abbreviations into full sales-side names
+// supaya matcher di validator nemu. Single-tenant alias map.
+const ABBR_EXPANSIONS: Array<[RegExp, string]> = [
+  [/^P\.\s*ATAS$/i, "PAHA ATAS"],
+  [/^P\.\s*BAWAH$/i, "PAHA BAWAH"],
+  [/^P\.\s*BAWAH\s+U\/.*/i, "PAHA BAWAH"],
+  [/^P\.\s*ATAS\s+U\/.*/i, "PAHA ATAS"],
+  [/^C\.\s*STEAK$/i, "CHICKEN STEAK"],
+  [/^C\.\s*STRIP[S]?$/i, "CHICKEN STRIPS"],
+  [/^DADA\s+U\/.*/i, "DADA"],
+];
+
+function expandProductAlias(name: string): string {
+  for (const [re, full] of ABBR_EXPANSIONS) {
+    if (re.test(name)) return full;
+  }
+  return name;
+}
+
+function isGenericHppName(name: string): boolean {
+  const up = name.toUpperCase().trim();
+  if (GENERIC_HPP_NAMES.has(up)) return true;
+  if (/^\d+\s*(PORSI|RESEP|LITER|ML|PCK|PCS|PACK)/.test(up)) return true;
+  if (/^(NON|\+|COVER)/.test(up)) return true;
+  return false;
+}
+
+// Detect raw product extracted from "HPP <NAME>" label — strip prefix +
+// suffixes like "U/GPRK & LVL".
+function extractRawProductName(labelUpper: string): string | null {
+  // "HPP DADA U/GPRK & LVL" → "DADA U/GPRK & LVL" → strip suffix → "DADA"
+  const m = labelUpper.match(/^HPP\s+(.+?)(?:\s+U\/.*)?$/);
+  if (!m) return null;
+  let name = m[1].trim();
+  // Strip parenthetical suffixes
+  name = name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (isGenericHppName(name)) return null;
+  if (name.length < 2 || name.length > 30) return null;
+  // Expand RC Samata abbreviation
+  return expandProductAlias(name);
+}
+
+// For "HPP NON CVR" / "HPP + COVER" cells, climb the column to grab
+// 1-2 closest headers (cells where adjacent value column is empty —
+// indicates sub-product label, not ingredient line).
+function climbColumnForHeader(
+  rows: (string | number | Date | null | boolean)[][],
+  startRow: number,
+  col: number,
+  maxLookback = 18,
+): string {
+  const headers: string[] = [];
+  const seenLabels = new Set<string>();
+  for (let r = startRow - 1; r >= Math.max(0, startRow - maxLookback); r--) {
+    const cell = rows[r]?.[col];
+    if (cell == null || cell === "") continue;
+    const lbl = String(cell).trim();
+    if (!lbl) continue;
+    if (seenLabels.has(lbl)) continue;
+    const lblUp = lbl.toUpperCase();
+    // Stop on another HPP label
+    if (/^HPP\s/.test(lblUp)) break;
+    // Adjacent value cell: header if empty/blank, ingredient if numeric
+    const nextCell = rows[r]?.[col + 1];
+    const hasNumericNext = toNumber(nextCell) > 0;
+    if (hasNumericNext) {
+      // Ingredient row — skip
+      continue;
+    }
+    // Truncate overly long section titles (kelas headers) — take first 4 words
+    const cleanLbl = lbl.length > 50 ? lbl.split(/\s+/).slice(0, 4).join(" ") : lbl;
+    headers.unshift(cleanLbl);
+    seenLabels.add(lbl);
+    if (headers.length >= 3) break;
+  }
+  return headers.join(" ").replace(/\s+/g, " ").trim();
+}
+
 export function parseHPPProduk(wb: XLSX.WorkBook): ProductHPPItem[] {
   const result: ProductHPPItem[] = [];
 
-  // Find all relevant sheets
   const sheets: { name: string; cls: ProductHPPItem["pricingClass"] }[] = [];
-
   for (const name of wb.SheetNames) {
     const up = name.toUpperCase();
     if (up.includes("HITUNGAN HPP") || up.includes("HPP PRODUK")) {
@@ -61,170 +148,101 @@ export function parseHPPProduk(wb: XLSX.WorkBook): ProductHPPItem[] {
   }
 
   for (const { name, cls } of sheets) {
-    const items = parseHPPSheet(wb, name, cls);
+    const items = parseHPPSheetHorizontal(wb, name, cls);
     result.push(...items);
   }
 
-  return result;
+  // Dedup by productName + pricingClass — prefer "with_cover" if same name has
+  // both variants. Also prefer first occurrence (raw products usually first).
+  type Bucket = ProductHPPItem & { variant: "raw" | "non_cover" | "with_cover" };
+  const seen = new Map<string, Bucket>();
+  for (const r of result as Bucket[]) {
+    const key = `${r.productName.toUpperCase()}::${r.pricingClass}`;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, r);
+      continue;
+    }
+    // Replace if new is "with_cover" or existing is non_cover with no cover ver
+    if (r.variant === "with_cover" && existing.variant !== "with_cover") {
+      seen.set(key, r);
+    }
+  }
+  const dedupped = Array.from(seen.values()).map(({ variant: _v, ...rest }) => {
+    void _v;
+    return rest;
+  });
+  return dedupped;
 }
 
-function parseHPPSheet(
+function parseHPPSheetHorizontal(
   wb: XLSX.WorkBook,
   sheetName: string,
   pricingClass: ProductHPPItem["pricingClass"],
-): ProductHPPItem[] {
+): (ProductHPPItem & { variant: "raw" | "non_cover" | "with_cover" })[] {
   const rows = getSheetRows(wb, sheetName);
-  const result: ProductHPPItem[] = [];
+  const result: (ProductHPPItem & { variant: "raw" | "non_cover" | "with_cover" })[] = [];
 
-  let currentProduct = "";
-  let currentIngredients: HPPIngredient[] = [];
-  let currentSellingPrice: number | undefined;
-  let inProduct = false;
+  // Determine sheet max width
+  const maxWidth = Math.max(...rows.map((r) => r.length));
 
-  // Known product names (Rocket Chicken menu items)
-  const PRODUCT_KEYWORDS = [
-    "DADA", "PAHA", "SAYAP", "KULIT", "PERKEDEL", "NASI", "BARGUD",
-    "PATTY", "BURGER", "CHICKEN", "PAKET", "CRISPY", "COMBO", "SAUS",
-    "SAMBAL", "LALAPAN", "KENTANG", "FRENCH", "NUGGET", "GEPREK",
-    "ORIGINAL", "SPICY", "FIRE", "HOT", "COLA", "TEH", "JERUK", "MILO",
-  ];
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < maxWidth; c++) {
+      const cell = rows[r][c];
+      if (cell == null || cell === "") continue;
+      const label = String(cell).trim();
+      if (!label) continue;
+      const labelUp = label.toUpperCase();
 
-  const isProductHeader = (row: (string | number | Date | null | boolean)[]): boolean => {
-    const name = String(row[0] ?? row[1] ?? "").toUpperCase().trim();
-    if (!name || name.length < 2) return false;
+      // Only "HPP" prefix lines matter
+      if (!labelUp.startsWith("HPP")) continue;
 
-    // Baris produk biasanya: nama produk saja, atau nama + harga jual
-    // Baris ingredient: nama bahan + qty + satuan + harga + subtotal (banyak kolom numerik)
-    const numericCols = row.slice(2).filter((v) => toNumber(v) > 0).length;
+      const valueRaw = rows[r][c + 1];
+      const value = toNumber(valueRaw);
+      if (value <= 0) continue;
 
-    // Product header usually has <= 2 numeric values (maybe selling price and total)
-    // Ingredient rows have 3+ numeric values (qty, unitCost, subtotal)
-    const hasProductKeyword = PRODUCT_KEYWORDS.some((k) => name.includes(k));
-
-    // Also detect if it looks like a section header
-    if (hasProductKeyword && numericCols <= 2) return true;
-
-    // Check for NO column (numbered products)
-    const firstNum = toNumber(row[0]);
-    if (firstNum > 0 && firstNum < 200) {
-      const nameCol = String(row[1] ?? "").trim();
-      if (nameCol.length >= 3 && numericCols <= 3) return true;
-    }
-
-    return false;
-  };
-
-  const emitProduct = () => {
-    if (currentProduct && currentIngredients.length > 0) {
-      const totalHPP = currentIngredients.reduce((s, ing) => s + ing.subtotal, 0);
-      result.push({
-        productName: currentProduct,
-        pricingClass,
-        totalHPP,
-        sellingPrice: currentSellingPrice,
-        ingredients: [...currentIngredients],
-      });
-    }
-    currentProduct = "";
-    currentIngredients = [];
-    currentSellingPrice = undefined;
-    inProduct = false;
-  };
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const label = String(row[0] ?? row[1] ?? "").toUpperCase().trim();
-
-    // Skip empty rows
-    if (!label && !row.some((v) => v !== null && v !== "")) continue;
-
-    // Stop at grand total
-    if (label.includes("GRAND TOTAL")) {
-      emitProduct();
-      break;
-    }
-
-    // Detect "TOTAL" row for current product — emit and reset
-    if (label.includes("TOTAL") && inProduct) {
-      // The total row might have the total HPP value
-      const totalVal = row.slice(2).map((v) => toNumber(v)).find((v) => v > 0);
-      if (totalVal && currentIngredients.length > 0) {
-        // Use computed total from ingredients, but could also use this value
-      }
-      emitProduct();
-      continue;
-    }
-
-    // Detect HPP/HARGA JUAL labels
-    if (label.includes("HARGA JUAL") || label.includes("SELLING PRICE")) {
-      const price = row.slice(1).map((v) => toNumber(v)).find((v) => v > 0);
-      if (price) currentSellingPrice = price;
-      continue;
-    }
-
-    // Check if this is a product header
-    if (isProductHeader(row)) {
-      if (inProduct) emitProduct(); // emit previous product
-      currentProduct = String(row[1] ?? row[0] ?? "").trim();
-      inProduct = true;
-
-      // Check if selling price is on same row (last column with large value)
-      const vals = row.slice(2).map((v) => toNumber(v));
-      const largeVal = vals.find((v) => v >= 1000);
-      if (largeVal) currentSellingPrice = largeVal;
-      continue;
-    }
-
-    // Parse ingredient row if we're inside a product block
-    if (inProduct) {
-      const ingredientName = String(row[1] ?? row[0] ?? "").trim();
-      if (!ingredientName) continue;
-
-      // Skip if it's a sub-header or label
-      const ingUpper = ingredientName.toUpperCase();
-      if (ingUpper.includes("TOTAL") || ingUpper.includes("JUMLAH") ||
-          ingUpper === "NO" || ingUpper === "BAHAN" || ingUpper === "KETERANGAN") continue;
-
-      // Find qty, unit, unitCost, subtotal from remaining columns
-      let qty = 0;
-      let unit = "";
-      let unitCost = 0;
-      let subtotal = 0;
-      let numericIdx = 0;
-
-      for (let c = 2; c < Math.min(row.length, 12); c++) {
-        const cellStr = String(row[c] ?? "").trim();
-        const val = toNumber(row[c]);
-
-        if (typeof row[c] === "string" && cellStr.match(/^[a-zA-Z]{1,6}$/i)) {
-          unit = cellStr; // e.g., "gr", "pcs", "ml", "kg"
-        } else if (val > 0 || (typeof row[c] === "number" && row[c] !== null)) {
-          if (numericIdx === 0) qty = val;
-          else if (numericIdx === 1) unitCost = val;
-          else if (numericIdx === 2) subtotal = val;
-          numericIdx++;
+      // Case A: "HPP <NAME>" — raw product (DADA, P.ATAS, dll)
+      // Strip "1 PORSI", "1 RESEP", "NON CVR", "+ COVER" — those handled in B.
+      if (
+        !labelUp.includes("NON CVR") &&
+        !labelUp.includes("+ COVER") &&
+        !/^HPP\s+\d/.test(labelUp) &&
+        !/^HPP\s+1\s/.test(labelUp)
+      ) {
+        const rawName = extractRawProductName(labelUp);
+        if (rawName) {
+          result.push({
+            productName: rawName,
+            pricingClass,
+            totalHPP: value,
+            ingredients: [],
+            variant: "raw",
+          });
+          continue;
         }
       }
 
-      // If subtotal is 0 but we have qty and unitCost, compute it
-      if (subtotal === 0 && qty > 0 && unitCost > 0) {
-        subtotal = qty * unitCost;
-      }
-
-      if (subtotal > 0 || (qty > 0 && unitCost > 0)) {
-        currentIngredients.push({
-          name: ingredientName,
-          qty,
-          unit: unit || "pcs",
-          unitCost,
-          subtotal,
-        });
+      // Case B: "HPP NON CVR" / "HPP + COVER" / "HPP 1 PORSI+TIMUN" —
+      // package product. Climb column for header chain.
+      if (
+        labelUp.includes("NON CVR") ||
+        labelUp.includes("+ COVER") ||
+        /^HPP\s+1\s+PORSI\s*\+/.test(labelUp)
+      ) {
+        const productName = climbColumnForHeader(rows, r, c);
+        if (productName && productName.length >= 2 && productName.length <= 60) {
+          const variant = labelUp.includes("+ COVER") ? "with_cover" : "non_cover";
+          result.push({
+            productName,
+            pricingClass,
+            totalHPP: value,
+            ingredients: [],
+            variant,
+          });
+        }
       }
     }
   }
-
-  // Emit last product if any
-  emitProduct();
 
   return result;
 }

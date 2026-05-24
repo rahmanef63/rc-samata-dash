@@ -5,6 +5,7 @@ import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { toast } from "sonner";
 import { parseExcelFile } from "@/features/report-upload/lib/xlsxHelpers";
+import * as XLSXLib from "xlsx";
 import { parseLPKK, type LPKKItem } from "@/features/report-upload/parsers/parseLPKK";
 import { parsePenjualan, type ProductSaleItem } from "@/features/report-upload/parsers/parsePenjualan";
 import { parsePlatformSales } from "@/features/report-upload/parsers/parsePlatformSales";
@@ -68,18 +69,127 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+const MONTH_MAP: Record<string, string> = {
+  JAN: "01", FEB: "02", MAR: "03", APR: "04", MEI: "05", MAY: "05",
+  JUN: "06", JUL: "07", AGU: "08", AUG: "08", SEP: "09",
+  OKT: "10", OCT: "10", NOV: "11", DES: "12", DEC: "12",
+};
+
+/**
+ * Extract DD-DD MMM YYYY period from various delimiter patterns:
+ *   "15-21 MEI 2026"   (dash)
+ *   "15 - 21 MEI 2026" (dash w/ space)
+ *   "1521 MEI 2026"    (continuous 2+2 digits — last 2 = end, first = start)
+ *   "15.21 MEI 2026"   (dot)
+ *   "15_21 MEI 2026"   (underscore)
+ *   "15 21 MEI 2026"   (space)
+ */
 function extractPeriod(fileName: string): { start: string; end: string } {
-  const name = fileName.toUpperCase();
-  const monthMap: Record<string, string> = {
-    JAN: "01", FEB: "02", MAR: "03", APR: "04", MEI: "05", MAY: "05",
-    JUN: "06", JUL: "07", AGU: "08", AUG: "08", SEP: "09",
-    OKT: "10", OCT: "10", NOV: "11", DES: "12", DEC: "12",
-  };
-  const match = name.match(/(\d+)-(\d+)\s+([A-Z]+)\s+(\d{4})/);
-  if (!match) return { start: "", end: "" };
-  const [, d1, d2, mon, year] = match;
-  const m = monthMap[mon] ?? "01";
-  return { start: `${year}-${m}-${d1.padStart(2, "0")}`, end: `${year}-${m}-${d2.padStart(2, "0")}` };
+  // Normalize: strip extension, uppercase. Keep underscores — used as separator.
+  const name = fileName.toUpperCase().replace(/\.[A-Z]+$/, "");
+  // Universal whitespace-like separator: space, underscore, hyphen, dot.
+  const SEP = "[\\s_\\-.]";
+
+  // Pattern 1: explicit separator between day numbers
+  //   "15-21 MEI 2026" / "15_21_MEI_2026" / "15 21 MEI 2026" / "15.21 MEI 2026"
+  const sep = name.match(new RegExp(`(\\d{1,2})${SEP}+(\\d{1,2})${SEP}+([A-Z]+)${SEP}+(\\d{4})`));
+  if (sep) {
+    const [, d1, d2, mon, year] = sep;
+    const m = MONTH_MAP[mon];
+    if (m) {
+      const d1n = Number(d1), d2n = Number(d2);
+      if (d1n >= 1 && d1n <= 31 && d2n >= 1 && d2n <= 31) {
+        return {
+          start: `${year}-${m}-${d1.padStart(2, "0")}`,
+          end: `${year}-${m}-${d2.padStart(2, "0")}`,
+        };
+      }
+    }
+  }
+
+  // Pattern 2: continuous 4-digit = DDDD (start=first 2, end=last 2)
+  //   "1521_MEI_2026" / "0107 JAN 2026"
+  const cont = name.match(new RegExp(`(?<!\\d)(\\d{4})${SEP}+([A-Z]+)${SEP}+(\\d{4})`));
+  if (cont) {
+    const digits = cont[1];
+    const mon = cont[2];
+    const year = cont[3];
+    const m = MONTH_MAP[mon];
+    if (m) {
+      const d1 = digits.slice(0, 2);
+      const d2 = digits.slice(2);
+      const d1n = Number(d1);
+      const d2n = Number(d2);
+      if (d1n >= 1 && d1n <= 31 && d2n >= 1 && d2n <= 31) {
+        return {
+          start: `${year}-${m}-${d1.padStart(2, "0")}`,
+          end: `${year}-${m}-${d2.padStart(2, "0")}`,
+        };
+      }
+    }
+  }
+
+  // Pattern 3: single day "17 MAR 2026"
+  const single = name.match(new RegExp(`(\\d{1,2})${SEP}+([A-Z]+)${SEP}+(\\d{4})`));
+  if (single) {
+    const [, d, mon, year] = single;
+    const m = MONTH_MAP[mon];
+    if (m) {
+      const d2 = d.padStart(2, "0");
+      return { start: `${year}-${m}-${d2}`, end: `${year}-${m}-${d2}` };
+    }
+  }
+
+  return { start: "", end: "" };
+}
+
+/**
+ * Fallback: scan xlsx sheet content for "DD - DD MMM YYYY" pattern.
+ * Looks at header cells of common sheets where periode is printed.
+ */
+function extractPeriodFromSheets(wb: import("xlsx").WorkBook): { start: string; end: string } {
+  const CANDIDATE_SHEETS = [
+    "LAP. PENJUALAN ", "LAP. PENJUALAN",
+    "LAP. CF",
+    "LAPORAN KAS PERIODE",
+    "WEEKLY FC", "LPKK", "VENDOR",
+  ];
+  for (const name of wb.SheetNames) {
+    if (!CANDIDATE_SHEETS.some((c) => name.toUpperCase().includes(c.toUpperCase().trim()))) continue;
+    const ws = wb.Sheets[name];
+    // Scan first 10 rows for period text
+    for (let r = 1; r <= 10; r++) {
+      for (let c = 0; c < 30; c++) {
+        const addr = XLSXLib.utils.encode_cell({ r: r - 1, c });
+        const cell = ws[addr];
+        if (!cell || !cell.v) continue;
+        const txt = String(cell.v).toUpperCase();
+        if (!txt.includes("PERIODE") && !txt.includes("PERIOD") && !/\d.*MEI|\d.*JAN|\d.*FEB|\d.*MAR|\d.*APR|\d.*JUN|\d.*JUL|\d.*AGU|\d.*SEP|\d.*OKT|\d.*NOV|\d.*DES/.test(txt)) {
+          continue;
+        }
+        // Probe this cell + next-row same col + same-row next col for date pattern
+        const candidates = [
+          txt,
+          String(ws[XLSXLib.utils.encode_cell({ r: r - 1, c: c + 1 })]?.v ?? "").toUpperCase(),
+          String(ws[XLSXLib.utils.encode_cell({ r: r, c })]?.v ?? "").toUpperCase(),
+        ];
+        for (const t of candidates) {
+          const m = t.match(/(\d{1,2})\s*[-._ ]\s*(\d{1,2})\s+([A-Z]+)\s+(\d{4})/);
+          if (m) {
+            const [, d1, d2, mon, year] = m;
+            const mm = MONTH_MAP[mon];
+            if (mm) {
+              return {
+                start: `${year}-${mm}-${d1.padStart(2, "0")}`,
+                end: `${year}-${mm}-${d2.padStart(2, "0")}`,
+              };
+            }
+          }
+        }
+      }
+    }
+  }
+  return { start: "", end: "" };
 }
 
 function formatWarningForClipboard(w: ValidationWarning): string {
@@ -318,7 +428,15 @@ export default function LaporanUploadPage() {
         }
       })();
       const wb = await parseExcelFile(file);
-      const { start, end } = extractPeriod(file.name);
+      let { start, end } = extractPeriod(file.name);
+      if (!start || !end) {
+        const fallback = extractPeriodFromSheets(wb);
+        if (fallback.start && fallback.end) {
+          start = fallback.start;
+          end = fallback.end;
+          toast.info(`Periode dideteksi dari isi sheet: ${start} → ${end}`);
+        }
+      }
       // Discover sheets we don't have a parser for — owner can request a new
       // parser without losing data. Dynamic prep for future xlsx variants.
       const KNOWN_SHEET_PATTERNS = [

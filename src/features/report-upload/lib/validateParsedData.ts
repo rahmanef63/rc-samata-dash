@@ -48,13 +48,34 @@ type ParsedDataForValidation = {
   categoryRules?: Array<{ keyword: string; label: string; type: string; priority: number; isActive: boolean }>;
 };
 
-/** Normalize for comparison (same as server-side normalizeItemName) */
+/** Normalize for comparison — permissive untuk match HPP vs Sales:
+ *  - strip parenthetical variant info "(ES TEH / S-TEE)"
+ *  - strip "TAKE AWAY" suffix (variant flag, bukan beda produk)
+ *  - strip ingredient prefixes
+ *  - collapse "." → " " (P.ATAS → P ATAS), then space-normalize
+ */
 function normalize(name: string): string {
   return name
     .toUpperCase()
     .trim()
     .replace(/^(DAGING\s+|BAHAN\s+|BUMBU\s+)/i, "")
-    .replace(/\s+/g, " ");
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\s+TAKE\s+AWAY\b/g, "")
+    .replace(/[./,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Permissive containment check — HPP "PAKET SEGAR 1" matches sales
+ *  "PAKET SEGAR 1 TAKE AWAY (ES TEH / S-TEE)" and vice versa. */
+function nameMatches(salesNorm: string, hppNames: Set<string>): boolean {
+  if (hppNames.has(salesNorm)) return true;
+  for (const h of hppNames) {
+    if (h.length < 4 || salesNorm.length < 4) continue;
+    if (salesNorm.startsWith(h) || h.startsWith(salesNorm)) return true;
+    if (salesNorm.includes(h) || h.includes(salesNorm)) return true;
+  }
+  return false;
 }
 
 export function validateParsedData(data: ParsedDataForValidation, fileName?: string): ValidationWarning[] {
@@ -101,7 +122,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
   const salesProductNames = [...new Set(allSales.map((s) => normalize(s.productName)))];
   const hppProductNames = new Set(data.hppProduk.map((h) => normalize(h.productName)));
 
-  const salesWithoutHPP = salesProductNames.filter((n) => !hppProductNames.has(n));
+  const salesWithoutHPP = salesProductNames.filter((n) => !nameMatches(n, hppProductNames));
   if (salesWithoutHPP.length > 0) {
     warnings.push({
       severity: "info",
@@ -117,7 +138,7 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
   const vendorNames = [...new Set(data.vendor.map((v) => normalize(v.commodityName)))];
   const caNames = new Set(data.costAnalysis.map((c) => normalize(c.itemName)));
 
-  const vendorWithoutCA = vendorNames.filter((n) => !caNames.has(n));
+  const vendorWithoutCA = vendorNames.filter((n) => !nameMatches(n, caNames));
   if (vendorWithoutCA.length > 5) {
     warnings.push({
       severity: "info",
