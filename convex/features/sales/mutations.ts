@@ -17,6 +17,8 @@ export const create = mutation({
     settlementDate: v.optional(v.string()),
     referenceNo: v.string(),
     status: v.union(v.literal("recorded"), v.literal("settled"), v.literal("pending_settlement")),
+    pocketSourceId: v.optional(v.id("pockets")),
+    receivedByStaffId: v.optional(v.id("staff")),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -24,7 +26,10 @@ export const create = mutation({
     if (args.platformFee < 0) throw new Error("platformFee must be >= 0");
     if (args.promoCost < 0) throw new Error("promoCost must be >= 0");
     if (args.netAmount < 0) throw new Error("netAmount must be >= 0");
-    const id = await ctx.db.insert("dailySales", args);
+    if (!args.referenceNo.trim()) throw new Error("No. referensi wajib diisi sebagai penjelasan transaksi");
+    const { pocketSourceId, receivedByStaffId, ...saleRow } = args;
+    void pocketSourceId; void receivedByStaffId;
+    const id = await ctx.db.insert("dailySales", saleRow);
     // Mirror ke Buku Besar SSOT — receipt kind (sales = income), direction=in.
     const txId = await mirrorTx(ctx, {
       kind: "receipt",
@@ -34,6 +39,8 @@ export const create = mutation({
       status: args.status,
       channelId: args.channelId,
       channelName: args.channelName,
+      pocketSourceId: args.pocketSourceId,
+      receivedByStaffId: args.receivedByStaffId,
       reference: args.referenceNo,
       description: `Penjualan ${args.channelName} ${args.businessDate}`,
       sourceKind: "manual",

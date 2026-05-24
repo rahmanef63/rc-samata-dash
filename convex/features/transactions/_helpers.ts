@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { TxKind, TxDirection, SourceKind } from "./_types";
 import { assertPeriodOpen } from "../closing/periodLock";
+import { derivePocketSourceId } from "../pockets/_helpers";
 
 type SourceTier = "csv_verified" | "wa_chat" | "weekly_xlsx" | "photo_pdf" | "manual";
 
@@ -43,6 +44,7 @@ export type MirrorArgs = {
   paidByStaffId?: Id<"staff">;
   receivedByStaffId?: Id<"staff">;
   sourceTier?: SourceTier;
+  paymentSource?: string;  // hint for pocket derivation; not persisted
   counterparty?: string;
   description?: string;
   reference?: string;
@@ -69,11 +71,29 @@ export async function mirrorTx(
   ctx: MutationCtx,
   args: MirrorArgs,
 ): Promise<Id<"transactions">> {
-  const { userId, ...rest } = args;
+  const { userId, paymentSource, ...rest } = args;
   const now = Date.now();
 
   // Period-lock enforcement — throws if date in locked/closed period.
   await assertPeriodOpen(ctx, rest.date);
+
+  // Auto-derive pocketSourceId if caller didn't pass one. Ensures zero
+  // untagged tx going forward (user constraint: cashflow always synced).
+  if (!rest.pocketSourceId) {
+    const derived = await derivePocketSourceId(ctx, {
+      kind: rest.kind,
+      direction: rest.direction,
+      paymentSource,
+      sourceKind: rest.sourceKind,
+    });
+    if (derived.pocketSourceId) {
+      rest.pocketSourceId = derived.pocketSourceId;
+      rest.pocketName = derived.pocketName;
+    }
+  } else if (!rest.pocketName) {
+    const p = await ctx.db.get(rest.pocketSourceId);
+    if (p) rest.pocketName = p.name;
+  }
 
   let existing = null;
   if (rest.sourceFileName) {

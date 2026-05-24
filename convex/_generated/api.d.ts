@@ -71,6 +71,7 @@ import type * as features_pettyCash__schema from "../features/pettyCash/_schema.
 import type * as features_pettyCash__types from "../features/pettyCash/_types.js";
 import type * as features_pettyCash_mutations from "../features/pettyCash/mutations.js";
 import type * as features_pettyCash_queries from "../features/pettyCash/queries.js";
+import type * as features_pockets__helpers from "../features/pockets/_helpers.js";
 import type * as features_pockets__schema from "../features/pockets/_schema.js";
 import type * as features_pockets_mutations from "../features/pockets/mutations.js";
 import type * as features_pockets_queries from "../features/pockets/queries.js";
@@ -92,6 +93,9 @@ import type * as features_transactions__types from "../features/transactions/_ty
 import type * as features_transactions_mutations from "../features/transactions/mutations.js";
 import type * as features_transactions_queries from "../features/transactions/queries.js";
 import type * as features_waAudit__schema from "../features/waAudit/_schema.js";
+import type * as features_waAudit_mutations from "../features/waAudit/mutations.js";
+import type * as features_waAudit_parser from "../features/waAudit/parser.js";
+import type * as features_waAudit_queries from "../features/waAudit/queries.js";
 import type * as http from "../http.js";
 import type * as projectConstants from "../projectConstants.js";
 import type * as shared_auth from "../shared/auth.js";
@@ -179,6 +183,7 @@ declare const fullApi: ApiFromModules<{
   "features/pettyCash/_types": typeof features_pettyCash__types;
   "features/pettyCash/mutations": typeof features_pettyCash_mutations;
   "features/pettyCash/queries": typeof features_pettyCash_queries;
+  "features/pockets/_helpers": typeof features_pockets__helpers;
   "features/pockets/_schema": typeof features_pockets__schema;
   "features/pockets/mutations": typeof features_pockets_mutations;
   "features/pockets/queries": typeof features_pockets_queries;
@@ -200,6 +205,9 @@ declare const fullApi: ApiFromModules<{
   "features/transactions/mutations": typeof features_transactions_mutations;
   "features/transactions/queries": typeof features_transactions_queries;
   "features/waAudit/_schema": typeof features_waAudit__schema;
+  "features/waAudit/mutations": typeof features_waAudit_mutations;
+  "features/waAudit/parser": typeof features_waAudit_parser;
+  "features/waAudit/queries": typeof features_waAudit_queries;
   http: typeof http;
   projectConstants: typeof projectConstants;
   "shared/auth": typeof shared_auth;

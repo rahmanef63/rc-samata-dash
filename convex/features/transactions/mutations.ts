@@ -12,6 +12,7 @@ import {
 } from "./_types";
 import { inferSourceTier } from "./_helpers";
 import { assertPeriodOpen } from "../closing/periodLock";
+import { derivePocketSourceId } from "../pockets/_helpers";
 
 // ─── Idempotent upsert by source signature ──────────────────
 // Caller passes the source trace; if a row already exists with the
@@ -369,6 +370,10 @@ export const backfillTransactions = mutation({
     for (const r of receipts) {
       if (r.transactionId) continue;
       const isAnomaly = r.anomalyFlag && r.anomalyFlag !== "ok";
+      const pocket = await derivePocketSourceId(ctx, {
+        kind: "payment", direction: "out", sourceKind: "system",
+        explicit: r.pocketId,
+      });
       const txId = await ctx.db.insert("transactions", {
         kind: (isAnomaly ? "anomaly" : "payment") as "anomaly" | "payment",
         direction: "out" as const,
@@ -377,6 +382,8 @@ export const backfillTransactions = mutation({
         status: r.payableId ? "linked" : "unlinked",
         payableId: r.payableId,
         receiptId: r._id,
+        pocketSourceId: pocket.pocketSourceId,
+        pocketName: pocket.pocketName,
         reference: r.reference,
         bankAccount: r.bankAccount,
         paidBy: r.paidBy,
@@ -401,12 +408,18 @@ export const backfillTransactions = mutation({
       .take(cap);
     for (const t of transfers) {
       if (t.transactionId) continue;
+      const pocket = await derivePocketSourceId(ctx, {
+        kind: "transfer", direction: "transfer", sourceKind: "system",
+        explicit: t.toPocketId,
+      });
       const txId = await ctx.db.insert("transactions", {
         kind: "transfer" as const,
         direction: "transfer" as const,
         date: t.transferDate,
         amount: t.amount,
         status: t.status,
+        pocketSourceId: pocket.pocketSourceId,
+        pocketName: pocket.pocketName,
         counterparty: t.direction === "branch_to_owner" ? PARTY.OWNER : PARTY.OWNER_INCOMING,
         description: t.description ?? t.purpose,
         reference: t.referenceNo,
@@ -426,12 +439,17 @@ export const backfillTransactions = mutation({
       .take(cap);
     for (const c of closings) {
       if (c.transactionId) continue;
+      const pocket = await derivePocketSourceId(ctx, {
+        kind: "transfer", direction: "transfer", sourceKind: "system",
+      });
       const txId = await ctx.db.insert("transactions", {
         kind: "transfer" as const,
         direction: "transfer" as const,
         date: c.businessDate,
         amount: c.cashSales + c.nonCashSales,
         status: c.status,
+        pocketSourceId: pocket.pocketSourceId,
+        pocketName: pocket.pocketName,
         counterparty: PARTY.CASHIER_SETORAN,
         description: `Opening ${c.openingCash} · Expected ${c.expectedCash} · Actual ${c.actualCash} · Diff ${c.difference}`,
         sourceKind: "system" as const,
@@ -448,6 +466,9 @@ export const backfillTransactions = mutation({
       .take(cap);
     for (const s of sales) {
       if (s.transactionId) continue;
+      const pocket = await derivePocketSourceId(ctx, {
+        kind: "receipt", direction: "in", sourceKind: "system",
+      });
       const txId = await ctx.db.insert("transactions", {
         kind: "receipt" as const,
         direction: "in" as const,
@@ -456,6 +477,8 @@ export const backfillTransactions = mutation({
         status: s.status,
         channelId: s.channelId,
         channelName: s.channelName,
+        pocketSourceId: pocket.pocketSourceId,
+        pocketName: pocket.pocketName,
         reference: s.referenceNo,
         description: `Penjualan ${s.channelName} ${s.businessDate}`,
         sourceKind: "system" as const,
@@ -472,6 +495,10 @@ export const backfillTransactions = mutation({
       .take(cap);
     for (const e of expenses) {
       if (e.transactionId) continue;
+      const pocket = await derivePocketSourceId(ctx, {
+        kind: "expense", direction: "out", sourceKind: "system",
+        paymentSource: e.paymentSource,
+      });
       const txId = await ctx.db.insert("transactions", {
         kind: "expense" as const,
         direction: "out" as const,
@@ -480,6 +507,8 @@ export const backfillTransactions = mutation({
         status: e.status,
         categoryId: e.categoryId,
         vendorId: e.vendorId,
+        pocketSourceId: pocket.pocketSourceId,
+        pocketName: pocket.pocketName,
         counterparty: e.vendorName,
         description: e.description,
         sourceKind: "system" as const,

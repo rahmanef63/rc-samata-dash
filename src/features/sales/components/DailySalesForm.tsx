@@ -21,12 +21,13 @@ const fields: FieldConfig[] = [
   { key: "grossAmount", label: "Penjualan Kotor", type: "number", required: true },
   { key: "platformFee", label: "Fee Platform", type: "number" },
   { key: "promoCost", label: "Potongan Promo", type: "number" },
-  { key: "referenceNo", label: "No. Referensi" },
+  { key: "referenceNo", label: "No. Referensi / Catatan", required: true, helpText: "Wajib — sebagai penjelasan transaksi (no struk, channel ref, dll)" },
   { key: "status", label: "Status", type: "select", options: [
     { value: "recorded", label: "Tercatat" },
     { value: "pending_settlement", label: "Menunggu Settlement" },
     { value: "settled", label: "Selesai" },
   ]},
+  { key: "pocketSourceId", label: "Pocket Penerima Kas", type: "pocket", helpText: "Cash tunai → Brankas Toko · Transfer bank → Rekening Toko · Auto pilih kalau kosong." },
 ];
 
 const columns: Column<DailySale>[] = [

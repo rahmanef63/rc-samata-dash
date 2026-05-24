@@ -213,10 +213,12 @@ export const createTransfer = mutation({
     amount: v.number(),
     referenceNo: v.string(),
     status: transferStatusValidator,
+    toPocketId: v.optional(v.id("pockets")),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     if (args.amount <= 0) throw new Error("Transfer amount must be > 0");
+    if (!args.referenceNo.trim()) throw new Error("No. referensi wajib diisi");
     const id = await ctx.db.insert("ownerTransfers", args);
     // Mirror ke Buku Besar SSOT — transfer kind, direction follows arg.
     const txId = await mirrorTx(ctx, {
@@ -225,6 +227,7 @@ export const createTransfer = mutation({
       date: args.transferDate,
       amount: args.amount,
       status: args.status,
+      pocketSourceId: args.toPocketId,
       reference: args.referenceNo,
       description: `Transfer ${args.direction} ${args.purpose}`,
       sourceKind: "manual",
@@ -324,10 +327,14 @@ export const createPaymentReceipt = mutation({
     proofStorageId: v.optional(v.id("_storage")),
     proofFileName: v.optional(v.string()),
     proofMimeType: v.optional(v.string()),
+    pocketId: v.optional(v.id("pockets")),
+    paidByStaffId: v.optional(v.id("staff")),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
-    const id = await ctx.db.insert("paymentReceipts", { ...args, uploadedAt: Date.now(), uploadedBy: userId });
+    const { paidByStaffId, ...receiptRow } = args;
+    void paidByStaffId;
+    const id = await ctx.db.insert("paymentReceipts", { ...receiptRow, uploadedAt: Date.now(), uploadedBy: userId });
 
     // If linked to a payable, auto-bump paidAmount + status.
     if (args.payableId) {
@@ -346,6 +353,8 @@ export const createPaymentReceipt = mutation({
       amount: args.amount,
       paidBy: args.paidBy,
       channelName: args.channel,
+      pocketSourceId: args.pocketId,
+      paidByStaffId: args.paidByStaffId,
       reference: args.reference,
       description: `Bukti bayar ${args.paidBy} Rp${args.amount}`,
       payableId: args.payableId,

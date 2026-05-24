@@ -83,6 +83,7 @@ export function ExpensesOverview() {
       { label: "Rejected", value: "rejected" },
     ]},
     { key: "expenseDate", label: "Tanggal", type: "date" },
+    { key: "pocketSourceId", label: "Pocket Sumber Kas", type: "pocket", helpText: "Auto-derive dari Sumber Pembayaran kalau kosong." },
   ];
 
   const customCreate = async (data: Expense) => {

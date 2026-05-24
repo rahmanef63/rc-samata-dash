@@ -159,6 +159,14 @@ export const ROUTE_GROUPS: RouteGroup[] = [
         ],
       },
       {
+        title: "WA Audit",
+        url: "/operation/wa-audit",
+        icon: MessageSquareText,
+        children: [
+          { title: "Daily Audit", url: "/operation/wa-audit", icon: MessageSquareText },
+        ],
+      },
+      {
         title: "Sistem",
         url: "/operation/settings",
         icon: Settings,

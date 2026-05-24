@@ -17,11 +17,16 @@ export const create = mutation({
     paymentSource: paymentSourceValidator,
     status: approvalStatusValidator,
     hasAttachment: v.boolean(),
+    pocketSourceId: v.optional(v.id("pockets")),
+    paidByStaffId: v.optional(v.id("staff")),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     if (args.amount <= 0) throw new Error("amount must be > 0");
-    const id = await ctx.db.insert("expenses", args);
+    if (!args.description.trim()) throw new Error("Deskripsi wajib diisi");
+    const { pocketSourceId, paidByStaffId, ...expenseRow } = args;
+    void pocketSourceId; void paidByStaffId; // not persisted on expenses, only on tx
+    const id = await ctx.db.insert("expenses", expenseRow);
     // Mirror ke Buku Besar SSOT — expense kind, direction=out.
     const txId = await mirrorTx(ctx, {
       kind: "expense",
@@ -31,6 +36,9 @@ export const create = mutation({
       status: args.status,
       categoryId: args.categoryId,
       vendorId: args.vendorId,
+      pocketSourceId: args.pocketSourceId,
+      paidByStaffId: args.paidByStaffId,
+      paymentSource: args.paymentSource,
       counterparty: args.vendorName,
       description: args.description,
       sourceKind: "manual",

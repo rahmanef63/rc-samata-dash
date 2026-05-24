@@ -11,6 +11,7 @@ export { TabBar } from "./TabBar";
 export { FAB } from "./FAB";
 export { ViewAllButton } from "./ViewAllButton";
 export { CrudDialog } from "./CrudDialog";
+export { PocketPicker } from "./PocketPicker";
 export { DataTable } from "./DataTable";
 export { DateRangePicker } from "./DateRangePicker";
 export { RowSourceDialog, deriveSourceFromEtl } from "./RowSourceDialog";

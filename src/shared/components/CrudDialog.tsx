@@ -24,14 +24,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import type { CrudMode } from "../hooks/useCrudState";
+import { PocketPicker } from "./PocketPicker";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 export interface FieldConfig {
   key: string;
   label: string;
-  type?: "text" | "number" | "select" | "date";
+  type?: "text" | "number" | "select" | "date" | "pocket";
   options?: { label: string; value: string }[];
   placeholder?: string;
   required?: boolean;
+  helpText?: string;
 }
 
 interface CrudDialogProps<T extends Record<string, any>> {
@@ -122,44 +125,60 @@ export function CrudDialog<T extends Record<string, any>>({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {fields.map((field) => (
-            <div key={field.key} className="space-y-1.5">
-              <Label htmlFor={field.key} className="text-xs font-medium">
-                {field.label}
-              </Label>
-              {field.type === "select" && field.options ? (
-                <Select
-                  value={String(formData[field.key] || "")}
-                  onValueChange={(v) => handleChange(field.key, v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={field.placeholder || `Pilih ${field.label}`} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {field.options.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
+          {fields.map((field) => {
+            if (field.type === "pocket") {
+              return (
+                <PocketPicker
+                  key={field.key}
                   id={field.key}
-                  type={field.type || "text"}
-                  placeholder={field.placeholder || field.label}
-                  value={formData[field.key] ?? ""}
-                  onChange={(e) =>
-                    handleChange(
-                      field.key,
-                      field.type === "number" ? Number(e.target.value) : e.target.value
-                    )
-                  }
+                  label={field.label}
+                  description={field.helpText ?? "Pilih pocket sumber kas. Kosongkan untuk auto-derive."}
                   required={field.required}
+                  value={formData[field.key] as Id<"pockets"> | undefined}
+                  onChange={(v) => handleChange(field.key, v)}
                 />
-              )}
-            </div>
-          ))}
+              );
+            }
+            return (
+              <div key={field.key} className="space-y-1.5">
+                <Label htmlFor={field.key} className="text-xs font-medium">
+                  {field.label}
+                </Label>
+                {field.type === "select" && field.options ? (
+                  <Select
+                    value={String(formData[field.key] || "")}
+                    onValueChange={(v) => handleChange(field.key, v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={field.placeholder || `Pilih ${field.label}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id={field.key}
+                    type={field.type || "text"}
+                    placeholder={field.placeholder || field.label}
+                    value={formData[field.key] ?? ""}
+                    onChange={(e) =>
+                      handleChange(
+                        field.key,
+                        field.type === "number" ? Number(e.target.value) : e.target.value
+                      )
+                    }
+                    required={field.required}
+                  />
+                )}
+                {field.helpText && <p className="text-[10px] text-muted-foreground">{field.helpText}</p>}
+              </div>
+            );
+          })}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Batal
