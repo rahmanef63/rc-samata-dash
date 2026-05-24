@@ -137,8 +137,21 @@ export function parseLapCF(wb: XLSX.WorkBook): DailyCashFlowItem[] {
       continue;
     }
 
-    // Collect other income items
+    // Collect other income items — SKIP subtotal/total rows. Sheet punya
+    // pattern:
+    //   Row 27-31: individual items (TOP UP, IURAN, INJECT, dst)
+    //   Row 33: subtotal "....." Rp. 48,368,354
+    //   Row 35: "Total Uang Yang Masuk" Rp. 89,390,001
+    // Tanpa skip, ketiganya ke-count → otherInflow inflate ~4x.
     if (inOtherIncome) {
+      const cellsText = row.map((c) => String(c ?? "").toUpperCase().trim()).join(" ");
+      const isSubtotalRow =
+        cellsText.includes("TOTAL") ||
+        cellsText.includes("JUMLAH") ||
+        cellsText.includes("SUB TOTAL") ||
+        cellsText.includes("…") ||
+        cellsText.includes("....");
+      if (isSubtotalRow) continue;
       const amount = findAmount(row);
       if (amount > 0) {
         totalOtherInflow += amount;

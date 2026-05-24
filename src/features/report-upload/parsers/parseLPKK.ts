@@ -64,11 +64,27 @@ const CATEGORY_COLS: ColDef[] = [
 const DATA_START_ROW = 9; // row index 9 = baris pertama data (0-based)
 
 /** "SUB TOTAL" diulang per-hari di LPKK; harus di-SKIP tapi parsing lanjut.
- *  Yang bener-bener akhir = "JUMLAH" / "GRAND TOTAL" / "TOTAL " standalone. */
+ *  Yang bener-bener akhir = "JUMLAH" / "GRAND TOTAL" / "TOTAL " standalone.
+ *
+ *  Kadang owner gak isi "SUB TOTAL" label tapi row tetap aggregate per-hari
+ *  (NO col 1 kosong + KETERANGAN col 14 kosong + JUMLAH col 15 punya value).
+ *  Sub-totals seperti itu juga harus di-skip — kalau tidak, parser anggap
+ *  itu transaksi tanpa deskripsi dan masuk warning "Deskripsi Kosong" (false
+ *  positive — angka sebenarnya cuma daily sum). */
 function isSubTotalRow(row: RawSheet[0]): boolean {
   const c0 = String(row[0] ?? "").toUpperCase().trim();
   const c1 = String(row[1] ?? "").toUpperCase().trim();
-  return c0.includes("SUB TOTAL") || c0 === "SUBTOTAL" || c1.includes("SUB TOTAL") || c1 === "SUBTOTAL";
+  if (c0.includes("SUB TOTAL") || c0 === "SUBTOTAL") return true;
+  if (c1.includes("SUB TOTAL") || c1 === "SUBTOTAL") return true;
+  // Implicit subtotal: NO column kosong + KETERANGAN kosong + JUMLAH terisi.
+  // Real transactions selalu punya NO (col 1) atau KETERANGAN (col 14).
+  const noCell = row[1];
+  const desc = String(row[14] ?? "").trim();
+  const jumlah = toNumber(row[15]);
+  if ((noCell == null || String(noCell).trim() === "") && desc === "" && jumlah > 0) {
+    return true;
+  }
+  return false;
 }
 
 function isStopRow(row: RawSheet[0]): boolean {
