@@ -1,6 +1,7 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { TxKind, TxDirection, SourceKind } from "./_types";
+import { assertPeriodOpen } from "../closing/periodLock";
 
 type SourceTier = "csv_verified" | "wa_chat" | "weekly_xlsx" | "photo_pdf" | "manual";
 
@@ -70,6 +71,9 @@ export async function mirrorTx(
 ): Promise<Id<"transactions">> {
   const { userId, ...rest } = args;
   const now = Date.now();
+
+  // Period-lock enforcement — throws if date in locked/closed period.
+  await assertPeriodOpen(ctx, rest.date);
 
   let existing = null;
   if (rest.sourceFileName) {

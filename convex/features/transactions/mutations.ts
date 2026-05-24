@@ -11,6 +11,7 @@ import {
   sourceKindValidator,
 } from "./_types";
 import { inferSourceTier } from "./_helpers";
+import { assertPeriodOpen } from "../closing/periodLock";
 
 // ─── Idempotent upsert by source signature ──────────────────
 // Caller passes the source trace; if a row already exists with the
@@ -54,6 +55,9 @@ export const upsertTransaction = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
     const now = Date.now();
+
+    // Period-lock enforcement — block writes to locked/closed period.
+    await assertPeriodOpen(ctx, args.date);
 
     // Find existing by source signature
     let existing = null;

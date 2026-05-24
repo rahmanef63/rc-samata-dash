@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { formatRpFull } from "@/shared/lib";
 import { useDateScope } from "@/features/dashboard";
-import { Wallet, Plus, Pencil, Sparkles, Building2, Banknote, HandCoins, Receipt } from "lucide-react";
+import { Wallet, Plus, Pencil, Sparkles, Building2, Banknote, HandCoins, Receipt, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 type PocketKind =
@@ -83,11 +83,13 @@ export function PocketsOverview() {
   const createPocket = useMutation(api.features.pockets.mutations.createPocket);
   const updatePocket = useMutation(api.features.pockets.mutations.updatePocket);
   const seedDefault = useMutation(api.features.pockets.mutations.seedDefaultPockets);
+  const backfill = useMutation(api.features.pockets.mutations.backfillPocketSourceId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Pocket | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [seeding, setSeeding] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const openCreate = () => {
     setEditing(null);
@@ -152,6 +154,19 @@ export function PocketsOverview() {
     }
   };
 
+  const handleBackfill = async () => {
+    setBackfilling(true);
+    try {
+      const res = await backfill({});
+      const summary = Object.entries(res.byPocket).map(([k, v]) => `${k}: ${v}`).join(", ");
+      toast.success(`Backfill: ${res.updated} tx ter-tag (${summary || "0"}). ${res.skipped} di-skip.`);
+    } catch (e) {
+      toast.error("Backfill gagal: " + (e as Error).message);
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   if (!pockets || !balances) {
     return (
       <div className="space-y-4">
@@ -188,6 +203,12 @@ export function PocketsOverview() {
             <Button variant="outline" size="sm" onClick={handleSeed} disabled={seeding}>
               <Sparkles className="h-4 w-4 mr-1" />
               {seeding ? "Seeding..." : "Seed Default"}
+            </Button>
+          )}
+          {pockets.length > 0 && untagged && untagged.txCount > 0 && (
+            <Button variant="outline" size="sm" onClick={handleBackfill} disabled={backfilling}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${backfilling ? "animate-spin" : ""}`} />
+              {backfilling ? "Backfill..." : "Backfill Tag"}
             </Button>
           )}
           <Button size="sm" onClick={openCreate}>

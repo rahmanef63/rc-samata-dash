@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench, CreditCard, ShoppingCart } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench, CreditCard, ShoppingCart, Lock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -86,6 +86,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
           { title: "Setoran Harian", url: "/finance/setoran", icon: Landmark },
           { title: "Transfer Owner", url: "/finance/transfer-owner-list", icon: RefreshCw },
           { title: "Bank Batches", url: "/finance/bank-batches", icon: Landmark },
+          { title: "Periode Akuntansi", url: "/finance/periode", icon: Lock, roles: SUPER_ADMIN_ONLY },
         ],
       },
       {
@@ -147,6 +148,14 @@ export const ROUTE_GROUPS: RouteGroup[] = [
           { title: "Validasi Laporan", url: "/operation/report-validations", icon: ClipboardCheck },
           { title: "Audit Log Notion", url: "/operation/audit-log", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
           { title: "Log Audit", url: "/operation/audit/logs", icon: ClipboardList, roles: SUPER_ADMIN_ONLY },
+        ],
+      },
+      {
+        title: "HR",
+        url: "/operation/hr/staff",
+        icon: Users,
+        children: [
+          { title: "Staff", url: "/operation/hr/staff", icon: Users },
         ],
       },
       {

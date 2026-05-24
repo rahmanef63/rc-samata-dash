@@ -38,6 +38,7 @@ import type * as features_bukuBesar_queries from "../features/bukuBesar/queries.
 import type * as features_closing__schema from "../features/closing/_schema.js";
 import type * as features_closing__types from "../features/closing/_types.js";
 import type * as features_closing_mutations from "../features/closing/mutations.js";
+import type * as features_closing_periodLock from "../features/closing/periodLock.js";
 import type * as features_closing_queries from "../features/closing/queries.js";
 import type * as features_dailyReportValidation__schema from "../features/dailyReportValidation/_schema.js";
 import type * as features_dailyReportValidation__types from "../features/dailyReportValidation/_types.js";
@@ -48,6 +49,8 @@ import type * as features_expenses__types from "../features/expenses/_types.js";
 import type * as features_expenses_mutations from "../features/expenses/mutations.js";
 import type * as features_expenses_queries from "../features/expenses/queries.js";
 import type * as features_hr__schema from "../features/hr/_schema.js";
+import type * as features_hr_mutations from "../features/hr/mutations.js";
+import type * as features_hr_queries from "../features/hr/queries.js";
 import type * as features_inventory__schema from "../features/inventory/_schema.js";
 import type * as features_inventory__types from "../features/inventory/_types.js";
 import type * as features_inventory_mutations from "../features/inventory/mutations.js";
@@ -143,6 +146,7 @@ declare const fullApi: ApiFromModules<{
   "features/closing/_schema": typeof features_closing__schema;
   "features/closing/_types": typeof features_closing__types;
   "features/closing/mutations": typeof features_closing_mutations;
+  "features/closing/periodLock": typeof features_closing_periodLock;
   "features/closing/queries": typeof features_closing_queries;
   "features/dailyReportValidation/_schema": typeof features_dailyReportValidation__schema;
   "features/dailyReportValidation/_types": typeof features_dailyReportValidation__types;
@@ -153,6 +157,8 @@ declare const fullApi: ApiFromModules<{
   "features/expenses/mutations": typeof features_expenses_mutations;
   "features/expenses/queries": typeof features_expenses_queries;
   "features/hr/_schema": typeof features_hr__schema;
+  "features/hr/mutations": typeof features_hr_mutations;
+  "features/hr/queries": typeof features_hr_queries;
   "features/inventory/_schema": typeof features_inventory__schema;
   "features/inventory/_types": typeof features_inventory__types;
   "features/inventory/mutations": typeof features_inventory_mutations;

@@ -123,6 +123,94 @@ export const seedDefaultPockets = mutation({
   },
 });
 
+// Backfill `pocketSourceId` retroaktif untuk transactions yang belum
+// di-tag. Rule heuristik (single-tenant RC Samata):
+//   - receipt/payment direction=in    → Brankas Toko
+//   - expense paymentSource=petty_cash → Petty Cash
+//   - expense paymentSource=owner_direct → Owner Direct
+//   - expense paymentSource=payable   → Rek Toko (asumsi via transfer bank)
+//   - transfer kind=transfer          → Brankas Toko (setoran fisik)
+//   - payment kind=payment (direction=out, statement_bank) → Rek Toko
+//   - default                          → Brankas Toko
+// Idempotent: skip tx yang sudah punya pocketSourceId.
+export const backfillPocketSourceId = mutation({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    const userId = await requireAuth(ctx);
+    const cap = limit ?? 10000;
+
+    // Build name→id pocket lookup
+    const pockets = await ctx.db.query("pockets").collect();
+    const byName = new Map<string, typeof pockets[number]>();
+    for (const p of pockets) byName.set(p.name, p);
+    const brankas = byName.get("Brankas Toko");
+    const petty = byName.get("Petty Cash");
+    const ownerDirect = byName.get("Owner Direct");
+    const rekToko = byName.get("Rekening Toko");
+
+    if (!brankas || !petty || !ownerDirect || !rekToko) {
+      throw new Error("Default pockets belum di-seed. Klik 'Seed Default' di /finance/pockets dulu.");
+    }
+
+    const txs = await ctx.db.query("transactions").take(cap);
+    const expenses = await ctx.db.query("expenses").take(cap);
+    // Map expenseTransactionId → paymentSource biar bisa derive pocket
+    const expensePaymentSource = new Map<string, string>();
+    for (const e of expenses) {
+      if (e.transactionId) expensePaymentSource.set(e.transactionId, e.paymentSource);
+    }
+
+    type Counts = Record<string, number>;
+    const counts: Counts = {};
+    let updated = 0;
+    let skipped = 0;
+
+    for (const tx of txs) {
+      if (tx.pocketSourceId) { skipped++; continue; }
+
+      let target = brankas;
+      if (tx.kind === "expense") {
+        const src = expensePaymentSource.get(tx._id);
+        if (src === "petty_cash") target = petty;
+        else if (src === "owner_direct") target = ownerDirect;
+        else if (src === "payable") target = rekToko;
+        else target = brankas;
+      } else if (tx.kind === "payment") {
+        if (tx.sourceKind === "statement_bank") target = rekToko;
+        else target = brankas;
+      } else if (tx.kind === "receipt") {
+        target = brankas;
+      } else if (tx.kind === "transfer") {
+        target = brankas;
+      } else if (tx.kind === "invoice") {
+        // invoice = expected future payment, not actual cash movement.
+        // Don't tag — leave null intentionally.
+        skipped++;
+        continue;
+      }
+
+      await ctx.db.patch(tx._id, {
+        pocketSourceId: target._id,
+        pocketName: target.name,
+        updatedBy: userId,
+        updatedAt: Date.now(),
+      });
+      counts[target.name] = (counts[target.name] ?? 0) + 1;
+      updated++;
+    }
+
+    await insertAuditLog(ctx, {
+      entityType: "transactions",
+      entityId: "backfill",
+      action: "update",
+      description: `Backfill pocketSourceId: ${updated} updated, ${skipped} skipped`,
+      actedBy: userId,
+    });
+
+    return { updated, skipped, byPocket: counts };
+  },
+});
+
 // Manual flow record — UI transfer antar pocket atau koreksi.
 export const createPocketFlow = mutation({
   args: {
