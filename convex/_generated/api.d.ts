@@ -69,6 +69,8 @@ import type * as features_pettyCash__types from "../features/pettyCash/_types.js
 import type * as features_pettyCash_mutations from "../features/pettyCash/mutations.js";
 import type * as features_pettyCash_queries from "../features/pettyCash/queries.js";
 import type * as features_pockets__schema from "../features/pockets/_schema.js";
+import type * as features_pockets_mutations from "../features/pockets/mutations.js";
+import type * as features_pockets_queries from "../features/pockets/queries.js";
 import type * as features_reports__schema from "../features/reports/_schema.js";
 import type * as features_reports_analytics from "../features/reports/analytics.js";
 import type * as features_reports_bridges from "../features/reports/bridges.js";
@@ -172,6 +174,8 @@ declare const fullApi: ApiFromModules<{
   "features/pettyCash/mutations": typeof features_pettyCash_mutations;
   "features/pettyCash/queries": typeof features_pettyCash_queries;
   "features/pockets/_schema": typeof features_pockets__schema;
+  "features/pockets/mutations": typeof features_pockets_mutations;
+  "features/pockets/queries": typeof features_pockets_queries;
   "features/reports/_schema": typeof features_reports__schema;
   "features/reports/analytics": typeof features_reports_analytics;
   "features/reports/bridges": typeof features_reports_bridges;

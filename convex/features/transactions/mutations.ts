@@ -10,6 +10,7 @@ import {
   txDirectionValidator as directionValidator,
   sourceKindValidator,
 } from "./_types";
+import { inferSourceTier } from "./_helpers";
 
 // ─── Idempotent upsert by source signature ──────────────────
 // Caller passes the source trace; if a row already exists with the
@@ -68,14 +69,16 @@ export const upsertTransaction = mutation({
       ) ?? null;
     }
 
+    const sourceTier = inferSourceTier(args.sourceKind);
     if (existing) {
       const { sourceKind: _sk, ...patch } = args;
       void _sk;
-      await ctx.db.patch(existing._id, { ...patch, updatedBy: userId, updatedAt: now });
+      await ctx.db.patch(existing._id, { ...patch, sourceTier, updatedBy: userId, updatedAt: now });
       return { id: existing._id, action: "update" as const };
     }
     const id = await ctx.db.insert("transactions", {
       ...args,
+      sourceTier,
       createdBy: userId,
       createdAt: now,
     });
@@ -347,6 +350,7 @@ export const backfillTransactions = mutation({
         reference: p.paymentReference,
         proofFileName: p.refPdfFile,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         sourceFileName: p.refPdfFile,
         createdBy: userId,
         createdAt: now,
@@ -379,6 +383,7 @@ export const backfillTransactions = mutation({
         proofStorageId: r.proofStorageId,
         proofMimeType: r.proofMimeType,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         sourceFileName: r.proofFileName,
         createdBy: userId,
         createdAt: now,
@@ -403,6 +408,7 @@ export const backfillTransactions = mutation({
         reference: t.referenceNo,
         method: t.direction,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         sourceReportId: t.reportId,
         createdBy: userId,
         createdAt: now,
@@ -425,6 +431,7 @@ export const backfillTransactions = mutation({
         counterparty: PARTY.CASHIER_SETORAN,
         description: `Opening ${c.openingCash} · Expected ${c.expectedCash} · Actual ${c.actualCash} · Diff ${c.difference}`,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         createdBy: userId,
         createdAt: now,
       });
@@ -448,6 +455,7 @@ export const backfillTransactions = mutation({
         reference: s.referenceNo,
         description: `Penjualan ${s.channelName} ${s.businessDate}`,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         createdBy: userId,
         createdAt: now,
       });
@@ -471,6 +479,7 @@ export const backfillTransactions = mutation({
         counterparty: e.vendorName,
         description: e.description,
         sourceKind: "system" as const,
+        sourceTier: "manual" as const,
         createdBy: userId,
         createdAt: now,
       });

@@ -710,76 +710,88 @@ export const getPiutangPaymentsByVendor = query({
     await requireAuth(ctx);
     const inRange = inRangeFn(startDate, endDate);
 
-    const payments = await ctx.db.query("payablePayments").take(5000);
+    // Load all payables + payments. Single-tenant repo — payables small (<5k).
+    const [payables, payments] = await Promise.all([
+      ctx.db.query("payables").take(5000),
+      ctx.db.query("payablePayments").take(5000),
+    ]);
 
-    // Build payable→vendor lookup so we can group by vendor without N+1.
-    const payableIds = Array.from(new Set(payments.map((p) => p.payableId)));
-    const payableMap = new Map<string, { vendorId: string; vendorName: string; amount: number; paidAmount: number; status: string }>();
-    for (const pid of payableIds) {
-      const p = await ctx.db.get(pid);
-      if (p) {
-        payableMap.set(pid, {
-          vendorId: p.vendorId,
-          vendorName: p.vendorName,
-          amount: p.amount,
-          paidAmount: p.paidAmount,
-          status: p.status,
-        });
-      }
-    }
+    const payableMap = new Map<string, typeof payables[number]>();
+    for (const p of payables) payableMap.set(p._id, p);
 
     type Row = {
       vendorId: string;
       vendorName: string;
       paidThisPeriod: number;
-      outstandingNow: number;
-      paymentCount: number;
-      payableCount: number;
+      outstandingNow: number;     // ALL open payables, not just touched
+      paymentCount: number;       // pmts in this period
+      openPayableCount: number;   // all open payables for vendor (any age)
+      paidPayableCount: number;   // payables paid in this period (sub-set)
     };
     const byVendor = new Map<string, Row>();
-    const seenPayables = new Map<string, Set<string>>(); // vendor → payable set
+    const upsertRow = (vendorId: string, vendorName: string): Row => {
+      let row = byVendor.get(vendorId);
+      if (!row) {
+        row = {
+          vendorId,
+          vendorName,
+          paidThisPeriod: 0,
+          outstandingNow: 0,
+          paymentCount: 0,
+          openPayableCount: 0,
+          paidPayableCount: 0,
+        };
+        byVendor.set(vendorId, row);
+      }
+      return row;
+    };
 
+    // Step 1: aggregate ALL open payables per vendor → outstandingNow + openPayableCount.
+    for (const p of payables) {
+      if (p.status === "paid") continue;
+      const outstanding = Math.max(0, p.amount - p.paidAmount);
+      if (outstanding <= 0) continue;
+      const row = upsertRow(p.vendorId, p.vendorName);
+      row.outstandingNow += outstanding;
+      row.openPayableCount += 1;
+    }
+
+    // Step 2: aggregate payments in scope period → paidThisPeriod + paymentCount.
+    const paidPayableTouched = new Map<string, Set<string>>();
     for (const pm of payments) {
       if (!inRange(pm.paymentDate)) continue;
       const p = payableMap.get(pm.payableId);
       if (!p) continue;
-      let row = byVendor.get(p.vendorId);
-      if (!row) {
-        row = {
-          vendorId: p.vendorId,
-          vendorName: p.vendorName,
-          paidThisPeriod: 0,
-          outstandingNow: 0,
-          paymentCount: 0,
-          payableCount: 0,
-        };
-        byVendor.set(p.vendorId, row);
-        seenPayables.set(p.vendorId, new Set());
-      }
+      const row = upsertRow(p.vendorId, p.vendorName);
       row.paidThisPeriod += pm.amount;
       row.paymentCount += 1;
-      seenPayables.get(p.vendorId)!.add(pm.payableId);
-    }
-
-    // Compute outstanding (amount - paidAmount) per vendor across all *touched* payables.
-    for (const [vendorId, payableSet] of seenPayables.entries()) {
-      const row = byVendor.get(vendorId)!;
-      row.payableCount = payableSet.size;
-      for (const pid of payableSet) {
-        const p = payableMap.get(pid);
-        if (p) row.outstandingNow += Math.max(0, p.amount - p.paidAmount);
+      let touched = paidPayableTouched.get(p.vendorId);
+      if (!touched) {
+        touched = new Set();
+        paidPayableTouched.set(p.vendorId, touched);
       }
+      touched.add(pm.payableId);
+    }
+    for (const [vendorId, touched] of paidPayableTouched.entries()) {
+      const row = byVendor.get(vendorId);
+      if (row) row.paidPayableCount = touched.size;
     }
 
-    const rows = Array.from(byVendor.values()).sort((a, b) => b.paidThisPeriod - a.paidThisPeriod);
+    // Sort: vendors w/ paymentsThisPeriod first (desc), then by outstandingNow desc.
+    const rows = Array.from(byVendor.values()).sort((a, b) => {
+      if (a.paidThisPeriod !== b.paidThisPeriod) return b.paidThisPeriod - a.paidThisPeriod;
+      return b.outstandingNow - a.outstandingNow;
+    });
+
     const totals = rows.reduce(
       (acc, r) => ({
         paidThisPeriod: acc.paidThisPeriod + r.paidThisPeriod,
         outstandingNow: acc.outstandingNow + r.outstandingNow,
         paymentCount: acc.paymentCount + r.paymentCount,
-        payableCount: acc.payableCount + r.payableCount,
+        openPayableCount: acc.openPayableCount + r.openPayableCount,
+        paidPayableCount: acc.paidPayableCount + r.paidPayableCount,
       }),
-      { paidThisPeriod: 0, outstandingNow: 0, paymentCount: 0, payableCount: 0 },
+      { paidThisPeriod: 0, outstandingNow: 0, paymentCount: 0, openPayableCount: 0, paidPayableCount: 0 },
     );
     return { rows, totals };
   },

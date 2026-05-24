@@ -2,6 +2,21 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { TxKind, TxDirection, SourceKind } from "./_types";
 
+type SourceTier = "csv_verified" | "wa_chat" | "weekly_xlsx" | "photo_pdf" | "manual";
+
+// Infer data-quality tier from sourceKind. Callers may override by passing
+// `sourceTier` explicitly (e.g. statement that's actually photo OCR).
+export function inferSourceTier(sourceKind: SourceKind): SourceTier {
+  switch (sourceKind) {
+    case "weekly_upload": return "weekly_xlsx";
+    case "statement_bank": return "csv_verified";
+    case "laporan_pic_csv": return "csv_verified";
+    case "bulk_import_csv": return "csv_verified";
+    case "manual": return "manual";
+    case "system": return "manual";
+  }
+}
+
 // Internal mirror helper — call from any legacy mutation that inserts
 // into payables / paymentReceipts / ownerTransfers / dailyClosings /
 // bankStatementEntries so the unified `transactions` table also sees
@@ -23,11 +38,16 @@ export type MirrorArgs = {
   receiptId?: Id<"paymentReceipts">;
   linkedTxId?: Id<"transactions">;
   parentTxId?: Id<"transactions">;
+  pocketSourceId?: Id<"pockets">;
+  paidByStaffId?: Id<"staff">;
+  receivedByStaffId?: Id<"staff">;
+  sourceTier?: SourceTier;
   counterparty?: string;
   description?: string;
   reference?: string;
   bankAccount?: string;
   channelName?: string;
+  pocketName?: string;
   paidBy?: string;
   method?: string;
   notes?: string;
@@ -64,12 +84,18 @@ export async function mirrorTx(
     ) ?? null;
   }
 
+  // Auto-stamp sourceTier from sourceKind unless caller already set it.
+  const tieredRest = {
+    ...rest,
+    sourceTier: rest.sourceTier ?? inferSourceTier(rest.sourceKind),
+  };
+
   if (existing) {
-    await ctx.db.patch(existing._id, { ...rest, updatedBy: userId, updatedAt: now });
+    await ctx.db.patch(existing._id, { ...tieredRest, updatedBy: userId, updatedAt: now });
     return existing._id;
   }
   return await ctx.db.insert("transactions", {
-    ...rest,
+    ...tieredRest,
     createdBy: userId,
     createdAt: now,
   });

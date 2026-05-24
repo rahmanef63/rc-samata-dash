@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Wallet, ArrowDownRight, ArrowUpRight, Receipt } from "lucide-react";
 import { useQuery } from "convex/react";
+import Link from "next/link";
 import { api } from "../../../../convex/_generated/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRpFull } from "@/shared/lib";
@@ -82,8 +83,9 @@ export function CashflowOverview() {
   const income = useQuery(api.features.reports.dashboardQueries.getIncomeByChannel, args);
   const expense = useQuery(api.features.reports.dashboardQueries.getExpenseByCategory, args);
   const piutang = useQuery(api.features.reports.dashboardQueries.getPiutangPaymentsByVendor, args);
+  const pockets = useQuery(api.features.pockets.queries.getPocketBalances, args);
 
-  if (!income || !expense || !piutang) {
+  if (!income || !expense || !piutang || !pockets) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-28 w-full rounded-2xl" />
@@ -150,6 +152,14 @@ export function CashflowOverview() {
         </div>
       </div>
 
+      {/* Outstanding alert if open payables exceed paid */}
+      {piutang.totals.outstandingNow > 0 && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl px-4 py-2 text-xs flex items-center justify-between">
+          <span>Total outstanding piutang vendor:</span>
+          <span className="font-mono-data font-semibold text-warning-foreground">{formatRpFull(piutang.totals.outstandingNow)}</span>
+        </div>
+      )}
+
       {/* Income per channel */}
       <SectionCard
         title="Pendapatan per Channel"
@@ -207,6 +217,38 @@ export function CashflowOverview() {
         )}
       </SectionCard>
 
+      {/* Arus per Pocket — cash trail */}
+      <SectionCard
+        title="Arus per Pocket"
+        subtitle={`Net ${formatRpFull(pockets.totals.net)} · ${pockets.totals.txCount} tx`}
+      >
+        {pockets.rows.length === 0 ? (
+          <div className="text-xs text-muted-foreground text-center py-4">
+            Belum ada pocket terdaftar.{" "}
+            <Link href="/finance/pockets" className="text-primary underline">
+              Setup pocket
+            </Link>{" "}
+            untuk tracking arus per brankas / dompet / rekening.
+          </div>
+        ) : (
+          <div className="-mb-2">
+            {pockets.rows.map((r) => (
+              <BreakdownRow
+                key={r.pocketId ?? "untagged"}
+                label={r.pocketName + (r.bankAccount ? ` · ${r.bankAccount}` : "")}
+                primary={r.net}
+                tone={r.net >= 0 ? "in" : "out"}
+                meta={`${r.txCount} tx · ${r.pocketKind}${!r.pocketId ? " · ⚠ perlu di-tag" : ""}`}
+                secondary={[
+                  { label: "↓ Masuk", value: r.inflow },
+                  { label: "↑ Keluar", value: r.outflow },
+                ]}
+              />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
       {/* Piutang payments per vendor */}
       <SectionCard
         title="Pembayaran Piutang (PI) per Vendor"
@@ -225,7 +267,7 @@ export function CashflowOverview() {
                 label={r.vendorName}
                 primary={r.paidThisPeriod}
                 tone="out"
-                meta={`${r.paymentCount} pmt · ${r.payableCount} invoice`}
+                meta={`${r.paymentCount} pmt · ${r.openPayableCount} invoice open`}
                 secondary={[
                   { label: "Sisa", value: r.outstandingNow },
                 ]}
