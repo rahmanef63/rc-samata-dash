@@ -221,6 +221,83 @@ export const getProductHPP = query({
   },
 });
 
+/** Per-report audit: compare claimed counts (stored saat import) vs actual
+ *  count di staging tables. Owner pakai ini buat verify "data ter-record semua".
+ *
+ *  Output per kategori:
+ *    parsed = report.{x}Count (Excel-side count saat upload)
+ *    actual = live count dari staging table (cek apakah masih utuh)
+ *    diff   = parsed - actual (0 = OK, >0 = ada yang hilang, <0 = ada duplikat)
+ */
+export const getReportAuditCounts = query({
+  args: { reportId: v.id("weeklyReports") },
+  handler: async (ctx, { reportId }) => {
+    await requireAuth(ctx);
+    const report = await ctx.db.get(reportId);
+    if (!report) return null;
+
+    type Row = { key: string; label: string; parsed: number; actual: number; diff: number };
+
+    const countByReport = async (
+      table:
+        | "productSales" | "vendorPurchases" | "inventoryValuation" | "leftoverItems"
+        | "dailyCashSummary" | "salesControl" | "creditPurchases" | "foodCostSummary"
+        | "transferItems" | "productHPP" | "costAnalysis" | "dailyCashFlow"
+        | "employeeIncentives",
+    ) => {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_report", (q) => q.eq("reportId", reportId))
+        .collect();
+      return rows.length;
+    };
+    const countExpenses = async () => {
+      const rows = await ctx.db
+        .query("expenses")
+        .withIndex("by_source_report", (q) => q.eq("sourceReportId", reportId))
+        .collect();
+      return rows.length;
+    };
+
+    const out: Row[] = [
+      { key: "sales",         label: "Penjualan",            parsed: Number(report.salesCount ?? 0),          actual: await countByReport("productSales"),       diff: 0 },
+      { key: "expense",       label: "Kas Kecil (LPKK)",     parsed: Number(report.expenseCount ?? 0),        actual: await countExpenses(),                     diff: 0 },
+      { key: "vendor",        label: "Vendor Purchases",     parsed: Number(report.vendorCount ?? 0),         actual: await countByReport("vendorPurchases"),    diff: 0 },
+      { key: "inventory",     label: "Weekly FC",            parsed: Number(report.inventoryCount ?? 0),      actual: await countByReport("inventoryValuation"), diff: 0 },
+      { key: "leftover",      label: "Left Over",            parsed: Number(report.leftoverCount ?? 0),       actual: await countByReport("leftoverItems"),      diff: 0 },
+      { key: "kasPeriode",    label: "Kas Periode (daily)",  parsed: Number(report.kasPeriodeCount ?? 0),     actual: await countByReport("dailyCashSummary"),   diff: 0 },
+      { key: "salesControl",  label: "Sales Control",        parsed: Number(report.salesControlCount ?? 0),   actual: await countByReport("salesControl"),       diff: 0 },
+      { key: "creditPurchase",label: "Pembelian Kredit",     parsed: Number(report.creditPurchaseCount ?? 0), actual: await countByReport("creditPurchases"),    diff: 0 },
+      { key: "fcSummary",     label: "Food Cost Summary",    parsed: Number(report.foodCostSummaryCount ?? 0),actual: await countByReport("foodCostSummary"),    diff: 0 },
+      { key: "transfer",      label: "TO-TI Transfer",       parsed: Number(report.transferCount ?? 0),       actual: await countByReport("transferItems"),      diff: 0 },
+      { key: "hpp",           label: "HPP Produk",           parsed: Number(report.hppCount ?? 0),            actual: await countByReport("productHPP"),         diff: 0 },
+      { key: "costAnalysis",  label: "Cost Analysis",        parsed: Number(report.costAnalysisCount ?? 0),   actual: await countByReport("costAnalysis"),       diff: 0 },
+      { key: "cashFlow",      label: "Daily Cash Flow",      parsed: Number(report.cashFlowCount ?? 0),       actual: await countByReport("dailyCashFlow"),      diff: 0 },
+      { key: "incentive",     label: "Insentif Karyawan",    parsed: Number(report.incentiveCount ?? 0),      actual: await countByReport("employeeIncentives"), diff: 0 },
+    ];
+    let allClean = true;
+    for (const r of out) {
+      r.diff = r.parsed - r.actual;
+      if (r.diff !== 0) allClean = false;
+    }
+
+    const totalParsed = out.reduce((s, r) => s + r.parsed, 0);
+    const totalActual = out.reduce((s, r) => s + r.actual, 0);
+
+    return {
+      reportId,
+      periodStart: report.periodStart,
+      periodEnd: report.periodEnd,
+      fileName: report.fileName,
+      totalParsed,
+      totalActual,
+      totalDiff: totalParsed - totalActual,
+      allClean,
+      rows: out,
+    };
+  },
+});
+
 /** Unique product names across ALL reports' productHPP — used by upload
  *  validator so a product yang sudah punya HPP di file lama gak di-warn
  *  saat upload file baru tanpa HPP. */
