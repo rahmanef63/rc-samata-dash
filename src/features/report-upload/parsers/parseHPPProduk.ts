@@ -148,8 +148,13 @@ export function parseHPPProduk(wb: XLSX.WorkBook): ProductHPPItem[] {
   }
 
   for (const { name, cls } of sheets) {
+    // Horizontal pass — picks up "HPP <NAME>" / "HPP NON CVR" / "HPP + COVER" labels
     const items = parseHPPSheetHorizontal(wb, name, cls);
     result.push(...items);
+    // Tabular pass — FC ITEM KELAS sheets have header row ITEM | KOMPOSISI PAKET | HARGA | HPP
+    // Existing horizontal pass misses these because cells gak ada prefix "HPP".
+    const tabular = parseHPPTabularSheet(wb, name, cls);
+    result.push(...tabular);
   }
 
   // Dedup by productName + pricingClass — prefer "with_cover" if same name has
@@ -244,5 +249,97 @@ function parseHPPSheetHorizontal(
     }
   }
 
+  return result;
+}
+
+/**
+ * Tabular parser — buat FC ITEM KELAS sheets yang layout-nya:
+ *   Header row: NO PLU | ITEM | KOMPOSISI PAKET | HARGA | HPP | %
+ *   Data rows : 1     | Dada | Dada            | 10000 | 9167 | 0.91
+ *
+ * Bisa juga multi-block (5 kolom ITEM/HPP side-by-side untuk kelas berbeda).
+ * Tiap ITEM col dipasangkan dengan HPP col terdekat di kanan. KOMPOSISI PAKET
+ * (kalau ada antara ITEM & HPP) dipakai sebagai nama canonical karena lebih
+ * deskriptif (misal "PAKET GEPREK BAWANG 1 (ES TEH / S-TEE)" vs ITEM col yang
+ * cuma "Paket geprek 1").
+ *
+ * Skip kalau value <= 0 — owner sering kosongin HPP cell di Excel, gak perlu
+ * di-insert sebagai HPP = 0 dummy entries.
+ */
+function parseHPPTabularSheet(
+  wb: XLSX.WorkBook,
+  sheetName: string,
+  pricingClass: ProductHPPItem["pricingClass"],
+): (ProductHPPItem & { variant: "raw" | "non_cover" | "with_cover" })[] {
+  const rows = getSheetRows(wb, sheetName);
+  const result: (ProductHPPItem & { variant: "raw" | "non_cover" | "with_cover" })[] = [];
+
+  let headerRow = -1;
+  let itemCols: number[] = [];
+  let komposisiCols: number[] = [];
+  let hppCols: number[] = [];
+
+  for (let r = 0; r < Math.min(20, rows.length); r++) {
+    const ic: number[] = [];
+    const kc: number[] = [];
+    const hc: number[] = [];
+    for (let c = 0; c < (rows[r] ?? []).length; c++) {
+      const raw = rows[r][c];
+      if (raw == null) continue;
+      const up = String(raw).toUpperCase().trim();
+      if (up === "ITEM") ic.push(c);
+      else if (up.startsWith("KOMPOSISI")) kc.push(c);
+      else if (up === "HPP") hc.push(c);
+    }
+    if (ic.length > 0 && hc.length > 0) {
+      headerRow = r;
+      itemCols = ic;
+      komposisiCols = kc;
+      hppCols = hc;
+      break;
+    }
+  }
+  if (headerRow < 0) return [];
+
+  // Pair each ITEM col with first HPP col to the right. Prefer KOMPOSISI col
+  // (if between ITEM and HPP) as canonical name.
+  const pairs: { nameCols: number[]; hppCol: number }[] = [];
+  for (const ic of itemCols) {
+    const hc = hppCols.find((h) => h > ic);
+    if (hc === undefined) continue;
+    const kc = komposisiCols.find((k) => k > ic && k < hc);
+    pairs.push({ nameCols: kc !== undefined ? [kc, ic] : [ic], hppCol: hc });
+  }
+  if (pairs.length === 0) return [];
+
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    for (const p of pairs) {
+      let name = "";
+      for (const nc of p.nameCols) {
+        const cell = rows[r]?.[nc];
+        if (cell != null && String(cell).trim()) {
+          name = String(cell).trim();
+          break;
+        }
+      }
+      if (!name) continue;
+      const value = toNumber(rows[r]?.[p.hppCol]);
+      if (value <= 0) continue;
+      const up = name.toUpperCase();
+      // Skip header-repeats + section dividers
+      if (up === "ITEM" || up.includes("KOMPOSISI") || up.includes("PERHITUNGAN HPP")) continue;
+      if (up === "MINUMAN" || up === "MAKANAN" || up.startsWith("HPP DI ISI")) continue;
+      // Strip parenthetical variant info "(ES TEH / S-TEE)" — keep canonical
+      const canonical = name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+      if (canonical.length < 2 || canonical.length > 60) continue;
+      result.push({
+        productName: expandProductAlias(canonical),
+        pricingClass,
+        totalHPP: value,
+        ingredients: [],
+        variant: "raw",
+      });
+    }
+  }
   return result;
 }
