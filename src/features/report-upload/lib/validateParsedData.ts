@@ -48,14 +48,25 @@ type ParsedDataForValidation = {
   categoryRules?: Array<{ keyword: string; label: string; type: string; priority: number; isActive: boolean }>;
 };
 
+/** Shift YYYY-MM-DD by N days. Returns same format. */
+function shiftDate(yyyymmdd: string, deltaDays: number): string {
+  const d = new Date(`${yyyymmdd}T00:00:00`);
+  d.setDate(d.getDate() + deltaDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Normalize for comparison — permissive untuk match HPP vs Sales:
  *  - strip parenthetical variant info "(ES TEH / S-TEE)"
  *  - strip "TAKE AWAY" suffix (variant flag, bukan beda produk)
  *  - strip ingredient prefixes
  *  - collapse "." → " " (P.ATAS → P ATAS), then space-normalize
+ *  - expand RC Samata-specific abbreviations
  */
 function normalize(name: string): string {
-  return name
+  let n = name
     .toUpperCase()
     .trim()
     .replace(/^(DAGING\s+|BAHAN\s+|BUMBU\s+)/i, "")
@@ -64,6 +75,37 @@ function normalize(name: string): string {
     .replace(/[./,]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  // Sales-side abbreviations (RC Samata POS naming):
+  //   "DD MATAH" → "DADA MATAH"  (DD = singkatan Dada)
+  //   "DD TERASI" → "DADA TERASI"
+  //   "P AYAM UTUH ORIGINAL" → "PAKET AYAM UTUH ORIGINAL"
+  //   "P HOT SPICY 1" → "PAKET HOT SPICY 1"
+  //   "PB 3 PCS" → "PAHA BAWAH 3 PCS"
+  //   "SYP 3PCS" → "SAYAP 3 PCS"
+  n = n
+    .replace(/^DD\s+/, "DADA ")
+    .replace(/^P\s+AYAM\s+UTUH/, "PAKET AYAM UTUH")
+    .replace(/^P\s+HOT\s+SPICY/, "PAKET HOT SPICY")
+    .replace(/^P\s+HOT\s+CHEESY/, "PAKET HOT CHEESY")
+    .replace(/^PB\s+/, "PAHA BAWAH ")
+    .replace(/^SYP\s+/, "SAYAP ");
+  return n;
+}
+
+/** Sales products yang BUKAN target HPP coverage warning:
+ *  - "FREE *" — promo items, zero cost
+ *  - "KOIN *" — non-food revenue (kiddy ride)
+ *  - amount = 0 — gak ada sales aktual
+ *  - "SAOS *" / "SAMBAL *" — condiments add-on, biasanya bundled
+ */
+function isNonRevenueProduct(productName: string, amount: number): boolean {
+  if (amount <= 0) return true;
+  const up = productName.toUpperCase().trim();
+  if (up.startsWith("FREE ")) return true;
+  if (up.startsWith("KOIN ")) return true;
+  if (/^SAOS\s/.test(up)) return true;
+  if (/^SAMBAL\s/.test(up)) return true;
+  return false;
 }
 
 /** Permissive containment check — HPP "PAKET SEGAR 1" matches sales
@@ -117,9 +159,12 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     });
   }
 
-  // 3. Sales products without HPP — potential profitability blind spot
+  // 3. Sales products without HPP — potential profitability blind spot.
+  // Filter out non-revenue products (FREE/KOIN/Sambal/Saos add-ons) and
+  // zero-amount rows — those don't need HPP coverage.
   const allSales = [...data.penjualan, ...data.platformSales];
-  const salesProductNames = [...new Set(allSales.map((s) => normalize(s.productName)))];
+  const revenueSales = allSales.filter((s) => !isNonRevenueProduct(s.productName, s.amount));
+  const salesProductNames = [...new Set(revenueSales.map((s) => normalize(s.productName)))];
   const hppProductNames = new Set(data.hppProduk.map((h) => normalize(h.productName)));
 
   const salesWithoutHPP = salesProductNames.filter((n) => !nameMatches(n, hppProductNames));
@@ -171,16 +216,21 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     });
   }
 
-  // 6. Date range validation — check if data dates fall within period
+  // 6. Date range validation — check if data dates fall within period.
+  //    Tolerance ±1 day: RC Samata weekly reports often include preceding
+  //    Saturday's closeout (1 day before period start) or following Monday's
+  //    setoran (1 day after period end). Only flag if data >1 day outside.
   if (data.periodStart && data.periodEnd) {
+    const dayBefore = shiftDate(data.periodStart, -1);
+    const dayAfter = shiftDate(data.periodEnd, 1);
     const outOfRange: string[] = [];
     for (const s of allSales) {
-      if (s.businessDate < data.periodStart || s.businessDate > data.periodEnd) {
+      if (s.businessDate < dayBefore || s.businessDate > dayAfter) {
         outOfRange.push(`Penjualan ${s.businessDate}: ${s.productName}`);
       }
     }
     for (const cf of data.cashFlow) {
-      if (cf.businessDate < data.periodStart || cf.businessDate > data.periodEnd) {
+      if (cf.businessDate < dayBefore || cf.businessDate > dayAfter) {
         outOfRange.push(`Cash flow ${cf.businessDate}`);
       }
     }
@@ -190,8 +240,8 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
       warnings.push({
         severity: "warning",
         category: "Tanggal",
-        message: `${unique.length} record di luar periode ${data.periodStart} → ${data.periodEnd}`,
-        tip: "Kemungkinan tanggal di Excel berbeda dari periode nama file. Data tetap di-import semua — cek ulang nanti jika ada tanggal yang salah.",
+        message: `${unique.length} record jauh di luar periode ${data.periodStart} → ${data.periodEnd}`,
+        tip: "Tanggal lebih dari 1 hari di luar periode. Kemungkinan typo tanggal di Excel. Data tetap di-import — cek ulang setelah import.",
         details: unique.slice(0, 8),
         fullDetails: unique,
       });
@@ -203,17 +253,24 @@ export function validateParsedData(data: ParsedDataForValidation, fileName?: str
     const expected = cf.openingBalance + cf.salesInflow + cf.otherInflow - cf.expenseOutflow - cf.otherOutflow;
     const diff = Math.abs(cf.closingBalance - expected);
     if (diff > 100000 && cf.closingBalance > 0) {
+      const sign = cf.closingBalance < expected ? "kurang" : "lebih";
       warnings.push({
-        severity: "info",
+        severity: "warning",
         category: "Cash Flow",
-        message: `Cash flow ${cf.businessDate}: selisih Rp ${Math.round(diff).toLocaleString("id-ID")}`,
-        tip: "Ada selisih antara saldo penutup yang tercatat vs yang dihitung (opening + in - out). Bisa karena ada transaksi yang belum tercatat. Data tetap di-import.",
+        message: `Cash flow ${cf.businessDate}: selisih Rp ${Math.round(diff).toLocaleString("id-ID")} (saldo aktual ${sign})`,
+        tip:
+          cf.closingBalance < expected
+            ? "Saldo akhir lebih kecil dari ekspektasi — ada UANG KELUAR yang belum tercatat. Cek sheet 'TF OWNER' / 'OWNER TRANSFERS' / setoran kas besar / pergantian produk di periode ini. Setelah ketemu, tambah ke LPKK atau LAP. CF entry sebelum upload ulang."
+            : "Saldo akhir lebih besar dari ekspektasi — ada UANG MASUK yang belum tercatat. Cek 'PENERIMAAN LAIN-LAIN' di LAP. CF atau TOP UP yang belum di-record.",
         details: [
           `Opening: ${cf.openingBalance.toLocaleString("id-ID")}`,
-          `Sales: +${cf.salesInflow.toLocaleString("id-ID")}`,
-          `Expense: -${cf.expenseOutflow.toLocaleString("id-ID")}`,
+          `Sales inflow: +${cf.salesInflow.toLocaleString("id-ID")}`,
+          `Other inflow: +${cf.otherInflow.toLocaleString("id-ID")}`,
+          `Expense outflow: -${cf.expenseOutflow.toLocaleString("id-ID")}`,
+          `Other outflow: -${cf.otherOutflow.toLocaleString("id-ID")}`,
           `Expected closing: ${expected.toLocaleString("id-ID")}`,
           `Actual closing: ${cf.closingBalance.toLocaleString("id-ID")}`,
+          `Selisih ${sign}: ${Math.round(diff).toLocaleString("id-ID")}`,
         ],
       });
       break; // Only show first mismatch
