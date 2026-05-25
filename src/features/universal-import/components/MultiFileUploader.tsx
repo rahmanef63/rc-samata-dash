@@ -1,13 +1,10 @@
 "use client";
 
 // Unified multi-file uploader. Drop banyak file sekaligus — tiap file
-// di-detect dengan scored matcher, ditampilkan ranking + alternatif,
-// owner bisa override manual, lalu Import per-file atau Import All.
-//
-// Reuse existing parsers (parseProductChanges, parseAllowances) + existing
-// commit mutations (importProductChangesBatch, importAllowancesBatch,
-// importPayablesBulk, importVendorsBulk). Untuk kind dengan UX kompleks
-// (weekly_sv, bank_statement) tampil tombol "Buka halaman dedicated".
+// di-detect dengan scored matcher, ranking + alternatif, manual override.
+// Untuk weekly_sv: parse inline + validator panel + commit penuh (15
+// mutations + bridges + AI index) via useWeeklyImport hook. Kind lain
+// pakai existing parsers + commit mutations.
 
 import { useState, useCallback, useMemo } from "react";
 import { useMutation } from "convex/react";
@@ -15,7 +12,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
   Upload, Loader2, CheckCircle, AlertCircle, FileSpreadsheet, X,
-  ChevronDown, ChevronUp, ExternalLink, Sparkles, Layers,
+  ChevronDown, ChevronUp, ExternalLink, Sparkles, Layers, ShieldAlert, ShieldCheck,
 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { formatRpFull } from "@/shared/lib";
@@ -27,6 +24,9 @@ import {
   parseAllowances, extractAllowanceMetadata,
   type AllowanceItem,
 } from "@/features/report-upload/parsers/parseAllowances";
+import { useWeeklyImport, type WeeklyParsedData, type WeeklyImportProgress } from "@/features/report-upload/hooks/useWeeklyImport";
+import type { ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
+import { WarningPanel } from "@/features/report-upload/components/WarningPanel";
 import {
   bindXlsx, type FileKind,
 } from "../lib/detector";
@@ -47,6 +47,9 @@ type ParsedPayload = {
   payables?: ZiaSplit["payables"];
   vendors?: ZiaSplit["vendors"];
   tableRowsCount?: number;
+  // Weekly-specific
+  weekly?: WeeklyParsedData;
+  weeklyWarnings?: ValidationWarning[];
 };
 
 type FileEntry = {
@@ -54,7 +57,7 @@ type FileEntry = {
   file: File;
   wb: XLSX.WorkBook | null;
   ranked: ScoredDetection[];
-  topKind: FileKind;        // current selected kind (auto-set from top match; user can override)
+  topKind: FileKind;
   topScore: number;
   topReasons: string[];
   parsed: ParsedPayload;
@@ -62,6 +65,8 @@ type FileEntry = {
   importResult?: string;
   error?: string;
   showAlternatives?: boolean;
+  showValidator?: boolean;
+  progress?: WeeklyImportProgress;
 };
 
 const KIND_LABEL: Record<FileKind, string> = {
@@ -77,11 +82,6 @@ const KIND_LABEL: Record<FileKind, string> = {
 };
 
 const KIND_EXTERNAL_ROUTE: Partial<Record<FileKind, { url: string; label: string; reason: string }>> = {
-  weekly_sv: {
-    url: "/laporan/upload",
-    label: "Buka Upload Mingguan",
-    reason: "Laporan mingguan butuh UI dedicated (validasi 14 kategori, audit import, indexing AI).",
-  },
   bank_statement: {
     url: "/finance/owner-transfer",
     label: "Buka Owner Transfer",
@@ -159,80 +159,87 @@ function num(s: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Extract parsed payload per kind ──────────────────────
-
-function extractPayloadForKind(
-  wb: XLSX.WorkBook, kind: FileKind, fileName: string,
-): ParsedPayload {
-  switch (kind) {
-    case "zia_multi": {
-      const split = splitZiaWorkbook(wb, XLSX, fileName);
-      return {
-        pergantian: split.pergantian,
-        pergantianPeriod: split.pergantianPeriod,
-        tunjangan: split.tunjangan,
-        tunjanganPeriod: "ZIA " + new Date().toISOString().slice(0, 7),
-        payables: split.payables,
-        vendors: split.vendors,
-      };
-    }
-    case "pergantian": {
-      return {
-        pergantian: parseProductChanges(wb),
-        pergantianPeriod: extractPeriodLabel(wb),
-      };
-    }
-    case "tunjangan": {
-      const items = parseAllowances(wb);
-      const meta = extractAllowanceMetadata(wb);
-      return {
-        tunjangan: items,
-        tunjanganPeriod: `${meta.year} ${meta.submissionDate}`.trim() || fileName,
-      };
-    }
-    case "payables_table": {
-      const rows = extractTableRows(wb);
-      return {
-        payables: rows.map((r) => ({
-          vendorName: r.vendorName ?? r.vendor_name ?? r.name ?? "",
-          invoiceDate: r.invoiceDate ?? r.invoice_date ?? "",
-          dueDate: r.dueDate ?? r.due_date ?? r.invoiceDate ?? "",
-          amount: num(r.amount ?? r.total),
-          paidAmount: num(r.paidAmount ?? r.paid_amount),
-          description: r.description ?? r.desc ?? "",
-          reference: r.reference,
-          fileName,
-        })).filter((r) => r.vendorName && r.amount > 0),
-        tableRowsCount: rows.length,
-      };
-    }
-    case "vendors_table": {
-      const rows = extractTableRows(wb);
-      return {
-        vendors: rows.map((r) => ({
-          name: r.name ?? r.vendor_name ?? r.vendorName ?? "",
-          type: r.type,
-          phone: r.phone ?? r.contact,
-          notes: r.notes,
-        })).filter((r) => r.name),
-        tableRowsCount: rows.length,
-      };
-    }
-    default:
-      return {};
-  }
-}
-
 // ─── Main component ───────────────────────────────────────
 
 export function MultiFileUploader() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
 
+  const weekly = useWeeklyImport();
   const importPergantian = useMutation(api.features.reports.mutations.importProductChangesBatch);
   const importTunjangan = useMutation(api.features.reports.mutations.importAllowancesBatch);
   const importPayables = useMutation(api.features.payables.mutations.importPayablesBulk);
   const importVendors = useMutation(api.features.masterData.mutations.importVendorsBulk);
+
+  const updateEntry = useCallback((id: string, patch: Partial<FileEntry>) => {
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...patch } : e));
+  }, []);
+
+  const extractPayloadForKind = useCallback(async (
+    wb: XLSX.WorkBook, kind: FileKind, file: File,
+  ): Promise<ParsedPayload> => {
+    switch (kind) {
+      case "weekly_sv": {
+        const { parsed, warnings } = await weekly.parse(file);
+        return { weekly: parsed, weeklyWarnings: warnings };
+      }
+      case "zia_multi": {
+        const split = splitZiaWorkbook(wb, XLSX, file.name);
+        return {
+          pergantian: split.pergantian,
+          pergantianPeriod: split.pergantianPeriod,
+          tunjangan: split.tunjangan,
+          tunjanganPeriod: "ZIA " + new Date().toISOString().slice(0, 7),
+          payables: split.payables,
+          vendors: split.vendors,
+        };
+      }
+      case "pergantian": {
+        return {
+          pergantian: parseProductChanges(wb),
+          pergantianPeriod: extractPeriodLabel(wb),
+        };
+      }
+      case "tunjangan": {
+        const items = parseAllowances(wb);
+        const meta = extractAllowanceMetadata(wb);
+        return {
+          tunjangan: items,
+          tunjanganPeriod: `${meta.year} ${meta.submissionDate}`.trim() || file.name,
+        };
+      }
+      case "payables_table": {
+        const rows = extractTableRows(wb);
+        return {
+          payables: rows.map((r) => ({
+            vendorName: r.vendorName ?? r.vendor_name ?? r.name ?? "",
+            invoiceDate: r.invoiceDate ?? r.invoice_date ?? "",
+            dueDate: r.dueDate ?? r.due_date ?? r.invoiceDate ?? "",
+            amount: num(r.amount ?? r.total),
+            paidAmount: num(r.paidAmount ?? r.paid_amount),
+            description: r.description ?? r.desc ?? "",
+            reference: r.reference,
+            fileName: file.name,
+          })).filter((r) => r.vendorName && r.amount > 0),
+          tableRowsCount: rows.length,
+        };
+      }
+      case "vendors_table": {
+        const rows = extractTableRows(wb);
+        return {
+          vendors: rows.map((r) => ({
+            name: r.name ?? r.vendor_name ?? r.vendorName ?? "",
+            type: r.type,
+            phone: r.phone ?? r.contact,
+            notes: r.notes,
+          })).filter((r) => r.name),
+          tableRowsCount: rows.length,
+        };
+      }
+      default:
+        return {};
+    }
+  }, [weekly]);
 
   const processFiles = useCallback(async (files: FileList | File[]) => {
     bindXlsx(XLSX);
@@ -247,26 +254,25 @@ export function MultiFileUploader() {
     }
     setEntries((prev) => [...prev, ...newEntries]);
 
-    // Parse + score each file (sequential to avoid OOM with many large xlsx).
     for (const entry of newEntries) {
       try {
         const wb = await fileToWorkbook(entry.file);
         const ranked = scoreAllKinds(wb);
         const top = topMatchOrUnknown(ranked);
-        const parsed = top.kind === "unknown" ? {} : extractPayloadForKind(wb, top.kind, entry.file.name);
-        setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-          ...e, wb, ranked,
+        const parsed = top.kind === "unknown" ? {} : await extractPayloadForKind(wb, top.kind, entry.file);
+        updateEntry(entry.id, {
+          wb, ranked,
           topKind: top.kind, topScore: top.score, topReasons: top.reasons,
           parsed, status: "ready",
-        } : e));
+        });
       } catch (err) {
-        setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-          ...e, status: "error",
+        updateEntry(entry.id, {
+          status: "error",
           error: err instanceof Error ? err.message : "Gagal baca file",
-        } : e));
+        });
       }
     }
-  }, []);
+  }, [extractPayloadForKind, updateEntry]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
@@ -278,22 +284,33 @@ export function MultiFileUploader() {
     e.target.value = "";
   }, [processFiles]);
 
-  const overrideKind = useCallback((id: string, kind: FileKind) => {
-    setEntries((prev) => prev.map((e) => {
-      if (e.id !== id || !e.wb) return e;
-      const matched = e.ranked.find((r) => r.kind === kind);
-      const parsed = kind === "unknown" ? {} : extractPayloadForKind(e.wb, kind, e.file.name);
-      return {
-        ...e, topKind: kind,
+  const overrideKind = useCallback(async (id: string, kind: FileKind) => {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry || !entry.wb) return;
+    updateEntry(id, { status: "parsing" });
+    try {
+      const matched = entry.ranked.find((r) => r.kind === kind);
+      const parsed = kind === "unknown" ? {} : await extractPayloadForKind(entry.wb, kind, entry.file);
+      updateEntry(id, {
+        topKind: kind,
         topScore: matched?.score ?? 0,
         topReasons: matched?.reasons ?? ["Manual override"],
-        parsed,
-      };
-    }));
-  }, []);
+        parsed, status: "ready",
+      });
+    } catch (err) {
+      updateEntry(id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Gagal re-parse",
+      });
+    }
+  }, [entries, extractPayloadForKind, updateEntry]);
 
   const toggleAlt = useCallback((id: string) => {
     setEntries((prev) => prev.map((e) => e.id === id ? { ...e, showAlternatives: !e.showAlternatives } : e));
+  }, []);
+
+  const toggleValidator = useCallback((id: string) => {
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, showValidator: !e.showValidator } : e));
   }, []);
 
   const removeFile = useCallback((id: string) => {
@@ -302,8 +319,27 @@ export function MultiFileUploader() {
 
   const commitOne = useCallback(async (entry: FileEntry) => {
     if (entry.status !== "ready") return;
-    setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: "importing" } : e));
+    updateEntry(entry.id, { status: "importing" });
     try {
+      // Weekly_sv: full flow via hook
+      if (entry.topKind === "weekly_sv" && entry.parsed.weekly) {
+        const dup = weekly.findDuplicate(entry.parsed.weekly);
+        const result = await weekly.commit(
+          entry.parsed.weekly,
+          entry.parsed.weeklyWarnings ?? [],
+          {
+            replaceExistingId: dup?._id,
+            onProgress: (p) => updateEntry(entry.id, { progress: p }),
+          },
+        );
+        const totalRecords = Object.values(result.counts).reduce((s, n) => s + n, 0);
+        const msg = `${totalRecords} record imported${dup ? " (menimpa periode lama)" : ""}`;
+        updateEntry(entry.id, { status: "done", importResult: msg, progress: undefined });
+        toast.success(`${entry.file.name}: ${msg}`);
+        return;
+      }
+
+      // Other kinds: existing batch mutations
       const parts: string[] = [];
       const fName = entry.file.name;
       const { parsed } = entry;
@@ -331,18 +367,14 @@ export function MultiFileUploader() {
         parts.push(`${res.inserted} piutang${tail}`);
       }
       const msg = parts.length > 0 ? parts.join(" · ") : "Tidak ada baris ke-commit";
-      setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-        ...e, status: "done", importResult: msg,
-      } : e));
+      updateEntry(entry.id, { status: "done", importResult: msg });
       toast.success(`${entry.file.name}: ${msg}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Commit gagal";
-      setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-        ...e, status: "error", error: msg,
-      } : e));
+      updateEntry(entry.id, { status: "error", error: msg, progress: undefined });
       toast.error(`${entry.file.name}: ${msg}`);
     }
-  }, [importPergantian, importTunjangan, importPayables, importVendors]);
+  }, [weekly, importPergantian, importTunjangan, importPayables, importVendors, updateEntry]);
 
   const commitAll = useCallback(async () => {
     const ready = entries.filter((e) => e.status === "ready" && isCommittable(e));
@@ -379,6 +411,7 @@ export function MultiFileUploader() {
             <p className="font-semibold">Drop file XLSX/CSV (banyak file OK)</p>
             <p className="text-xs text-muted-foreground mt-1">
               Setiap file otomatis di-deteksi jenisnya. Bisa beda format dalam 1 upload.
+              Weekly SV: validator + commit inline. Tipe lain: commit langsung.
             </p>
           </div>
           <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary font-medium">
@@ -408,8 +441,9 @@ export function MultiFileUploader() {
             <FileCard
               key={entry.id}
               entry={entry}
-              onOverride={(k) => overrideKind(entry.id, k)}
+              onOverride={(k) => void overrideKind(entry.id, k)}
               onToggleAlt={() => toggleAlt(entry.id)}
+              onToggleValidator={() => toggleValidator(entry.id)}
               onRemove={() => removeFile(entry.id)}
               onImport={() => void commitOne(entry)}
             />
@@ -420,11 +454,17 @@ export function MultiFileUploader() {
   );
 }
 
-// ─── File card (per-file row in the list) ────────────────
+// ─── File card ────────────────────────────────────────────
 
 function isCommittable(entry: FileEntry): boolean {
   const { parsed, topKind } = entry;
-  if (topKind === "weekly_sv" || topKind === "bank_statement" || topKind === "unknown") return false;
+  if (topKind === "bank_statement" || topKind === "unknown") return false;
+  if (topKind === "weekly_sv") {
+    return !!parsed.weekly && (
+      parsed.weekly.lpkk.length + parsed.weekly.penjualan.length +
+      parsed.weekly.platformSales.length + parsed.weekly.cashFlow.length > 0
+    );
+  }
   return (
     (parsed.pergantian?.length ?? 0) > 0 ||
     (parsed.tunjangan?.length ?? 0) > 0 ||
@@ -434,11 +474,12 @@ function isCommittable(entry: FileEntry): boolean {
 }
 
 function FileCard({
-  entry, onOverride, onToggleAlt, onRemove, onImport,
+  entry, onOverride, onToggleAlt, onToggleValidator, onRemove, onImport,
 }: {
   entry: FileEntry;
   onOverride: (k: FileKind) => void;
   onToggleAlt: () => void;
+  onToggleValidator: () => void;
   onRemove: () => void;
   onImport: () => void;
 }) {
@@ -454,6 +495,7 @@ function FileCard({
 
   const ext = KIND_EXTERNAL_ROUTE[entry.topKind];
   const committable = isCommittable(entry);
+  const warningCount = entry.parsed.weeklyWarnings?.length ?? 0;
 
   return (
     <div className={`rounded-xl border bg-card p-4 shadow-sm ${tone}`}>
@@ -471,7 +513,8 @@ function FileCard({
             <StatusBadge status={entry.status} />
             <button
               onClick={onRemove}
-              className="p-1 rounded hover:bg-muted text-muted-foreground"
+              disabled={entry.status === "importing"}
+              className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30"
               aria-label="Hapus dari list"
             >
               <X className="h-4 w-4" />
@@ -534,10 +577,40 @@ function FileCard({
                 </div>
               )}
 
-              {/* Preview row */}
-              {committable && <PreviewRow entry={entry} />}
+              {/* Weekly-specific summary */}
+              {entry.topKind === "weekly_sv" && entry.parsed.weekly && (
+                <WeeklySummary parsed={entry.parsed.weekly} />
+              )}
 
-              {/* External-route hint for kinds that need dedicated UI */}
+              {/* Validator panel (weekly only) */}
+              {entry.topKind === "weekly_sv" && entry.parsed.weeklyWarnings && (
+                <div className="pt-1">
+                  <button
+                    onClick={onToggleValidator}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border ${
+                      warningCount > 0
+                        ? "bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-800 dark:text-yellow-300 hover:bg-yellow-100"
+                        : "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100"
+                    }`}
+                  >
+                    {warningCount > 0
+                      ? <ShieldAlert className="h-3.5 w-3.5" />
+                      : <ShieldCheck className="h-3.5 w-3.5" />}
+                    Validasi: {warningCount > 0 ? `${warningCount} catatan` : "Bersih"}
+                    {entry.showValidator ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                  {entry.showValidator && (
+                    <div className="mt-2 pl-1 border-l-2 border-border/40">
+                      <WarningPanel warnings={entry.parsed.weeklyWarnings} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Preview row for non-weekly */}
+              {entry.topKind !== "weekly_sv" && committable && <PreviewRow entry={entry} />}
+
+              {/* External-route hint */}
               {ext && entry.status === "ready" && (
                 <a
                   href={ext.url}
@@ -552,6 +625,11 @@ function FileCard({
                 <p className="text-xs text-rose-600 dark:text-rose-400">
                   Tidak ada match kuat. Pilih jenis manual dari dropdown di atas.
                 </p>
+              )}
+
+              {/* Progress bar during weekly commit */}
+              {entry.status === "importing" && entry.progress && (
+                <ProgressBar progress={entry.progress} />
               )}
 
               {entry.status === "done" && entry.importResult && (
@@ -627,6 +705,62 @@ function PreviewRow({ entry }: { entry: FileEntry }) {
           {c.total !== undefined && <span className="text-muted-foreground ml-1">· {formatRpFull(c.total)}</span>}
         </div>
       ))}
+    </div>
+  );
+}
+
+function WeeklySummary({ parsed }: { parsed: WeeklyParsedData }) {
+  const totalRecords =
+    parsed.lpkk.length + parsed.penjualan.length + parsed.platformSales.length +
+    parsed.vendor.length + parsed.weeklyFc.length + parsed.leftover.length +
+    parsed.kasPeriode.length + parsed.salesControl.length + parsed.pembelianKredit.length +
+    parsed.ikhtisarFC.length + parsed.transferTOTI.length + parsed.hppProduk.length +
+    parsed.costAnalysis.length + parsed.cashFlow.length + parsed.insentif.length;
+  const period = parsed.periodStart && parsed.periodEnd ? `${parsed.periodStart} → ${parsed.periodEnd}` : "Periode tidak terdeteksi";
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      <div className="text-xs px-2 py-1 rounded-md bg-muted/50 border border-border/60">
+        <span className="font-semibold">Periode:</span> {period}
+      </div>
+      <div className="text-xs px-2 py-1 rounded-md bg-muted/50 border border-border/60">
+        <span className="font-semibold">Total record:</span> {totalRecords}
+      </div>
+      {parsed.lpkk.length > 0 && <Chip label="Kas kecil" n={parsed.lpkk.length} />}
+      {(parsed.penjualan.length + parsed.platformSales.length) > 0 && <Chip label="Penjualan" n={parsed.penjualan.length + parsed.platformSales.length} />}
+      {parsed.vendor.length > 0 && <Chip label="Vendor" n={parsed.vendor.length} />}
+      {parsed.hppProduk.length > 0 && <Chip label="HPP" n={parsed.hppProduk.length} />}
+      {parsed.cashFlow.length > 0 && <Chip label="Cash flow" n={parsed.cashFlow.length} />}
+      {parsed.unknownSheets.length > 0 && (
+        <div className="text-xs px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-300/60 text-amber-700 dark:text-amber-300">
+          {parsed.unknownSheets.length} sheet tak dikenal
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chip({ label, n }: { label: string; n: number }) {
+  return (
+    <div className="text-xs px-2 py-1 rounded-md bg-muted/30 border border-border/40">
+      <span className="text-muted-foreground">{label}:</span> <span className="font-semibold">{n}</span>
+    </div>
+  );
+}
+
+function ProgressBar({ progress }: { progress: WeeklyImportProgress }) {
+  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{progress.label}</span>
+        <span className="font-mono font-semibold">{pct}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
