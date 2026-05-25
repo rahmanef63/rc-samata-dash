@@ -26,6 +26,7 @@ import { transactionsTables } from "./features/transactions/_schema";
 import { pocketsTables } from "./features/pockets/_schema";
 import { hrTables } from "./features/hr/_schema";
 import { waAuditTables } from "./features/waAudit/_schema";
+import { universalUploadsTables } from "./features/universalUploads/_schema";
 
 // ─── Merge all feature tables into one schema ───────────────
 export default defineSchema({
@@ -46,4 +47,5 @@ export default defineSchema({
   ...pocketsTables,
   ...hrTables,
   ...waAuditTables,
+  ...universalUploadsTables,
 });

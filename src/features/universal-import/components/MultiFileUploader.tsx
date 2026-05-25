@@ -175,6 +175,7 @@ export function MultiFileUploader() {
   const importTunjangan = useMutation(api.features.reports.mutations.importAllowancesBatch);
   const importPayables = useMutation(api.features.payables.mutations.importPayablesBulk);
   const importVendors = useMutation(api.features.masterData.mutations.importVendorsBulk);
+  const recordUpload = useMutation(api.features.universalUploads.mutations.recordUniversalUpload);
 
   const updateEntry = useCallback((id: string, patch: Partial<FileEntry>) => {
     setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...patch } : e));
@@ -337,6 +338,19 @@ export function MultiFileUploader() {
         const msg = `${totalRecords} record imported${dup ? " (menimpa periode lama)" : ""}`;
         updateEntry(entry.id, { status: "done", importResult: msg, progress: undefined });
         toast.success(`${entry.file.name}: ${msg}`);
+        await recordUpload({
+          kind: "weekly_sv",
+          fileName: entry.file.name,
+          fileSize: entry.file.size,
+          periodStart: entry.parsed.weekly.periodStart || undefined,
+          periodEnd: entry.parsed.weekly.periodEnd || undefined,
+          recordCount: totalRecords,
+          counts: result.counts,
+          warningCount: entry.parsed.weeklyWarnings?.length ?? 0,
+          detectScore: entry.topScore,
+          weeklyReportId: result.reportId,
+          status: "success",
+        }).catch((e) => console.error("recordUpload weekly", e));
         return;
       }
 
@@ -344,12 +358,16 @@ export function MultiFileUploader() {
       const parts: string[] = [];
       const fName = entry.file.name;
       const { parsed } = entry;
+      let counts: Parameters<typeof recordUpload>[0]["counts"] = {};
+      let totalRecords = 0;
       if (parsed.pergantian && parsed.pergantian.length > 0) {
         const count = await importPergantian({
           fileName: fName, periodLabel: parsed.pergantianPeriod || "Tanpa periode",
           items: parsed.pergantian,
         });
         parts.push(`${count} pergantian`);
+        counts = { ...counts, pergantian: count };
+        totalRecords += count;
       }
       if (parsed.tunjangan && parsed.tunjangan.length > 0) {
         const count = await importTunjangan({
@@ -357,25 +375,50 @@ export function MultiFileUploader() {
           items: parsed.tunjangan,
         });
         parts.push(`${count} tunjangan`);
+        counts = { ...counts, tunjangan: count };
+        totalRecords += count;
       }
       if (parsed.vendors && parsed.vendors.length > 0) {
         const res = await importVendors({ rows: parsed.vendors });
         parts.push(`${res.inserted} vendor${res.skipped > 0 ? ` (${res.skipped} skip)` : ""}`);
+        counts = { ...counts, vendors: res.inserted };
+        totalRecords += res.inserted;
       }
       if (parsed.payables && parsed.payables.length > 0) {
         const res = await importPayables({ rows: parsed.payables });
         const tail = res.unresolvedVendors.length > 0 ? `, ${res.unresolvedVendors.length} vendor unresolved` : "";
         parts.push(`${res.inserted} piutang${tail}`);
+        counts = { ...counts, payables: res.inserted };
+        totalRecords += res.inserted;
       }
       const msg = parts.length > 0 ? parts.join(" · ") : "Tidak ada baris ke-commit";
       updateEntry(entry.id, { status: "done", importResult: msg });
       toast.success(`${entry.file.name}: ${msg}`);
+      await recordUpload({
+        kind: entry.topKind === "unknown" ? "weekly_sv" : entry.topKind,
+        fileName: entry.file.name,
+        fileSize: entry.file.size,
+        periodLabel: parsed.pergantianPeriod ?? parsed.tunjanganPeriod ?? undefined,
+        recordCount: totalRecords,
+        counts,
+        detectScore: entry.topScore,
+        status: totalRecords > 0 ? "success" : "partial",
+      }).catch((e) => console.error("recordUpload", e));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Commit gagal";
       updateEntry(entry.id, { status: "error", error: msg, progress: undefined });
       toast.error(`${entry.file.name}: ${msg}`);
+      await recordUpload({
+        kind: entry.topKind === "unknown" ? "weekly_sv" : entry.topKind,
+        fileName: entry.file.name,
+        fileSize: entry.file.size,
+        recordCount: 0,
+        detectScore: entry.topScore,
+        status: "error",
+        errorMessage: msg,
+      }).catch((e) => console.error("recordUpload error", e));
     }
-  }, [weekly, importPergantian, importTunjangan, importPayables, importVendors, updateEntry]);
+  }, [weekly, importPergantian, importTunjangan, importPayables, importVendors, recordUpload, updateEntry]);
 
   const commitAll = useCallback(async () => {
     const ready = entries.filter((e) => e.status === "ready" && isCommittable(e));

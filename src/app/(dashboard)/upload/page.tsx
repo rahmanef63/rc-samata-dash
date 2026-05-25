@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { MultiFileUploader } from "@/features/universal-import/components/MultiFileUploader";
+import { UploadHistory } from "@/features/universal-import/components/UploadHistory";
 import { PageHeader } from "@/shared/components/PageHeader";
 import { UploadCloud } from "lucide-react";
 
@@ -15,6 +16,9 @@ export default function UnifiedUploadPage() {
       />
       <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat…</div>}>
         <MultiFileUploader />
+      </Suspense>
+      <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat history…</div>}>
+        <UploadHistory />
       </Suspense>
     </div>
   );
