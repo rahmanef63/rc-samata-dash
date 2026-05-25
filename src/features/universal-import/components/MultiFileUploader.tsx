@@ -13,7 +13,12 @@ import * as XLSX from "xlsx";
 import {
   Upload, Loader2, CheckCircle, AlertCircle, FileSpreadsheet, X,
   ChevronDown, ChevronUp, ExternalLink, Sparkles, Layers, ShieldAlert, ShieldCheck,
+  Eye,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "../../../../convex/_generated/api";
 import { formatRpFull } from "@/shared/lib";
 import {
@@ -65,7 +70,6 @@ type FileEntry = {
   importResult?: string;
   error?: string;
   showAlternatives?: boolean;
-  showValidator?: boolean;
   progress?: WeeklyImportProgress;
 };
 
@@ -164,6 +168,7 @@ function num(s: unknown): number {
 export function MultiFileUploader() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [validatorOpenFor, setValidatorOpenFor] = useState<string | null>(null);
 
   const weekly = useWeeklyImport();
   const importPergantian = useMutation(api.features.reports.mutations.importProductChangesBatch);
@@ -309,10 +314,6 @@ export function MultiFileUploader() {
     setEntries((prev) => prev.map((e) => e.id === id ? { ...e, showAlternatives: !e.showAlternatives } : e));
   }, []);
 
-  const toggleValidator = useCallback((id: string) => {
-    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, showValidator: !e.showValidator } : e));
-  }, []);
-
   const removeFile = useCallback((id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }, []);
@@ -443,14 +444,55 @@ export function MultiFileUploader() {
               entry={entry}
               onOverride={(k) => void overrideKind(entry.id, k)}
               onToggleAlt={() => toggleAlt(entry.id)}
-              onToggleValidator={() => toggleValidator(entry.id)}
+              onOpenValidator={() => setValidatorOpenFor(entry.id)}
               onRemove={() => removeFile(entry.id)}
               onImport={() => void commitOne(entry)}
             />
           ))}
         </div>
       )}
+
+      {/* ── Validator Dialog ── */}
+      <ValidatorDialog
+        entry={entries.find((e) => e.id === validatorOpenFor) ?? null}
+        onClose={() => setValidatorOpenFor(null)}
+      />
     </div>
+  );
+}
+
+function ValidatorDialog({
+  entry, onClose,
+}: { entry: FileEntry | null; onClose: () => void }) {
+  const open = entry !== null;
+  const warnings = entry?.parsed.weeklyWarnings ?? [];
+  const period = entry?.parsed.weekly && entry.parsed.weekly.periodStart && entry.parsed.weekly.periodEnd
+    ? `${entry.parsed.weekly.periodStart} → ${entry.parsed.weekly.periodEnd}`
+    : null;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {warnings.length > 0
+              ? <ShieldAlert className="h-5 w-5 text-yellow-600" />
+              : <ShieldCheck className="h-5 w-5 text-emerald-600" />}
+            Validator — {entry?.file.name ?? ""}
+          </DialogTitle>
+          <DialogDescription>
+            {period ? `Periode: ${period} · ` : ""}
+            {warnings.length > 0
+              ? `${warnings.length} catatan validasi. Tinjau sebelum import.`
+              : "Tidak ada peringatan — data bersih."}
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="flex-1 -mx-6 px-6">
+          <div className="pb-4">
+            <WarningPanel warnings={warnings} />
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -474,12 +516,12 @@ function isCommittable(entry: FileEntry): boolean {
 }
 
 function FileCard({
-  entry, onOverride, onToggleAlt, onToggleValidator, onRemove, onImport,
+  entry, onOverride, onToggleAlt, onOpenValidator, onRemove, onImport,
 }: {
   entry: FileEntry;
   onOverride: (k: FileKind) => void;
   onToggleAlt: () => void;
-  onToggleValidator: () => void;
+  onOpenValidator: () => void;
   onRemove: () => void;
   onImport: () => void;
 }) {
@@ -582,28 +624,27 @@ function FileCard({
                 <WeeklySummary parsed={entry.parsed.weekly} />
               )}
 
-              {/* Validator panel (weekly only) */}
+              {/* Validator dialog trigger (weekly only) */}
               {entry.topKind === "weekly_sv" && entry.parsed.weeklyWarnings && (
                 <div className="pt-1">
                   <button
-                    onClick={onToggleValidator}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border ${
+                    onClick={onOpenValidator}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
                       warningCount > 0
                         ? "bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-800 dark:text-yellow-300 hover:bg-yellow-100"
                         : "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100"
                     }`}
+                    title="Buka dialog validator"
                   >
                     {warningCount > 0
                       ? <ShieldAlert className="h-3.5 w-3.5" />
                       : <ShieldCheck className="h-3.5 w-3.5" />}
-                    Validasi: {warningCount > 0 ? `${warningCount} catatan` : "Bersih"}
-                    {entry.showValidator ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    Buka Validator
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-background/70 border border-current/30 font-mono">
+                      {warningCount > 0 ? `${warningCount} catatan` : "0"}
+                    </span>
+                    <Eye className="h-3 w-3 opacity-70" />
                   </button>
-                  {entry.showValidator && (
-                    <div className="mt-2 pl-1 border-l-2 border-border/40">
-                      <WarningPanel warnings={entry.parsed.weeklyWarnings} />
-                    </div>
-                  )}
                 </div>
               )}
 
