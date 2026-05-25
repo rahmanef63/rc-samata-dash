@@ -37,7 +37,8 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     label: "MENU UTAMA",
     items: [
       { title: "Dashboard", url: "/", icon: Home },
-      { title: "Import Universal", url: "/import", icon: UploadCloud, roles: ADMIN_ROLES },
+      { title: "Upload Universal", url: "/upload", icon: UploadCloud, roles: ADMIN_ROLES },
+      { title: "Import Universal (lama)", url: "/import", icon: UploadCloud, roles: ADMIN_ROLES },
       { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
       { title: "Chat AI", url: "/chat", icon: Bot },
       { title: "Profil", url: "/profile", icon: User },
