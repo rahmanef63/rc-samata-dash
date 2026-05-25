@@ -92,6 +92,9 @@ import type * as features_transactions__schema from "../features/transactions/_s
 import type * as features_transactions__types from "../features/transactions/_types.js";
 import type * as features_transactions_mutations from "../features/transactions/mutations.js";
 import type * as features_transactions_queries from "../features/transactions/queries.js";
+import type * as features_universalUploads__schema from "../features/universalUploads/_schema.js";
+import type * as features_universalUploads_mutations from "../features/universalUploads/mutations.js";
+import type * as features_universalUploads_queries from "../features/universalUploads/queries.js";
 import type * as features_waAudit__schema from "../features/waAudit/_schema.js";
 import type * as features_waAudit_mutations from "../features/waAudit/mutations.js";
 import type * as features_waAudit_parser from "../features/waAudit/parser.js";
@@ -204,6 +207,9 @@ declare const fullApi: ApiFromModules<{
   "features/transactions/_types": typeof features_transactions__types;
   "features/transactions/mutations": typeof features_transactions_mutations;
   "features/transactions/queries": typeof features_transactions_queries;
+  "features/universalUploads/_schema": typeof features_universalUploads__schema;
+  "features/universalUploads/mutations": typeof features_universalUploads_mutations;
+  "features/universalUploads/queries": typeof features_universalUploads_queries;
   "features/waAudit/_schema": typeof features_waAudit__schema;
   "features/waAudit/mutations": typeof features_waAudit_mutations;
   "features/waAudit/parser": typeof features_waAudit_parser;

@@ -14,9 +14,10 @@ import {
   CheckCircle, AlertCircle, AlertTriangle, FileSpreadsheet,
 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
-type FileKind = Doc<"universalUploads">["kind"];
+type FileKind = "weekly_sv" | "zia_multi" | "pergantian" | "tunjangan" |
+  "payables_table" | "receipts_table" | "vendors_table" | "bank_statement";
 type SortBy = "uploadedAt" | "fileName" | "recordCount" | "warningCount";
 type SortOrder = "asc" | "desc";
 
@@ -83,10 +84,10 @@ export function UploadHistory() {
   const stats = useQuery(api.features.universalUploads.queries.getUniversalUploadStats, {});
   const deleteUpload = useMutation(api.features.universalUploads.mutations.deleteUniversalUpload);
 
-  const handleDelete = async (id: Id<"universalUploads">, fileName: string) => {
+  const handleDelete = async (id: string, fileName: string) => {
     if (!confirm(`Hapus record upload "${fileName}" dari history? (Data domain TIDAK ikut terhapus)`)) return;
     try {
-      await deleteUpload({ id });
+      await deleteUpload({ id: id as Id<"universalUploads"> });
       toast.success("Record history dihapus");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal hapus");
@@ -273,13 +274,22 @@ export function UploadHistory() {
               {rows.map((r) => (
                 <tr key={r._id} className="border-b border-border/40 hover:bg-muted/20">
                   <td className="px-4 py-2">
-                    <span className={`text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded ${KIND_TONE[r.kind]}`}>
-                      {KIND_LABEL[r.kind]}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded inline-flex w-fit ${KIND_TONE[r.kind]}`}>
+                        {KIND_LABEL[r.kind]}
+                      </span>
+                      {r.isLegacy && (
+                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 font-mono" title="Diimpor lewat halaman lama; metadata terbatas">
+                          legacy
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2 max-w-[280px]">
                     <p className="truncate font-medium" title={r.fileName}>{r.fileName}</p>
-                    <p className="text-[10px] text-muted-foreground">{formatBytes(r.fileSize)}</p>
+                    {r.fileSize > 0 && (
+                      <p className="text-[10px] text-muted-foreground">{formatBytes(r.fileSize)}</p>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
                     {r.periodStart && r.periodEnd
@@ -315,13 +325,15 @@ export function UploadHistory() {
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
                       )}
-                      <button
-                        onClick={() => void handleDelete(r._id, r.fileName)}
-                        className="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/20 text-muted-foreground hover:text-rose-600"
-                        title="Hapus record history (tidak hapus data domain)"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!r.isLegacy && (
+                        <button
+                          onClick={() => void handleDelete(r._id, r.fileName)}
+                          className="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/20 text-muted-foreground hover:text-rose-600"
+                          title="Hapus record history (tidak hapus data domain)"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
