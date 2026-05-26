@@ -314,7 +314,7 @@ export default function ReportHub() {
             </p>
             {!isOwner && reports && reports.length === 0 && (
               <Button
-                onClick={() => router.push("/laporan/upload")}
+                onClick={() => router.push("/upload")}
                 size="sm"
               >
                 <Upload className="h-4 w-4 mr-2" /> Upload Laporan

@@ -33,6 +33,7 @@ export const universalUploadsTables = {
       pergantian: v.optional(v.number()),
       tunjangan: v.optional(v.number()),
       payables: v.optional(v.number()),
+      receipts: v.optional(v.number()),
       vendors: v.optional(v.number()),
       sales: v.optional(v.number()),
       expense: v.optional(v.number()),

@@ -38,7 +38,6 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     items: [
       { title: "Dashboard", url: "/", icon: Home },
       { title: "Upload Universal", url: "/upload", icon: UploadCloud, roles: ADMIN_ROLES },
-      { title: "Import Universal (lama)", url: "/import", icon: UploadCloud, roles: ADMIN_ROLES },
       { title: "Buku Besar", url: "/finance/buku-besar", icon: BookOpen, roles: ADMIN_ROLES },
       { title: "Chat AI", url: "/chat", icon: Bot },
       { title: "Profil", url: "/profile", icon: User },
@@ -49,7 +48,6 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     items: [
       { title: "Ringkasan", url: "/report", icon: BarChart3 },
       { title: "Semua Laporan", url: "/laporan", icon: Folder },
-      { title: "Upload Mingguan", url: "/laporan/upload", icon: UploadCloud, roles: ADMIN_ROLES },
     ],
   },
   {

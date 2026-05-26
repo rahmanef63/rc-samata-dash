@@ -13,7 +13,7 @@ import * as XLSX from "xlsx";
 import {
   Upload, Loader2, CheckCircle, AlertCircle, FileSpreadsheet, X,
   ChevronDown, ChevronUp, ExternalLink, Sparkles, Layers, ShieldAlert, ShieldCheck,
-  Eye,
+  Eye, BookOpen,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -32,6 +32,7 @@ import {
 import { useWeeklyImport, type WeeklyParsedData, type WeeklyImportProgress } from "@/features/report-upload/hooks/useWeeklyImport";
 import type { ValidationWarning } from "@/features/report-upload/lib/validateParsedData";
 import { WarningPanel } from "@/features/report-upload/components/WarningPanel";
+import { PanduanAiDialog, type PanduanKind } from "@/features/report-upload/components/PanduanAiDialog";
 import {
   bindXlsx, type FileKind,
 } from "../lib/detector";
@@ -44,12 +45,24 @@ import { splitZiaWorkbook, type ZiaSplit } from "../lib/ziaSplit";
 
 type FileStatus = "parsing" | "ready" | "importing" | "done" | "error";
 
+type ReceiptRow = {
+  paidDate: string;
+  amount: number;
+  paidBy: "owner" | "pic";
+  vendorName?: string;
+  channel?: string;
+  reference?: string;
+  notes?: string;
+  fileName?: string;
+};
+
 type ParsedPayload = {
   pergantian?: ProductChangeItem[];
   pergantianPeriod?: string;
   tunjangan?: AllowanceItem[];
   tunjanganPeriod?: string;
   payables?: ZiaSplit["payables"];
+  receipts?: ReceiptRow[];
   vendors?: ZiaSplit["vendors"];
   tableRowsCount?: number;
   // Weekly-specific
@@ -83,6 +96,13 @@ const KIND_LABEL: Record<FileKind, string> = {
   receipts_table: "Bulk Bukti Bayar",
   vendors_table: "Master Vendor",
   unknown: "Belum dikenali",
+};
+
+const KIND_TO_PANDUAN: Partial<Record<FileKind, PanduanKind>> = {
+  weekly_sv: "weekly",
+  pergantian: "pergantian",
+  tunjangan: "tunjangan",
+  bank_statement: "bankStatement",
 };
 
 const KIND_EXTERNAL_ROUTE: Partial<Record<FileKind, { url: string; label: string; reason: string }>> = {
@@ -169,11 +189,13 @@ export function MultiFileUploader() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
   const [validatorOpenFor, setValidatorOpenFor] = useState<string | null>(null);
+  const [panduanKind, setPanduanKind] = useState<PanduanKind | null>(null);
 
   const weekly = useWeeklyImport();
   const importPergantian = useMutation(api.features.reports.mutations.importProductChangesBatch);
   const importTunjangan = useMutation(api.features.reports.mutations.importAllowancesBatch);
   const importPayables = useMutation(api.features.payables.mutations.importPayablesBulk);
+  const importReceipts = useMutation(api.features.closing.mutations.importPaymentReceiptsBulk);
   const importVendors = useMutation(api.features.masterData.mutations.importVendorsBulk);
   const recordUpload = useMutation(api.features.universalUploads.mutations.recordUniversalUpload);
 
@@ -227,6 +249,26 @@ export function MultiFileUploader() {
             reference: r.reference,
             fileName: file.name,
           })).filter((r) => r.vendorName && r.amount > 0),
+          tableRowsCount: rows.length,
+        };
+      }
+      case "receipts_table": {
+        const rows = extractTableRows(wb);
+        return {
+          receipts: rows.map((r) => {
+            const paidByRaw = (r.paidBy ?? r.paid_by ?? "").toLowerCase().trim();
+            const paidBy: "owner" | "pic" = paidByRaw === "owner" ? "owner" : "pic";
+            return {
+              paidDate: r.paidDate ?? r.paid_date ?? "",
+              amount: num(r.amount ?? r.total),
+              paidBy,
+              vendorName: (r.vendorName ?? r.vendor_name ?? r.vendor) || undefined,
+              channel: r.channel || undefined,
+              reference: (r.reference ?? r.ref) || undefined,
+              notes: (r.notes ?? r.description ?? r.desc) || undefined,
+              fileName: file.name,
+            };
+          }).filter((r) => r.paidDate && r.amount > 0),
           tableRowsCount: rows.length,
         };
       }
@@ -391,6 +433,13 @@ export function MultiFileUploader() {
         counts = { ...counts, payables: res.inserted };
         totalRecords += res.inserted;
       }
+      if (parsed.receipts && parsed.receipts.length > 0) {
+        const res = await importReceipts({ rows: parsed.receipts });
+        const tail = res.linked > 0 ? ` (${res.linked} linked)` : "";
+        parts.push(`${res.inserted} bukti bayar${tail}`);
+        counts = { ...counts, receipts: res.inserted };
+        totalRecords += res.inserted;
+      }
       const msg = parts.length > 0 ? parts.join(" · ") : "Tidak ada baris ke-commit";
       updateEntry(entry.id, { status: "done", importResult: msg });
       toast.success(`${entry.file.name}: ${msg}`);
@@ -418,7 +467,7 @@ export function MultiFileUploader() {
         errorMessage: msg,
       }).catch((e) => console.error("recordUpload error", e));
     }
-  }, [weekly, importPergantian, importTunjangan, importPayables, importVendors, recordUpload, updateEntry]);
+  }, [weekly, importPergantian, importTunjangan, importPayables, importReceipts, importVendors, recordUpload, updateEntry]);
 
   const commitAll = useCallback(async () => {
     const ready = entries.filter((e) => e.status === "ready" && isCommittable(e));
@@ -488,6 +537,7 @@ export function MultiFileUploader() {
               onOverride={(k) => void overrideKind(entry.id, k)}
               onToggleAlt={() => toggleAlt(entry.id)}
               onOpenValidator={() => setValidatorOpenFor(entry.id)}
+              onOpenPanduan={(k) => setPanduanKind(k)}
               onRemove={() => removeFile(entry.id)}
               onImport={() => void commitOne(entry)}
             />
@@ -499,6 +549,13 @@ export function MultiFileUploader() {
       <ValidatorDialog
         entry={entries.find((e) => e.id === validatorOpenFor) ?? null}
         onClose={() => setValidatorOpenFor(null)}
+      />
+
+      {/* ── Panduan AI Dialog ── */}
+      <PanduanAiDialog
+        open={panduanKind !== null}
+        onOpenChange={(o) => { if (!o) setPanduanKind(null); }}
+        kind={panduanKind ?? "weekly"}
       />
     </div>
   );
@@ -554,17 +611,19 @@ function isCommittable(entry: FileEntry): boolean {
     (parsed.pergantian?.length ?? 0) > 0 ||
     (parsed.tunjangan?.length ?? 0) > 0 ||
     (parsed.payables?.length ?? 0) > 0 ||
+    (parsed.receipts?.length ?? 0) > 0 ||
     (parsed.vendors?.length ?? 0) > 0
   );
 }
 
 function FileCard({
-  entry, onOverride, onToggleAlt, onOpenValidator, onRemove, onImport,
+  entry, onOverride, onToggleAlt, onOpenValidator, onOpenPanduan, onRemove, onImport,
 }: {
   entry: FileEntry;
   onOverride: (k: FileKind) => void;
   onToggleAlt: () => void;
   onOpenValidator: () => void;
+  onOpenPanduan: (k: PanduanKind) => void;
   onRemove: () => void;
   onImport: () => void;
 }) {
@@ -579,6 +638,7 @@ function FileCard({
     : "border-border";
 
   const ext = KIND_EXTERNAL_ROUTE[entry.topKind];
+  const panduanKind = KIND_TO_PANDUAN[entry.topKind];
   const committable = isCommittable(entry);
   const warningCount = entry.parsed.weeklyWarnings?.length ?? 0;
 
@@ -667,27 +727,39 @@ function FileCard({
                 <WeeklySummary parsed={entry.parsed.weekly} />
               )}
 
-              {/* Validator dialog trigger (weekly only) */}
-              {entry.topKind === "weekly_sv" && entry.parsed.weeklyWarnings && (
-                <div className="pt-1">
-                  <button
-                    onClick={onOpenValidator}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
-                      warningCount > 0
-                        ? "bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-800 dark:text-yellow-300 hover:bg-yellow-100"
-                        : "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100"
-                    }`}
-                    title="Buka dialog validator"
-                  >
-                    {warningCount > 0
-                      ? <ShieldAlert className="h-3.5 w-3.5" />
-                      : <ShieldCheck className="h-3.5 w-3.5" />}
-                    Buka Validator
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-background/70 border border-current/30 font-mono">
-                      {warningCount > 0 ? `${warningCount} catatan` : "0"}
-                    </span>
-                    <Eye className="h-3 w-3 opacity-70" />
-                  </button>
+              {/* Action row: Panduan AI (per kind) + Validator (weekly only) */}
+              {(panduanKind || (entry.topKind === "weekly_sv" && entry.parsed.weeklyWarnings)) && (
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  {panduanKind && (
+                    <button
+                      onClick={() => onOpenPanduan(panduanKind)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition"
+                      title="Panduan AI — rapikan file via ChatGPT/Claude sebelum upload"
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-primary" />
+                      Panduan AI
+                    </button>
+                  )}
+                  {entry.topKind === "weekly_sv" && entry.parsed.weeklyWarnings && (
+                    <button
+                      onClick={onOpenValidator}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
+                        warningCount > 0
+                          ? "bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/20 dark:border-yellow-800 dark:text-yellow-300 hover:bg-yellow-100"
+                          : "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100"
+                      }`}
+                      title="Buka dialog validator"
+                    >
+                      {warningCount > 0
+                        ? <ShieldAlert className="h-3.5 w-3.5" />
+                        : <ShieldCheck className="h-3.5 w-3.5" />}
+                      Buka Validator
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-background/70 border border-current/30 font-mono">
+                        {warningCount > 0 ? `${warningCount} catatan` : "0"}
+                      </span>
+                      <Eye className="h-3 w-3 opacity-70" />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -779,6 +851,10 @@ function PreviewRow({ entry }: { entry: FileEntry }) {
   if (parsed.payables && parsed.payables.length > 0) {
     const total = parsed.payables.reduce((s, p) => s + p.amount, 0);
     chips.push({ label: "Piutang", value: `${parsed.payables.length} invoice`, total });
+  }
+  if (parsed.receipts && parsed.receipts.length > 0) {
+    const total = parsed.receipts.reduce((s, r) => s + r.amount, 0);
+    chips.push({ label: "Bukti Bayar", value: `${parsed.receipts.length} receipt`, total });
   }
   if (chips.length === 0) return null;
   return (

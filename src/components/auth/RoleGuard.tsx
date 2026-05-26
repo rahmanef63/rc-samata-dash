@@ -8,9 +8,6 @@ import { useUserRole } from "@/features/auth/useUserRole";
  * Owner-only allowlist — chart/report/interactive routes only.
  * Anything outside this list redirects to "/" (dashboard charts).
  *
- * Match is by prefix: "/laporan" allows "/laporan/analisis", but not the
- * stripped admin path "/laporan/upload" — gated separately by sidebar.
- *
  * Keep tight: owner should only see things to *look* at, not edit.
  */
 const OWNER_ALLOWED_PREFIXES = [
@@ -23,15 +20,6 @@ const OWNER_ALLOWED_PREFIXES = [
 
 function isOwnerAllowed(pathname: string): boolean {
   if (pathname === "/") return true;
-  // Block /laporan/upload* explicitly — those are technical routes that
-  // share the /laporan prefix.
-  if (
-    pathname === "/laporan/upload" ||
-    pathname.startsWith("/laporan/upload/") ||
-    pathname.startsWith("/laporan/upload-")
-  ) {
-    return false;
-  }
   return OWNER_ALLOWED_PREFIXES.some(
     (p) => p !== "/" && (pathname === p || pathname.startsWith(`${p}/`)),
   );

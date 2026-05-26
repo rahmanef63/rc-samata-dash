@@ -84,7 +84,7 @@ export function ReportOverview() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push("/laporan/upload");
+                    router.push("/upload");
                   }}
                   className="text-primary underline"
                 >
@@ -135,7 +135,7 @@ export function ReportOverview() {
             {isOwner ? "Belum ada laporan tersedia." : "Belum ada laporan yang diunggah."}
           </p>
           {!isOwner && (
-            <Button onClick={() => router.push("/laporan/upload")} size="sm">
+            <Button onClick={() => router.push("/upload")} size="sm">
               <Upload className="h-4 w-4 mr-2" /> Upload Laporan
             </Button>
           )}
