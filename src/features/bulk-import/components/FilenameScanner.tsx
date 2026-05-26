@@ -98,7 +98,7 @@ export function FilenameScanner() {
             Scan Filenames → CSV Scaffold
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Paste daftar nama file dari chat WhatsApp (1 baris per file). Sistem deteksi kategori, vendor, tanggal otomatis dari nama file. Klik Export CSV → isi kolom amount → upload ke Bulk Import.
+            Paste daftar nama file dari chat WhatsApp (1 baris per file). Sistem deteksi kategori, vendor, tanggal otomatis dari nama file. Klik Export CSV → isi kolom amount → upload ke /upload (auto-detect kind).
           </p>
         </div>
       </div>

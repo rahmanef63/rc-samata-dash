@@ -1,4 +1,4 @@
-import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, Upload, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench, CreditCard, ShoppingCart, Lock } from "lucide-react";
+import { Home, FileText, DollarSign, Receipt, Wallet, Moon, Package, ClipboardCheck, Database, Settings, BarChart3, Bot, UploadCloud, RefreshCw, Users, Folder, User, TrendingUp, Target, History, ClipboardList, Landmark, MessageSquareText, BookOpen, Wrench, CreditCard, ShoppingCart, Lock, ScanLine } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type Role = "super_admin" | "owner" | "staff";
@@ -105,7 +105,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
         children: [
           { title: "Laporan PIC (CSV)", url: "/finance/laporan-pic", icon: ClipboardList },
           { title: "Statement Bank", url: "/finance/owner-transfer", icon: Landmark },
-          { title: "Bulk Import Chat", url: "/laporan/bulk-import", icon: Upload },
+          { title: "Scan Filename WA", url: "/laporan/bulk-import", icon: ScanLine },
           { title: "Validasi Harian WA", url: "/laporan/validasi-harian", icon: MessageSquareText },
         ],
       },
