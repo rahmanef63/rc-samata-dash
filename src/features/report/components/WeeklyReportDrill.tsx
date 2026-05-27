@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatRpFull } from "@/shared/lib";
 import { useFilteredByDate } from "@/shared/hooks";
+import { ReportButton, ReportPrintHeader, ReportPrintFooter } from "@/features/report-pdf";
 
 type TabDef = {
   key: string;
@@ -370,7 +371,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3" data-print="hide">
         <div className="min-w-0">
           <Link
             href="/laporan"
@@ -399,7 +400,14 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
             )}
           </p>
         </div>
+        <ReportButton hint="Cetak tab aktif sebagai PDF" />
       </div>
+
+      <ReportPrintHeader
+        title={`Laporan Mingguan · ${report.periodStart} — ${report.periodEnd}`}
+        subtitle={report.fileName ?? undefined}
+        meta={[{ label: "Status", value: report.status }]}
+      />
 
       {/* Tab strip */}
       <div className="border-b overflow-x-auto">
@@ -720,6 +728,10 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       )}
 
       {active === "audit" && <AuditPanel reportId={reportId} />}
+
+      <ReportPrintFooter
+        title={`Laporan Mingguan · ${report.periodStart} — ${report.periodEnd}`}
+      />
     </div>
   );
 }

@@ -231,3 +231,141 @@ body {
 .animate-accordion-down { animation: accordion-down 0.2s ease-out; }
 .animate-accordion-up { animation: accordion-up 0.2s ease-out; }
 .animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ─── Print Mode (PDF via window.print → Save as PDF) ──────── */
+.print-only { display: none; }
+
+@media print {
+  /* A4 paper, modest margins, page counter via CSS counters. */
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+  }
+
+  /* Force light palette to avoid dark-mode color invert in PDFs. */
+  :root, .dark {
+    --background: #ffffff;
+    --foreground: #111111;
+    --card: #ffffff;
+    --card-foreground: #111111;
+    --muted: #f5f5f5;
+    --muted-foreground: #444444;
+    --border: #d4d4d4;
+    --primary: #be123c;
+    --primary-foreground: #ffffff;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  /* Hide app chrome. */
+  [data-sidebar="sidebar"],
+  [data-sidebar="trigger"],
+  [data-sidebar="rail"],
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-rail"],
+  body > header,
+  header.sticky,
+  nav,
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  /* Keep print-only elements (brand header, footer). */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Strip layout containers so content owns the page width. */
+  [data-slot="sidebar-inset"],
+  main, .max-w-7xl, .max-w-\[1400px\] {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* Recharts: keep saturated colors when "background graphics" toggled in
+     the print dialog. Avoid splitting a chart across pages. */
+  .recharts-wrapper, .recharts-surface, svg {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    break-inside: avoid !important;
+  }
+
+  /* Tables: repeat <thead> on each page, keep rows whole. */
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { padding: 4px 8px !important; font-size: 11px; }
+
+  /* Card backgrounds → white with thin border so they survive on paper. */
+  .bg-card, .bg-muted, .bg-primary, .bg-success, .bg-destructive, .bg-warning, .bg-info {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #d4d4d4 !important;
+    box-shadow: none !important;
+  }
+
+  /* Brand header inside ReportPrintShell. */
+  .print-report-header {
+    margin: 0 0 12px 0;
+    padding: 0 0 8px 0;
+    border-bottom: 2px solid #111;
+    display: grid;
+    grid-template-columns: 1fr 2fr 1.5fr;
+    gap: 12px;
+    align-items: end;
+  }
+  .print-report-brand-mark {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #be123c;
+  }
+  .print-report-brand-sub {
+    font-size: 9px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .print-report-titles h1 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .print-report-subtitle {
+    font-size: 10px;
+    color: #555;
+    margin: 2px 0 0 0;
+  }
+  .print-report-meta {
+    margin: 0;
+    font-size: 9px;
+    color: #333;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+  }
+  .print-report-meta > div { display: flex; gap: 4px; }
+  .print-report-meta dt { font-weight: 600; color: #777; margin: 0; }
+  .print-report-meta dd { margin: 0; }
+
+  /* Footer printed once per page (browser only prints once but we keep
+     consistent visuals if user generates multi-page A4). */
+  .print-report-footer {
+    margin-top: 12px;
+    padding-top: 6px;
+    border-top: 1px solid #d4d4d4;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #555;
+  }
+
+  .print-break-before { break-before: page; page-break-before: always; }
+  .print-avoid-break  { break-inside: avoid; page-break-inside: avoid; }
+}

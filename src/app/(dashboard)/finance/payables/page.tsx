@@ -4,6 +4,7 @@ import { CreditCard } from "lucide-react";
 import { PayablesNotionView } from "@/features/payables/components/PayablesNotionView";
 import { PageHeader } from "@/shared/components";
 import { ImportLinkButton } from "@/features/universal-import/components/ImportLinkButton";
+import { ReportButton, ReportPrintShell } from "@/features/report-pdf";
 
 export default function Page() {
   return (
@@ -12,9 +13,16 @@ export default function Page() {
         icon={CreditCard}
         title="Piutang Vendor"
         description="Daftar invoice vendor yang masih open/partial. Klik baris untuk detail bukti bayar."
-        action={<ImportLinkButton />}
+        action={
+          <>
+            <ImportLinkButton />
+            <ReportButton hint="Cetak PDF — gunakan view 'Tabel' untuk hasil terbaik" />
+          </>
+        }
       />
-      <PayablesNotionView />
+      <ReportPrintShell title="Piutang Vendor">
+        <PayablesNotionView />
+      </ReportPrintShell>
     </div>
   );
 }
