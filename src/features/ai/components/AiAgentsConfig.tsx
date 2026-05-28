@@ -187,19 +187,19 @@ export function AiAgentsConfig() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!agent.isEnabled ? (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleToggle(agent._id, agent.isEnabled)} title="Set aktif">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleToggle(agent._id, agent.isEnabled)} title="Set aktif" aria-label="Set aktif">
                       <Radio className="h-3.5 w-3.5" />
                     </Button>
                   ) : (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleToggle(agent._id, agent.isEnabled)} title="Nonaktifkan">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleToggle(agent._id, agent.isEnabled)} title="Nonaktifkan" aria-label="Nonaktifkan">
                       <Radio className="h-3.5 w-3.5 text-primary" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(agent)} title="Edit">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(agent)} title="Edit" aria-label="Edit">
                     <Edit3 className="h-3.5 w-3.5" />
                   </Button>
                   {!agent.isBuiltIn && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(agent._id)} title="Hapus">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(agent._id)} title="Hapus" aria-label="Hapus">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}

@@ -226,17 +226,17 @@ export function AiProviderConfig() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {!p.isActive && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleSetActive(p._id)} title="Set aktif">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleSetActive(p._id)} title="Set aktif" aria-label="Set aktif">
                         <Radio className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleTest(p._id)} disabled={testing === p._id} title="Test koneksi">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleTest(p._id)} disabled={testing === p._id} title="Test koneksi" aria-label="Test koneksi">
                       {testing === p._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(p)} title="Edit">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(p)} title="Edit" aria-label="Edit">
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p._id)} title="Hapus">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p._id)} title="Hapus" aria-label="Hapus">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

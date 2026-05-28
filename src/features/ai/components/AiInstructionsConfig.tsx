@@ -160,15 +160,15 @@ export function AiInstructionsConfig() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!inst.isActive && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleSetActive(inst._id)} title="Set aktif">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleSetActive(inst._id)} title="Set aktif" aria-label="Set aktif">
                       <Radio className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(inst)} title="Edit">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openEdit(inst)} title="Edit" aria-label="Edit">
                     <Edit3 className="h-3.5 w-3.5" />
                   </Button>
                   {!inst.isDefault && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(inst._id)} title="Hapus">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(inst._id)} title="Hapus" aria-label="Hapus">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}

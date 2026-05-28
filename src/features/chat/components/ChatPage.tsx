@@ -295,10 +295,10 @@ export default function ChatPage() {
         {/* Chat Top Header (Mobile & Compact Desktop) */}
         <div className="h-14 border-b border-border bg-card/80 glass px-2 md:px-4 flex items-center justify-between z-10 sticky top-0 shrink-0">
           <div className="flex items-center gap-1 md:hidden">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-primary" onClick={() => setShowMobileHistory(true)}>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-primary" onClick={() => setShowMobileHistory(true)} aria-label="Riwayat chat">
               <History className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-primary" onClick={handleNewSession}>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-primary" onClick={handleNewSession} aria-label="Sesi baru">
               <Plus className="h-5 w-5" />
             </Button>
           </div>
@@ -313,10 +313,10 @@ export default function ChatPage() {
           </div>}
 
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg disabled:opacity-30 border-border shadow-sm" onClick={goPrev} disabled={!canGoPrev}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg disabled:opacity-30 border-border shadow-sm" onClick={goPrev} disabled={!canGoPrev} aria-label="Sesi sebelumnya">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg disabled:opacity-30 border-border shadow-sm" onClick={goNext} disabled={!canGoNext}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg disabled:opacity-30 border-border shadow-sm" onClick={goNext} disabled={!canGoNext} aria-label="Sesi berikutnya">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -537,6 +537,7 @@ export default function ChatPage() {
 
             <Button
               size="icon"
+              aria-label="Kirim pesan"
               className={`rounded-2xl shrink-0 h-[46px] w-[46px] transition-all shadow-sm flex items-center justify-center ${
                 input.trim() && !isLoading 
                   ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105 active:scale-95" 
