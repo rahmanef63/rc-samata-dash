@@ -14,7 +14,7 @@ import { inferFromRules, isUncategorized } from "../../shared/categoryInference"
 async function buildCategoryLookup(
   ctx: MutationCtx,
 ): Promise<Map<string, Id<"expenseCategories">>> {
-  const cats = await ctx.db.query("expenseCategories").collect();
+  const cats = await ctx.db.query("expenseCategories").take(5000);
   const m = new Map<string, Id<"expenseCategories">>();
   for (const c of cats) {
     m.set(c.name.toLowerCase().trim(), c._id);

@@ -87,7 +87,7 @@ export const seedDefaultStaff = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const existing = await ctx.db.query("staff").collect();
+    const existing = await ctx.db.query("staff").take(5000);
     const existingNames = new Set(existing.map((s) => s.fullName.toLowerCase()));
     const defaults: Array<{
       fullName: string;

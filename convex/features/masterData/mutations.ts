@@ -480,7 +480,7 @@ export const seedExpenseCategoriesFull = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const existing = await ctx.db.query("expenseCategories").collect();
+    const existing = await ctx.db.query("expenseCategories").take(5000);
     const have = new Set(existing.map((c) => c.name.toLowerCase()));
     let inserted = 0;
     for (const c of ALL_EXPENSE_CATEGORIES) {
@@ -496,7 +496,7 @@ export const seedIncomeChannelsFull = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const existing = await ctx.db.query("incomeChannels").collect();
+    const existing = await ctx.db.query("incomeChannels").take(5000);
     const have = new Set(existing.map((c) => c.name.toLowerCase()));
     let inserted = 0;
     for (const c of DEFAULT_INCOME_CHANNELS) {

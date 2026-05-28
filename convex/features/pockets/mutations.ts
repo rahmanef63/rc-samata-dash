@@ -83,7 +83,7 @@ export const seedDefaultPockets = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const existing = await ctx.db.query("pockets").collect();
+    const existing = await ctx.db.query("pockets").take(5000);
     const existingNames = new Set(existing.map((p) => p.name));
     const defaults: Array<{
       name: string;
@@ -140,7 +140,7 @@ export const backfillPocketSourceId = mutation({
     const cap = limit ?? 10000;
 
     // Build name→id pocket lookup
-    const pockets = await ctx.db.query("pockets").collect();
+    const pockets = await ctx.db.query("pockets").take(5000);
     const byName = new Map<string, typeof pockets[number]>();
     for (const p of pockets) byName.set(p.name, p);
     const brankas = byName.get("Brankas Toko");
