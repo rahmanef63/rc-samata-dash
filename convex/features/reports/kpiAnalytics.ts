@@ -115,7 +115,7 @@ export const listKPITargets = query({
   args: {},
   handler: async (ctx) => {
     await requireAuth(ctx);
-    return ctx.db.query("kpiTargets").collect();
+    return ctx.db.query("kpiTargets").take(200);
   },
 });
 
@@ -147,7 +147,7 @@ export const getKPIDashboard = query({
     await requireAuth(ctx);
 
     // Get targets
-    const targets = await ctx.db.query("kpiTargets").collect();
+    const targets = await ctx.db.query("kpiTargets").take(200);
 
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
@@ -273,7 +273,7 @@ export const getKPIDashboardInternal = internalQuery({
   handler: async (ctx, { reportId, timeFilter }) => {
     await requireAuth(ctx);
 
-    const targets = await ctx.db.query("kpiTargets").collect();
+    const targets = await ctx.db.query("kpiTargets").take(200);
 
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
@@ -561,7 +561,7 @@ export const getKpiDashboardRich = query({
   handler: async (ctx, { startDate, endDate, granularity }) => {
     await requireAuth(ctx);
 
-    const targets = await ctx.db.query("kpiTargets").collect();
+    const targets = await ctx.db.query("kpiTargets").take(200);
     const targetMap = new Map(targets.map((t) => [t.kpiCode, t]));
 
     const current = roundActuals(await computeActuals(ctx, startDate, endDate));

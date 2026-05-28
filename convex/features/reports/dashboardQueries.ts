@@ -333,10 +333,13 @@ export const getRecentTransactions = query({
     };
 
     // Take a wider window so the client-side date filter has rows to keep.
-    const summaries = await ctx.db.query("dailyCashSummary").collect();
-    const latestSummaries = summaries
-      .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 30);
+    // by_date index + order desc bounds the read to the 30 latest (was a full
+    // unbounded collect + JS sort/slice — identical result set).
+    const latestSummaries = await ctx.db
+      .query("dailyCashSummary")
+      .withIndex("by_date")
+      .order("desc")
+      .take(30);
 
     for (const s of latestSummaries) {
       const file = await fileFor(s.reportId);
@@ -355,10 +358,11 @@ export const getRecentTransactions = query({
       });
     }
 
-    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
-    const latestCF = cashFlows
-      .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 30);
+    const latestCF = await ctx.db
+      .query("dailyCashFlow")
+      .withIndex("by_date")
+      .order("desc")
+      .take(30);
 
     for (const cf of latestCF) {
       if (cf.expenseOutflow > 0) {
@@ -400,10 +404,11 @@ export const getRecentTransactionsInternal = internalQuery({
       direction: "in" | "out";
     }[] = [];
 
-    const summaries = await ctx.db.query("dailyCashSummary").collect();
-    const latestSummaries = summaries
-      .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 3);
+    const latestSummaries = await ctx.db
+      .query("dailyCashSummary")
+      .withIndex("by_date")
+      .order("desc")
+      .take(3);
 
     for (const s of latestSummaries) {
       results.push({
@@ -417,10 +422,11 @@ export const getRecentTransactionsInternal = internalQuery({
       });
     }
 
-    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
-    const latestCF = cashFlows
-      .sort((a, b) => b.businessDate.localeCompare(a.businessDate))
-      .slice(0, 3);
+    const latestCF = await ctx.db
+      .query("dailyCashFlow")
+      .withIndex("by_date")
+      .order("desc")
+      .take(3);
 
     for (const cf of latestCF) {
       if (cf.expenseOutflow > 0) {
