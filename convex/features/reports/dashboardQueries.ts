@@ -333,8 +333,9 @@ export const getRecentTransactions = query({
     };
 
     // Take a wider window so the client-side date filter has rows to keep.
-    // by_date index + order desc bounds the read to the 30 latest (was a full
-    // unbounded collect + JS sort/slice — identical result set).
+    // by_date index + order desc bounds the read to the 30 latest by date
+    // (was an unbounded collect + JS sort/slice). Same top-N-by-date result;
+    // a late-inserted back-dated row won't surface, which fits a "recent" feed.
     const latestSummaries = await ctx.db
       .query("dailyCashSummary")
       .withIndex("by_date")
