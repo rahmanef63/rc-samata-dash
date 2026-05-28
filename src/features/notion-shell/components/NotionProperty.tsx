@@ -78,6 +78,7 @@ export function NotionProperty({
             size="icon"
             onClick={() => setEditingName(true)}
             className="h-4 w-4 text-muted-foreground/60 hover:text-foreground"
+            aria-label="Ubah nama properti"
           >
             <Pencil className="h-3 w-3" />
           </Button>
@@ -88,6 +89,7 @@ export function NotionProperty({
             size="icon"
             onClick={onSchemaRemove}
             className="h-4 w-4 text-muted-foreground/60 hover:text-destructive"
+            aria-label="Hapus properti"
           >
             <Trash2 className="h-3 w-3" />
           </Button>

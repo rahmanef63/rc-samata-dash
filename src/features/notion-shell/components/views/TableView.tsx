@@ -97,6 +97,7 @@ export function TableView({
                       size="icon"
                       onClick={() => onRowRemove(r.id)}
                       className="h-5 w-5 text-muted-foreground/40 opacity-0 group-hover/row:opacity-100 hover:text-destructive"
+                      aria-label="Hapus baris"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>

@@ -149,9 +149,9 @@ function SidebarRow({ node, depth, activeId, onSelect, onCreate, onRename, onDel
           </Button>
         )}
         <div className="ml-auto hidden items-center gap-0.5 group-hover:flex">
-          {onCreate && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onCreate(node.page.id); }} className="h-5 w-5 text-muted-foreground" title="New subpage"><Plus className="h-3 w-3" /></Button>}
-          {onRename && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="h-5 w-5 text-muted-foreground" title="Rename"><Pencil className="h-3 w-3" /></Button>}
-          {onDelete && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(node.page.id); }} className="h-5 w-5 text-muted-foreground hover:text-destructive" title="Delete"><Trash2 className="h-3 w-3" /></Button>}
+          {onCreate && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onCreate(node.page.id); }} className="h-5 w-5 text-muted-foreground" title="New subpage" aria-label="Subhalaman baru"><Plus className="h-3 w-3" /></Button>}
+          {onRename && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditing(true); }} className="h-5 w-5 text-muted-foreground" title="Rename" aria-label="Ubah nama"><Pencil className="h-3 w-3" /></Button>}
+          {onDelete && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(node.page.id); }} className="h-5 w-5 text-muted-foreground hover:text-destructive" title="Delete" aria-label="Hapus halaman"><Trash2 className="h-3 w-3" /></Button>}
         </div>
       </div>
       {open && hasChildren && (
