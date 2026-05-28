@@ -89,18 +89,20 @@ function buildIdDate(day: string, monthKey: string, year: string): string | null
 }
 
 function extractDateRange(s: string): { start: string; end: string } | undefined {
-  // "8-14 April 2026" / "08 Apr 2026 - 14 Apr 2026" / "1-7 mei 2026"
-  // / "22-30 April 2026"
-  const m1 = s.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([a-z]+)\s+(\d{4})/i);
-  if (m1) {
-    const start = buildIdDate(m1[1], m1[3], m1[4]);
-    const end = buildIdDate(m1[2], m1[3], m1[4]);
-    if (start && end) return { start, end };
-  }
+  // Try the dual-month form FIRST — "08 Apr 2026 - 14 Apr 2026". The
+  // single-month regex below would otherwise spuriously match the tail of the
+  // first year ("20[26] - 14 Apr 2026"), yielding a wrong start day.
   const m2 = s.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})\s*[-–]\s*(\d{1,2})\s+([a-z]+)\s+(\d{4})/i);
   if (m2) {
     const start = buildIdDate(m2[1], m2[2], m2[3]);
     const end = buildIdDate(m2[4], m2[5], m2[6]);
+    if (start && end) return { start, end };
+  }
+  // Single shared month/year — "8-14 April 2026" / "1-7 mei 2026" / "22-30 April 2026"
+  const m1 = s.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([a-z]+)\s+(\d{4})/i);
+  if (m1) {
+    const start = buildIdDate(m1[1], m1[3], m1[4]);
+    const end = buildIdDate(m1[2], m1[3], m1[4]);
     if (start && end) return { start, end };
   }
   return undefined;
