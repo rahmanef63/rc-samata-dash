@@ -1,7 +1,7 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { paymentMethodValidator } from "../../shared/validators";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { buildVendorIndex } from "../../shared/vendorResolver";
 import { computePayableStatus } from "../../shared/payableStatus";
@@ -112,7 +112,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("payables") },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Record not found");
     // Cascade delete payments + each payment's mirrored tx
