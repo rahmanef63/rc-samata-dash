@@ -23,6 +23,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_CONVEX_URL=https://api-rcsamata.rahmanef.com
 ENV NEXT_PUBLIC_CONVEX_URL=$NEXT_PUBLIC_CONVEX_URL
 
+# Build-id provenance — next.config.ts derives NEXT_PUBLIC_BUILD_ID from the
+# commit SHA so VersionWatcher can prompt reload on a real deploy. Without this
+# passthrough the build falls back to a dev timestamp (untraceable in prod).
+# In Dokploy: set Build Arg DOKPLOY_COMMIT_SHA to the commit — until then the
+# value stays empty and next.config keeps the dev fallback (no behavior change).
+ARG DOKPLOY_COMMIT_SHA=""
+ARG COMMIT_SHA=""
+ENV DOKPLOY_COMMIT_SHA=$DOKPLOY_COMMIT_SHA
+ENV COMMIT_SHA=$COMMIT_SHA
+
 RUN corepack enable pnpm && pnpm run build
 
 # Production image, copy all the files and run next
