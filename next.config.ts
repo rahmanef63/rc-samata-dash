@@ -15,6 +15,9 @@ process.env.NEXT_PUBLIC_BUILD_ID = BUILD_ID;
 const nextConfig: NextConfig = {
   output: "standalone",
   generateBuildId: () => BUILD_ID,
+  // Tags asset URLs with the build id so a client on an old deploy can't pull
+  // mismatched chunks during a rolling redeploy (pairs with ChunkErrorBoundary).
+  deploymentId: BUILD_ID,
   turbopack: {
     root: __dirname,
   },
