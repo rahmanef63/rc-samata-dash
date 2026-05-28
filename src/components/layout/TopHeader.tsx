@@ -142,7 +142,7 @@ export function TopHeader() {
         ) : (
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Filter periode">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Filter periode" aria-label="Filter periode">
                 <Filter className="h-4 w-4 text-muted-foreground" />
               </Button>
             </SheetTrigger>
@@ -164,7 +164,7 @@ export function TopHeader() {
         )}
 
         {/* Search */}
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSearchOpen(true)}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSearchOpen(true)} aria-label="Cari halaman">
           <Search className="h-4 w-4 text-muted-foreground" />
         </Button>
 
@@ -196,7 +196,7 @@ export function TopHeader() {
         </CommandDialog>
 
         {/* Theme */}
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={toggleDark}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={toggleDark} aria-label={isDark ? "Aktifkan mode terang" : "Aktifkan mode gelap"}>
           {isDark ? (
             <Moon className="h-4 w-4 text-muted-foreground" />
           ) : (
@@ -207,7 +207,7 @@ export function TopHeader() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Notifikasi">
               <Bell className="h-4 w-4 text-muted-foreground" />
               <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary ring-2 ring-card" />
             </Button>
@@ -226,7 +226,7 @@ export function TopHeader() {
         {!isMobile && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 rounded-full ml-1 p-0 ring-2 ring-border overflow-hidden cursor-pointer">
+              <Button variant="ghost" className="h-8 w-8 rounded-full ml-1 p-0 ring-2 ring-border overflow-hidden cursor-pointer" aria-label="Menu akun">
                 <Avatar className="h-full w-full">
                   <AvatarImage src={user?.image} alt={user?.name || "User"} />
                   <AvatarFallback className="bg-navy text-navy-foreground text-xs font-medium">

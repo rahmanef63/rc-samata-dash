@@ -259,12 +259,12 @@ export function DataTable<T extends object>({
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {onEdit && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-accent" onClick={(e) => { e.stopPropagation(); onEdit(item); }}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-accent" onClick={(e) => { e.stopPropagation(); onEdit(item); }} aria-label="Edit baris">
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           {onDelete && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); onDelete(item); }}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); onDelete(item); }} aria-label="Hapus baris">
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}

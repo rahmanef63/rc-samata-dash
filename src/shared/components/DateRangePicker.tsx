@@ -87,6 +87,7 @@ export function DateRangePicker({ className }: { className?: string }) {
         className="h-7 w-7"
         onClick={goPrev}
         title="Sebelumnya"
+        aria-label="Periode sebelumnya"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
@@ -268,6 +269,7 @@ export function DateRangePicker({ className }: { className?: string }) {
         className="h-7 w-7"
         onClick={goNext}
         title="Berikutnya"
+        aria-label="Periode berikutnya"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </Button>
