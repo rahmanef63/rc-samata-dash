@@ -1,7 +1,7 @@
 /**
  * Shared utility helpers for Convex functions.
  */
-import { MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 
 /**
  * Insert an audit log entry. Call from any mutation.
