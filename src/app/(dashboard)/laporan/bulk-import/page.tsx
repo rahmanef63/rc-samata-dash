@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ScanLine } from "lucide-react";
 import { FilenameScanner } from "@/features/bulk-import/components/FilenameScanner";
 
@@ -12,7 +13,7 @@ export default function BulkImportPage() {
           Scan Filename WA
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Paste daftar nama file dari chat WhatsApp → sistem deteksi vendor + tanggal dari pola filename → export CSV scaffold. Lengkapi <i>amount</i> di Excel, lalu upload via <a href="/upload" className="text-primary hover:underline font-medium">/upload</a> (auto-detect kind: bukti bayar / piutang).
+          Paste daftar nama file dari chat WhatsApp → sistem deteksi vendor + tanggal dari pola filename → export CSV scaffold. Lengkapi <i>amount</i> di Excel, lalu upload via <Link href="/upload" className="text-primary hover:underline font-medium">/upload</Link> (auto-detect kind: bukti bayar / piutang).
         </p>
       </header>
 
