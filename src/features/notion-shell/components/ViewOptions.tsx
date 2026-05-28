@@ -82,7 +82,7 @@ export function ViewOptions({ db, view, onChange, className }: ViewOptionsProps)
                   <option value="asc">Asc</option>
                   <option value="desc">Desc</option>
                 </select>
-                <Button variant="ghost" size="icon" onClick={() => removeSort(i)} className="h-6 w-6 text-muted-foreground"><X className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => removeSort(i)} className="h-6 w-6 text-muted-foreground" aria-label="Hapus pengurutan"><X className="h-3 w-3" /></Button>
               </div>
             ))}
             <Button variant="ghost" size="sm" onClick={addSort} className="mt-1 h-7 justify-start gap-1 px-2 text-xs text-muted-foreground">+ Add sort</Button>
@@ -108,7 +108,7 @@ export function ViewOptions({ db, view, onChange, className }: ViewOptionsProps)
                   {FILTER_OPS.map((op) => (<option key={op} value={op}>{op.replace("_", " ")}</option>))}
                 </select>
                 <Input value={f.value ?? ""} onChange={(e) => updateFilter(i, { value: e.target.value })} className="h-7 flex-1 text-xs" placeholder="value" />
-                <Button variant="ghost" size="icon" onClick={() => removeFilter(i)} className="h-6 w-6 text-muted-foreground"><X className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => removeFilter(i)} className="h-6 w-6 text-muted-foreground" aria-label="Hapus filter"><X className="h-3 w-3" /></Button>
               </div>
             ))}
             <Button variant="ghost" size="sm" onClick={addFilter} className="mt-1 h-7 justify-start gap-1 px-2 text-xs text-muted-foreground">+ Add filter</Button>

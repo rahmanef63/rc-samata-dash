@@ -51,8 +51,8 @@ export function CalendarView({ db, view, rows }: ViewProps) {
   return (
     <div className="p-3">
       <div className="mb-2 flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} className="h-7 w-7 text-muted-foreground"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-        <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} className="h-7 w-7 text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} className="h-7 w-7 text-muted-foreground" aria-label="Bulan sebelumnya"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} className="h-7 w-7 text-muted-foreground" aria-label="Bulan berikutnya"><ChevronRight className="h-3.5 w-3.5" /></Button>
         <span className="text-sm font-medium">{label}</span>
         <Button variant="ghost" size="sm" onClick={() => setCursor(new Date())} className="ml-auto h-7 px-2 text-xs text-muted-foreground">Today</Button>
       </div>
