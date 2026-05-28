@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { SectionHeader, DataTable, CrudDialog, ProgressBar, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Expense } from "@/shared/types";
 import { paymentSourceLabels } from "../lib";
@@ -26,6 +27,7 @@ const columns: Column<Expense>[] = [
 
 export function ExpensesOverview() {
   const [sourceRow, setSourceRow] = useState<Expense | null>(null);
+  const canManage = useCanManageFinance();
 
   const rawCategories = useQuery(api.features.masterData.queries.listExpenseCategories);
   const rawVendors = useQuery(api.features.masterData.queries.listVendors, {});
@@ -156,7 +158,7 @@ export function ExpensesOverview() {
         onReorder={table.setOrderedItems}
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
-        onDelete={crud.openDelete}
+        onDelete={canManage ? crud.openDelete : undefined}
         onRowClick={(item) => setSourceRow(item)}
         entityName="Pengeluaran"
       />

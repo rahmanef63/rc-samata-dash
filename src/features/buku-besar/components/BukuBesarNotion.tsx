@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Property, PropertyValue, SelectOption } from "@/features/notion-shell/types";
 import { EntityNotionView, RefreshCw } from "@/features/notion-shell-wrapper/EntityNotionView";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 import { LEDGER_CONFIG } from "../lib/config";
 import { txToPage, propToColumn, type TxRow } from "../lib/notionAdapter";
 import { useState, useMemo } from "react";
@@ -32,6 +33,7 @@ export function BukuBesarNotion() {
   }) as TxRow[] | undefined;
   const bulkPatch = useMutation(api.features.transactions.mutations.bulkPatchTransactions);
   const bulkDelete = useMutation(api.features.transactions.mutations.bulkDeleteTransactionsCascade);
+  const canManage = useCanManageFinance();
   const backfill = useMutation(api.features.transactions.mutations.backfillTransactions);
   const [busy, setBusy] = useState(false);
 
@@ -95,14 +97,14 @@ export function BukuBesarNotion() {
         });
         return res;
       }}
-      onBulkDelete={async (ids) => {
+      onBulkDelete={canManage ? async (ids) => {
         const res = await bulkDelete({
           ids: ids as Id<"transactions">[],
         });
         // Cascade also wiped proyeksi (closings/expenses/sales/payables/etc).
         toast.success(`${res.txDeleted} tx + ${res.projDeleted} proyeksi rows dihapus`);
         return { deleted: res.txDeleted };
-      }}
+      } : undefined}
       toolbarExtras={
         <button
           onClick={handleBackfill}

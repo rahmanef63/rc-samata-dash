@@ -6,6 +6,7 @@ import { Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { SectionHeader, DataTable, CrudDialog, RowSourceDialog } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { PettyCashRequest } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
@@ -80,6 +81,7 @@ export function PettyCashOverview() {
   const createPettyCashRequest = useCreatePettyCashRequest();
   const updatePettyCashRequest = useUpdatePettyCashRequest();
   const deletePettyCashRequest = useDeletePettyCashRequest();
+  const canManage = useCanManageFinance();
   const crud = useConvexCrudState<PettyCashRequest>({
     createMutation: createPettyCashRequest,
     updateMutation: updatePettyCashRequest,
@@ -166,7 +168,7 @@ export function PettyCashOverview() {
         onReorder={table.setOrderedItems}
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
-        onDelete={crud.openDelete}
+        onDelete={canManage ? crud.openDelete : undefined}
         onRowClick={(item) => setSourceRow(item)}
         entityName="Petty Cash"
       />
