@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { BRAND } from "@/config/branding";
@@ -35,7 +35,9 @@ function useFullMeta(subtitle: string | undefined, meta: MetaItem[] | undefined)
   return { fullMeta, rangeLabel };
 }
 
-export function ReportPrintHeader({ title, subtitle, meta }: CommonProps) {
+// Internal — only ReportPrintShell may render the print header/footer.
+// Surfaces must NOT import these directly; wrap content in <ReportPrintShell>.
+function PrintHeader({ title, subtitle, meta }: CommonProps) {
   const { fullMeta, rangeLabel } = useFullMeta(subtitle, meta);
   return (
     <header className="print-only print-report-header">
@@ -63,7 +65,7 @@ export function ReportPrintHeader({ title, subtitle, meta }: CommonProps) {
   );
 }
 
-export function ReportPrintFooter({ title }: { title: string }) {
+function PrintFooter({ title }: { title: string }) {
   return (
     <footer className="print-only print-report-footer">
       <span>{BRAND.name}</span>
@@ -74,8 +76,14 @@ export function ReportPrintFooter({ title }: { title: string }) {
 }
 
 /**
- * Wraps a printable region with brand header + footer rendered only in print
- * mode. Screen layout is unchanged.
+ * Single source of truth for the printed report header + footer.
+ *
+ * Renders as a Fragment (layout-transparent) so it can wrap content inside any
+ * parent — including ones using `space-y-*` — without collapsing spacing. The
+ * header/footer are print-only; on screen this renders just `children`.
+ *
+ * Every printable surface MUST route its print header through this component.
+ * The raw PrintHeader/PrintFooter are intentionally module-private.
  */
 export function ReportPrintShell({
   title,
@@ -84,10 +92,10 @@ export function ReportPrintShell({
   children,
 }: CommonProps & { children: ReactNode }) {
   return (
-    <div data-print-region="report" className="contents">
-      <ReportPrintHeader title={title} subtitle={subtitle} meta={meta} />
+    <Fragment>
+      <PrintHeader title={title} subtitle={subtitle} meta={meta} />
       {children}
-      <ReportPrintFooter title={title} />
-    </div>
+      <PrintFooter title={title} />
+    </Fragment>
   );
 }

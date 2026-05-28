@@ -17,9 +17,10 @@ type MetaItem = { label: string; value: string };
  *     <FeatureBody />
  *   </ReportPage>
  *
- * For surfaces with a dynamic header (e.g. weekly drilldown — title depends
- * on loaded data), skip this composer and use ReportPrintHeader/Footer
- * primitives directly.
+ * For surfaces with a bare/dynamic header (e.g. weekly drilldown — title
+ * depends on loaded data, or components that render their own screen header),
+ * skip this composer but still wrap the body in <ReportPrintShell> so the
+ * print header stays single-sourced.
  */
 export function ReportPage({
   icon,

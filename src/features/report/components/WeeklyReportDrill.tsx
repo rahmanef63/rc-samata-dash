@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatRpFull } from "@/shared/lib";
 import { useFilteredByDate } from "@/shared/hooks";
-import { ReportButton, ReportPrintHeader, ReportPrintFooter } from "@/features/report-pdf";
+import { ReportButton, ReportPrintShell } from "@/features/report-pdf";
 
 type TabDef = {
   key: string;
@@ -403,14 +403,13 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
         <ReportButton hint="Cetak tab aktif sebagai PDF" />
       </div>
 
-      <ReportPrintHeader
+      <ReportPrintShell
         title={`Laporan Mingguan · ${report.periodStart} — ${report.periodEnd}`}
         subtitle={report.fileName ?? undefined}
         meta={[{ label: "Status", value: report.status }]}
-      />
-
+      >
       {/* Tab strip */}
-      <div className="border-b overflow-x-auto">
+      <div className="border-b overflow-x-auto" data-print="hide">
         <div className="flex gap-1 min-w-max">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -728,10 +727,7 @@ export function WeeklyReportDrill({ reportId }: { reportId: Id<"weeklyReports"> 
       )}
 
       {active === "audit" && <AuditPanel reportId={reportId} />}
-
-      <ReportPrintFooter
-        title={`Laporan Mingguan · ${report.periodStart} — ${report.periodEnd}`}
-      />
+      </ReportPrintShell>
     </div>
   );
 }

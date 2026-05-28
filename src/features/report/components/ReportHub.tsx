@@ -43,7 +43,7 @@ import {
 import { formatRpFull } from "@/shared/lib";
 import { formatDateRange, formatShortDate } from "@/shared/lib";
 import { useUserRole } from "@/features/auth/useUserRole";
-import { ReportButton, ReportPrintHeader, ReportPrintFooter } from "@/features/report-pdf";
+import { ReportButton, ReportPrintShell } from "@/features/report-pdf";
 
 const STATUS_LABEL: Record<string, string> = {
   processed: "Diproses",
@@ -196,7 +196,7 @@ export default function ReportHub() {
         <ReportButton />
       </div>
 
-      <ReportPrintHeader title="Daftar Laporan Mingguan" />
+      <ReportPrintShell title="Daftar Laporan Mingguan">
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -446,8 +446,7 @@ export default function ReportHub() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <ReportPrintFooter title="Daftar Laporan Mingguan" />
+      </ReportPrintShell>
     </motion.div>
   );
 }

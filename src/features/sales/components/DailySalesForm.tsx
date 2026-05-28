@@ -14,7 +14,7 @@ import { labelChannel } from "../constants/channels";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { ReportButton, ReportPrintHeader, ReportPrintFooter } from "@/features/report-pdf";
+import { ReportButton, ReportPrintShell } from "@/features/report-pdf";
 
 const fields: FieldConfig[] = [
   { key: "businessDate", label: "Tanggal", type: "date", required: true },
@@ -104,8 +104,7 @@ export function DailySalesForm() {
         <ReportButton hint="Cetak tab aktif sebagai PDF" />
       </div>
 
-      <ReportPrintHeader title="Laporan Penjualan" />
-
+      <ReportPrintShell title="Laporan Penjualan">
       <div className="flex flex-wrap gap-2" data-print="hide">
         {subTabs.map((t, i) => (
           <button key={t} onClick={() => setSub(i)}
@@ -239,7 +238,7 @@ export function DailySalesForm() {
           </div>
         </>
       )}
-      <ReportPrintFooter title="Laporan Penjualan" />
+      </ReportPrintShell>
     </motion.div>
   );
 }
