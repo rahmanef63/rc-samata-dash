@@ -38,7 +38,7 @@ export const seedMasterData = mutation({
     const userId = await requireAuth(ctx);
 
     let catSeeded = 0;
-    const existingCats = await ctx.db.query("expenseCategories").collect();
+    const existingCats = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const existingCatNames = new Set(existingCats.map((c) => c.name.toLowerCase()));
     for (const c of DEFAULT_EXPENSE_CATEGORIES) {
       if (existingCatNames.has(c.name.toLowerCase())) continue;
@@ -47,7 +47,7 @@ export const seedMasterData = mutation({
     }
 
     let chanSeeded = 0;
-    const existingChans = await ctx.db.query("incomeChannels").collect();
+    const existingChans = await ctx.db.query("incomeChannels").take(LIMITS.CHANNELS_PAGE);
     const existingChanNames = new Set(existingChans.map((c) => c.name.toLowerCase()));
     for (const c of DEFAULT_INCOME_CHANNELS) {
       if (existingChanNames.has(c.name.toLowerCase())) continue;
@@ -67,7 +67,7 @@ export const deriveVendors = mutation({
     const userId = await requireAuth(ctx);
 
     const credits = await ctx.db.query("creditPurchases").take(LIMITS.STAGING_PAGE);
-    const existingVendors = await ctx.db.query("vendors").collect();
+    const existingVendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const existingNames = new Set(existingVendors.map((v) => v.name.toLowerCase()));
 
     const distinct = new Set<string>();
@@ -104,7 +104,7 @@ async function vendorIdByName(ctx: any, name: string): Promise<any> {
 }
 
 async function channelIdByPattern(ctx: any, hint: string): Promise<{ id: any; name: string } | null> {
-  const chans = await ctx.db.query("incomeChannels").collect();
+  const chans = await ctx.db.query("incomeChannels").take(LIMITS.CHANNELS_PAGE);
   const upper = hint.toUpperCase();
   const map: Record<string, string> = {
     gofood: "gofood",
@@ -414,7 +414,7 @@ export const bridgeCashFlowToExpenses = mutation({
     if (!report) return { inserted: 0, reason: "report not found" };
 
     // Find the "Pengeluaran Kas Kecil" category
-    const categories = await ctx.db.query("expenseCategories").collect();
+    const categories = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const cat =
       categories.find((c) => c.name === "Pengeluaran Kas Kecil") ??
       categories.find((c) => c.type === "other") ??
@@ -569,7 +569,7 @@ export const seedMasterDataInternal = internalMutation({
   args: {},
   handler: async (ctx): Promise<any> => {
     let catSeeded = 0;
-    const existingCats = await ctx.db.query("expenseCategories").collect();
+    const existingCats = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const existingCatNames = new Set(existingCats.map((c) => c.name.toLowerCase()));
     for (const c of DEFAULT_EXPENSE_CATEGORIES) {
       if (existingCatNames.has(c.name.toLowerCase())) continue;
@@ -577,7 +577,7 @@ export const seedMasterDataInternal = internalMutation({
       catSeeded++;
     }
     let chanSeeded = 0;
-    const existingChans = await ctx.db.query("incomeChannels").collect();
+    const existingChans = await ctx.db.query("incomeChannels").take(LIMITS.CHANNELS_PAGE);
     const existingChanNames = new Set(existingChans.map((c) => c.name.toLowerCase()));
     for (const c of DEFAULT_INCOME_CHANNELS) {
       if (existingChanNames.has(c.name.toLowerCase())) continue;
@@ -602,7 +602,7 @@ export const deriveVendorsInternal = internalMutation({
   args: {},
   handler: async (ctx): Promise<any> => {
     const credits = await ctx.db.query("creditPurchases").take(LIMITS.STAGING_PAGE);
-    const existingVendors = await ctx.db.query("vendors").collect();
+    const existingVendors = await ctx.db.query("vendors").take(LIMITS.VENDORS_PAGE);
     const existingNames = new Set(existingVendors.map((v) => v.name.toLowerCase()));
     const distinct = new Set<string>();
     for (const c of credits) {
@@ -856,7 +856,7 @@ export const bridgeCashFlowToExpensesInternal = internalMutation({
   handler: async (ctx, { reportId }): Promise<any> => {
     const report: any = await ctx.db.get(reportId);
     if (!report) return { inserted: 0 };
-    const categories = await ctx.db.query("expenseCategories").collect();
+    const categories = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const cat = categories.find((c) => c.name === "Pengeluaran Kas Kecil") ?? categories.find((c) => c.type === "other") ?? categories[0];
     if (!cat) return { inserted: 0, reason: "no categories" };
     const flows = await ctx.db.query("dailyCashFlow").withIndex("by_report", (q) => q.eq("reportId", reportId)).collect();
@@ -1043,7 +1043,7 @@ export const bridgeIncentivesToExpensesInternal = internalMutation({
   handler: async (ctx, { reportId }): Promise<any> => {
     const report: any = await ctx.db.get(reportId);
     if (!report) return { inserted: 0 };
-    const categories = await ctx.db.query("expenseCategories").collect();
+    const categories = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const cat = categories.find((c) => c.type === "salary_support") ?? categories.find((c) => c.name === "Insentif / Gaji");
     if (!cat) return { inserted: 0, reason: "no salary_support category" };
 
@@ -1292,7 +1292,7 @@ export const backfillStagingCategoryIdsInternal = internalMutation({
     transferFixed: number;
     unmatchedNames: string[];
   }> => {
-    const cats = await ctx.db.query("expenseCategories").collect();
+    const cats = await ctx.db.query("expenseCategories").take(LIMITS.CATEGORIES_PAGE);
     const m = new Map<string, any>();
     for (const c of cats) m.set(c.name.toLowerCase().trim(), c._id);
 
