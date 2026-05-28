@@ -1,6 +1,6 @@
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRowSelection } from "..";
+import { useRowSelection } from "./RowSelectionProvider";
 
 export function HeaderCheckboxGutter({ rowIds }: { rowIds: string[] }) {
   const sel = useRowSelection();
