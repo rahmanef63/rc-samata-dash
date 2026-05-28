@@ -2,7 +2,7 @@ import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
 import { aiProviderValidator, aiToolCategoryValidator } from "./_schema";
 import { BUILTIN_AI_AGENT_MANIFEST, BUILTIN_AI_TOOL_MANIFEST } from "./toolManifest";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { BRAND } from "../../config/branding";
 
 const now = () => new Date().toISOString();
@@ -39,7 +39,7 @@ export const upsertProvider = mutation({
     embeddingBaseUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     if (args.isActive) {
       const active = await ctx.db
         .query("aiProviders")
@@ -100,7 +100,7 @@ export const upsertProvider = mutation({
 export const deleteProvider = mutation({
   args: { id: v.id("aiProviders") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     await ctx.db.delete(id);
   },
 });
@@ -109,7 +109,7 @@ export const deleteProvider = mutation({
 export const setActiveProvider = mutation({
   args: { id: v.id("aiProviders") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const all = await ctx.db
       .query("aiProviders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -137,7 +137,7 @@ export const upsertTool = mutation({
     parameters: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     if (args.id) {
       await ctx.db.patch(args.id, {
         toolId: args.toolId,
@@ -168,7 +168,7 @@ export const upsertTool = mutation({
 export const toggleTool = mutation({
   args: { id: v.id("aiTools"), isEnabled: v.boolean() },
   handler: async (ctx, { id, isEnabled }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     await ctx.db.patch(id, { isEnabled });
   },
 });
@@ -188,7 +188,7 @@ export const upsertAgent = mutation({
     isEnabled: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     if (args.id) {
       await ctx.db.patch(args.id, {
         agentId: args.agentId,
@@ -220,7 +220,7 @@ export const upsertAgent = mutation({
 export const toggleAgent = mutation({
   args: { id: v.id("aiAgents"), isEnabled: v.boolean() },
   handler: async (ctx, { id, isEnabled }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     await ctx.db.patch(id, { isEnabled, updatedAt: now() });
   },
 });
@@ -229,7 +229,7 @@ export const toggleAgent = mutation({
 export const deleteAgent = mutation({
   args: { id: v.id("aiAgents") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const agent = await ctx.db.get(id);
     if (agent?.isBuiltIn) throw new Error("Tidak bisa menghapus agent bawaan.");
     await ctx.db.delete(id);
@@ -240,7 +240,7 @@ export const deleteAgent = mutation({
 export const seedDefaultAgents = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const existing = await ctx.db.query("aiAgents").take(1000);
     const existingByAgentId = new Map(existing.map((agent) => [agent.agentId, agent]));
 
@@ -294,7 +294,7 @@ export const seedDefaultAgents = mutation({
 export const deleteTool = mutation({
   args: { id: v.id("aiTools") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const tool = await ctx.db.get(id);
     if (tool?.isBuiltIn) throw new Error("Tidak bisa menghapus tool bawaan.");
     await ctx.db.delete(id);
@@ -305,7 +305,7 @@ export const deleteTool = mutation({
 export const seedDefaultTools = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const existing = await ctx.db.query("aiTools").take(1000);
     const existingByToolId = new Map(existing.map((tool) => [tool.toolId, tool]));
 
@@ -362,7 +362,7 @@ export const upsertInstruction = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     // If setting active, deactivate others
     if (args.isActive) {
       const active = await ctx.db
@@ -400,7 +400,7 @@ export const upsertInstruction = mutation({
 export const deleteInstruction = mutation({
   args: { id: v.id("aiCustomInstructions") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const inst = await ctx.db.get(id);
     if (inst?.isDefault) throw new Error("Tidak bisa menghapus instruksi default.");
     await ctx.db.delete(id);
@@ -411,7 +411,7 @@ export const deleteInstruction = mutation({
 export const setActiveInstruction = mutation({
   args: { id: v.id("aiCustomInstructions") },
   handler: async (ctx, { id }) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const all = await ctx.db
       .query("aiCustomInstructions")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -427,7 +427,7 @@ export const setActiveInstruction = mutation({
 export const seedDefaultInstruction = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
+    await requireRole(ctx, ["super_admin"]);
     const existing = await ctx.db
       .query("aiCustomInstructions")
       .withIndex("by_default", (q) => q.eq("isDefault", true))
