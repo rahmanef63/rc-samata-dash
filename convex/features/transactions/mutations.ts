@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { LIMITS } from "../../shared/limits";
 import { PARTY } from "../../projectConstants";
@@ -143,7 +143,7 @@ export const bulkDeleteTransactions = mutation({
     ids: v.array(v.id("transactions")),
   },
   handler: async (ctx, { ids }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     let deleted = 0;
     let cleared = 0;
     // Cascade: clear bridge-FK pointers on legacy rows that reference
@@ -236,7 +236,7 @@ export const bulkDeleteTransactionsCascade = mutation({
     ids: v.array(v.id("transactions")),
   },
   handler: async (ctx, { ids }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     let txDeleted = 0;
     let projDeleted = 0;
 

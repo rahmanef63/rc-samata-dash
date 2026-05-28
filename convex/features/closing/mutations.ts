@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { inferTxKind } from "../../shared/txClassify";
 import { buildVendorIndex } from "../../shared/vendorResolver";
@@ -188,7 +188,7 @@ export const updateClosing = mutation({
 export const removeClosing = mutation({
   args: { id: v.id("dailyClosings") },
   handler: async (ctx, { id }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Closing not found");
     if (existing.transactionId) {
@@ -216,7 +216,7 @@ export const createTransfer = mutation({
     toPocketId: v.optional(v.id("pockets")),
   },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     if (args.amount <= 0) throw new Error("Transfer amount must be > 0");
     if (!args.referenceNo.trim()) throw new Error("No. referensi wajib diisi");
     const id = await ctx.db.insert("ownerTransfers", args);
@@ -254,7 +254,7 @@ export const updateTransfer = mutation({
     status: v.optional(transferStatusValidator),
   },
   handler: async (ctx, { id, ...data }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Transfer not found");
     if (data.amount !== undefined && data.amount <= 0) {
@@ -287,7 +287,7 @@ export const updateTransfer = mutation({
 export const removeTransfer = mutation({
   args: { id: v.id("ownerTransfers") },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Transfer not found");
     // Cascade tx mirror SSOT.
@@ -531,7 +531,7 @@ export const patchPaymentReceipt = mutation({
 export const removePaymentReceipt = mutation({
   args: { id: v.id("paymentReceipts") },
   handler: async (ctx, { id }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const r = await ctx.db.get(id);
     if (!r) throw new Error("Receipt not found");
     if (r.payableId) {
@@ -579,7 +579,7 @@ export const createBankStatementBatch = mutation({
 export const removeBankStatementBatch = mutation({
   args: { id: v.id("bankStatementBatches") },
   handler: async (ctx, { id }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const b = await ctx.db.get(id);
     if (!b) throw new Error("Batch not found");
 
@@ -1577,7 +1577,7 @@ export const commitAutoMatchSuggestions = mutation({
 export const deleteValidationBatch = mutation({
   args: { batchId: v.id("validationBatches") },
   handler: async (ctx, { batchId }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const batch = await ctx.db.get(batchId);
     if (!batch) throw new Error("Batch validasi tidak ditemukan");
 
