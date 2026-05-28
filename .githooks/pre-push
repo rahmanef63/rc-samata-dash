@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-push gate: run the vitest suite before a push is allowed.
+# Enabled automatically via the package.json "prepare" script, which points
+# core.hooksPath at this directory on `pnpm install`.
+# Bypass in an emergency with:  git push --no-verify
+#
+# Kept deliberately fast (unit tests only, ~3s). The full lint + typecheck +
+# test gate runs in the manual .github/workflows/test.yml (workflow_dispatch).
+set -e
+
+echo "[pre-push] running test suite (pnpm test:run)…"
+pnpm test:run

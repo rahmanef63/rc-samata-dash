@@ -11,7 +11,7 @@
  */
 import { mutation, query, type MutationCtx } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { accountingPeriodStatusValidator } from "./_schema";
 
@@ -72,7 +72,7 @@ export const upsertPeriod = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db
       .query("accountingPeriods")
       .withIndex("by_yearMonth", (q) => q.eq("yearMonth", args.yearMonth))
@@ -132,7 +132,7 @@ export const upsertPeriod = mutation({
 export const deletePeriod = mutation({
   args: { id: v.id("accountingPeriods") },
   handler: async (ctx, { id }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const row = await ctx.db.get(id);
     if (!row) return;
     if (row.status === "closed") {

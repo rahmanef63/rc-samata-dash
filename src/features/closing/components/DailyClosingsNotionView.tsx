@@ -5,6 +5,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Page, PropertyValue } from "@/features/notion-shell/types";
 import { EntityNotionView } from "@/features/notion-shell-wrapper/EntityNotionView";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 
 type Row = {
   _id: string; _creationTime: number;
@@ -54,6 +55,7 @@ export function DailyClosingsNotionView() {
   const rows = useQuery(api.features.closing.queries.listClosings, {}) as Row[] | undefined;
   const patch = useMutation(api.features.closing.mutations.updateClosing);
   const removeClosing = useMutation(api.features.closing.mutations.removeClosing);
+  const canManage = useCanManageFinance();
 
   return (
     <EntityNotionView<Row>
@@ -75,14 +77,14 @@ export function DailyClosingsNotionView() {
         }
         return { updated, errors };
       }}
-      onBulkDelete={async (ids) => {
+      onBulkDelete={canManage ? async (ids) => {
         let deleted = 0;
         for (const id of ids) {
           try { await removeClosing({ id: id as Id<"dailyClosings"> }); deleted++; }
           catch { /* skip, surface lewat toast caller */ }
         }
         return { deleted };
-      }}
+      } : undefined}
     />
   );
 }

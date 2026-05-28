@@ -216,7 +216,7 @@ export const createTransfer = mutation({
     toPocketId: v.optional(v.id("pockets")),
   },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     if (args.amount <= 0) throw new Error("Transfer amount must be > 0");
     if (!args.referenceNo.trim()) throw new Error("No. referensi wajib diisi");
     const id = await ctx.db.insert("ownerTransfers", args);
@@ -254,7 +254,7 @@ export const updateTransfer = mutation({
     status: v.optional(transferStatusValidator),
   },
   handler: async (ctx, { id, ...data }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Transfer not found");
     if (data.amount !== undefined && data.amount <= 0) {
@@ -1577,7 +1577,7 @@ export const commitAutoMatchSuggestions = mutation({
 export const deleteValidationBatch = mutation({
   args: { batchId: v.id("validationBatches") },
   handler: async (ctx, { batchId }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const batch = await ctx.db.get(batchId);
     if (!batch) throw new Error("Batch validasi tidak ditemukan");
 

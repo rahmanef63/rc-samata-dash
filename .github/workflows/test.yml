@@ -1,0 +1,43 @@
+name: Test
+
+# Manual only (workflow_dispatch) — matches this repo's no-auto-burn policy
+# (see .github/workflows/README.md). Run from the Actions UI for a clean-room
+# check of lint + typecheck + the vitest suite. The local pre-push hook in
+# .githooks/ is the day-to-day gate; this is the on-demand authoritative run.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test:run

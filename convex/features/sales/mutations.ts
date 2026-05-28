@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { mirrorTx, syncTxFromSales } from "../transactions/_helpers";
 
@@ -137,7 +137,7 @@ export const patch = mutation({
 export const remove = mutation({
   args: { id: v.id("dailySales") },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Record not found");
     // Cascade ke Buku Besar SSOT — hapus tx mirror.

@@ -7,6 +7,7 @@ import { AlertTriangle, ExternalLink } from "lucide-react";
 import { SectionHeader, DataTable, CrudDialog, RowSourceDialog, deriveSourceFromEtl } from "@/shared/components";
 import type { FieldConfig, Column } from "@/shared/components";
 import { useConvexCrudState, useTableState, useFilteredByDate } from "@/shared/hooks";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Payable } from "@/shared/types";
 import { formatRpFull } from "@/shared/lib";
@@ -124,6 +125,7 @@ export function PayablesOverview() {
   const createPayable = useCreatePayable();
   const updatePayable = useUpdatePayable();
   const deletePayable = useDeletePayable();
+  const canManage = useCanManageFinance();
   const crud = useConvexCrudState<Payable>({
     createMutation: createPayable,
     updateMutation: updatePayable,
@@ -219,7 +221,7 @@ export function PayablesOverview() {
         onReorder={table.setOrderedItems}
         onAdd={crud.openCreate}
         onEdit={crud.openEdit}
-        onDelete={crud.openDelete}
+        onDelete={canManage ? crud.openDelete : undefined}
         onRowClick={(item) => setSourceRow(item)}
         entityName="Piutang"
       />

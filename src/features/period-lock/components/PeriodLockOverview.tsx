@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Lock, LockOpen, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useCanManageFinance } from "@/features/auth/useUserRole";
 
 type Status = "open" | "locked" | "closed";
 
@@ -46,6 +47,7 @@ export function PeriodLockOverview() {
   const periods = useQuery(api.features.closing.periodLock.listPeriods, {}) as Period[] | undefined;
   const upsert = useMutation(api.features.closing.periodLock.upsertPeriod);
   const remove = useMutation(api.features.closing.periodLock.deletePeriod);
+  const canManage = useCanManageFinance();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [yearMonth, setYearMonth] = useState(currentYearMonth());
@@ -106,9 +108,11 @@ export function PeriodLockOverview() {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{periods.length} periode terdaftar</p>
-        <Button size="sm" onClick={() => { setYearMonth(currentYearMonth()); setStatus("locked"); setNotes(""); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1" /> Atur Periode
-        </Button>
+        {canManage && (
+          <Button size="sm" onClick={() => { setYearMonth(currentYearMonth()); setStatus("locked"); setNotes(""); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> Atur Periode
+          </Button>
+        )}
       </div>
 
       {periods.length === 0 ? (
@@ -142,7 +146,7 @@ export function PeriodLockOverview() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className={`text-[10px] ${meta.color}`}>{meta.label}</Badge>
-                  {p.status !== "closed" && (
+                  {p.status !== "closed" && canManage && (
                     <>
                       {p.status === "open" && (
                         <Button variant="outline" size="sm" onClick={() => handleSet(p.yearMonth, "locked")}>

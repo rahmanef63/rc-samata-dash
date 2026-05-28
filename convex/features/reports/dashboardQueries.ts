@@ -5,7 +5,18 @@
 import { query, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "../../shared/auth";
+import { LIMITS } from "../../shared/limits";
 import type { Id } from "../../_generated/dataModel";
+
+// Date-ranged trend queries scan via the existing by_date / by_period indexes.
+// businessDate / periodStart are YYYY-MM-DD strings that sort chronologically,
+// so string range bounds are correct without an ms migration. The index window
+// is widened ±1 day and the exact Date.parse filter below is kept unchanged, so
+// results match the prior full-scan exactly — only the I/O is now bounded. The
+// no-arg path takes the most recent rows (by_date desc) to preserve the
+// "last N data-dates" slice semantics.
+const DAY_MS = 86_400_000;
+const msToDateStr = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /**
  * Sales trend for the last 7 days of uploaded data.
@@ -19,7 +30,20 @@ export const getWeeklySalesTrend = query({
   handler: async (ctx, { startDate, endDate }) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db.query("productSales").collect();
+    const lo = startDate != null ? msToDateStr(startDate - DAY_MS) : "";
+    const hi = endDate != null ? msToDateStr(endDate + DAY_MS) : "";
+    const sales =
+      startDate != null && endDate != null
+        ? await ctx.db
+            .query("productSales")
+            .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
+            .take(LIMITS.BACKFILL_BATCH)
+        : await ctx.db
+            .query("productSales")
+            .withIndex("by_date")
+            .order("desc")
+            .take(LIMITS.STAGING_PAGE);
 
     const byDate: Record<string, number> = {};
     for (const s of sales) {
@@ -47,7 +71,11 @@ export const getWeeklySalesTrendInternal = internalQuery({
   handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db.query("productSales").collect();
+    const sales = await ctx.db
+      .query("productSales")
+      .withIndex("by_date")
+      .order("desc")
+      .take(LIMITS.STAGING_PAGE);
 
     const byDate: Record<string, number> = {};
     for (const s of sales) {
@@ -78,7 +106,20 @@ export const getMonthlySalesTrend = query({
   handler: async (ctx, { startDate, endDate }) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db.query("productSales").collect();
+    const lo = startDate != null ? msToDateStr(startDate - DAY_MS) : "";
+    const hi = endDate != null ? msToDateStr(endDate + DAY_MS) : "";
+    const sales =
+      startDate != null && endDate != null
+        ? await ctx.db
+            .query("productSales")
+            .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
+            .take(LIMITS.BACKFILL_BATCH)
+        : await ctx.db
+            .query("productSales")
+            .withIndex("by_date")
+            .order("desc")
+            .take(LIMITS.STAGING_PAGE);
 
     const byDate: Record<string, number> = {};
     for (const sale of sales) {
@@ -105,7 +146,11 @@ export const getMonthlySalesTrendInternal = internalQuery({
   handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const sales = await ctx.db.query("productSales").collect();
+    const sales = await ctx.db
+      .query("productSales")
+      .withIndex("by_date")
+      .order("desc")
+      .take(LIMITS.STAGING_PAGE);
 
     const byDate: Record<string, number> = {};
     for (const sale of sales) {
@@ -141,20 +186,35 @@ export const getExpenseBreakdown = query({
 
     if (reports.length === 0) return [];
 
-    const reportIds = new Set(reports.map((r) => r._id));
+    const reportIds = [...new Set(reports.map((r) => r._id))];
 
-    // Food cost summaries — sum usageValue per category
-    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
-
-    const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
+    // Food cost summaries — sum usageValue per category (indexed per report)
+    const fcFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("foodCostSummary")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const byCat: Record<string, number> = {};
     for (const f of fcFiltered) {
       byCat[f.category] = (byCat[f.category] ?? 0) + f.usageValue;
     }
 
     // Also add incentives (payroll)
-    const incentives = await ctx.db.query("employeeIncentives").collect();
-    const incFiltered = incentives.filter((i) => reportIds.has(i.reportId));
+    const incFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("employeeIncentives")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalIncentive = incFiltered.reduce((s, i) => s + i.amount, 0);
     if (totalIncentive > 0) byCat["Insentif / Gaji"] = totalIncentive;
 
@@ -186,18 +246,33 @@ export const getExpenseBreakdownInternal = internalQuery({
 
     if (reports.length === 0) return [];
 
-    const reportIds = new Set(reports.map((r) => r._id));
+    const reportIds = [...new Set(reports.map((r) => r._id))];
 
-    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
-
-    const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
+    const fcFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("foodCostSummary")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const byCat: Record<string, number> = {};
     for (const f of fcFiltered) {
       byCat[f.category] = (byCat[f.category] ?? 0) + f.usageValue;
     }
 
-    const incentives = await ctx.db.query("employeeIncentives").collect();
-    const incFiltered = incentives.filter((i) => reportIds.has(i.reportId));
+    const incFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("employeeIncentives")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalIncentive = incFiltered.reduce((s, i) => s + i.amount, 0);
     if (totalIncentive > 0) byCat["Insentif / Gaji"] = totalIncentive;
 
@@ -225,26 +300,40 @@ export const getCashflowWaterfall = query({
   handler: async (ctx) => {
     await requireAuth(ctx);
 
-    // Sum all cash flow entries
-    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
-
     // Get last 4 reports
     const reports = await ctx.db
       .query("weeklyReports")
       .withIndex("by_uploadedAt")
       .order("desc")
       .take(4);
-    const reportIds = new Set(reports.map((r) => r._id));
+    const reportIds = [...new Set(reports.map((r) => r._id))];
 
-    const cfFiltered = cashFlows.filter((cf) => reportIds.has(cf.reportId));
+    const cfFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("dailyCashFlow")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalSales = cfFiltered.reduce((s, cf) => s + cf.salesInflow, 0);
     const totalExpense = cfFiltered.reduce((s, cf) => s + cf.expenseOutflow, 0);
     const totalOtherIn = cfFiltered.reduce((s, cf) => s + cf.otherInflow, 0);
     const totalOtherOut = cfFiltered.reduce((s, cf) => s + cf.otherOutflow, 0);
 
-    // COGS from food cost summary
-    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
-    const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
+    // COGS from food cost summary (indexed per report)
+    const fcFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("foodCostSummary")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalCOGS = fcFiltered.reduce((s, f) => s + f.usageValue, 0);
 
     const opex = totalExpense - totalCOGS;
@@ -266,23 +355,38 @@ export const getCashflowWaterfallInternal = internalQuery({
   handler: async (ctx) => {
     await requireAuth(ctx);
 
-    const cashFlows = await ctx.db.query("dailyCashFlow").collect();
-
     const reports = await ctx.db
       .query("weeklyReports")
       .withIndex("by_uploadedAt")
       .order("desc")
       .take(4);
-    const reportIds = new Set(reports.map((r) => r._id));
+    const reportIds = [...new Set(reports.map((r) => r._id))];
 
-    const cfFiltered = cashFlows.filter((cf) => reportIds.has(cf.reportId));
+    const cfFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("dailyCashFlow")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalSales = cfFiltered.reduce((s, cf) => s + cf.salesInflow, 0);
     const totalExpense = cfFiltered.reduce((s, cf) => s + cf.expenseOutflow, 0);
     const totalOtherIn = cfFiltered.reduce((s, cf) => s + cf.otherInflow, 0);
     const totalOtherOut = cfFiltered.reduce((s, cf) => s + cf.otherOutflow, 0);
 
-    const fcSummaries = await ctx.db.query("foodCostSummary").collect();
-    const fcFiltered = fcSummaries.filter((f) => reportIds.has(f.reportId));
+    const fcFiltered = (
+      await Promise.all(
+        reportIds.map((rid) =>
+          ctx.db
+            .query("foodCostSummary")
+            .withIndex("by_report", (q) => q.eq("reportId", rid))
+            .take(LIMITS.STAGING_PAGE),
+        ),
+      )
+    ).flat();
     const totalCOGS = fcFiltered.reduce((s, f) => s + f.usageValue, 0);
 
     const opex = totalExpense - totalCOGS;
@@ -512,10 +616,29 @@ export const getFinancialTrend = query({
       return t >= startDate && t < endDate;
     };
 
+    const lo = startDate != null ? msToDateStr(startDate - DAY_MS) : "";
+    const hi = endDate != null ? msToDateStr(endDate + DAY_MS) : "";
+    const useRange = startDate != null && endDate != null;
     const [sales, fcSummary, salesCtrl] = await Promise.all([
-      ctx.db.query("productSales").collect(),
-      ctx.db.query("foodCostSummary").collect(),
-      ctx.db.query("salesControl").collect(),
+      useRange
+        ? ctx.db
+            .query("productSales")
+            .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
+            .take(LIMITS.BACKFILL_BATCH)
+        : ctx.db.query("productSales").withIndex("by_date").order("desc").take(LIMITS.BACKFILL_BATCH),
+      useRange
+        ? ctx.db
+            .query("foodCostSummary")
+            .withIndex("by_period", (q) => q.gte("periodStart", lo).lte("periodStart", hi))
+            .take(LIMITS.STAGING_PAGE)
+        : ctx.db.query("foodCostSummary").withIndex("by_period").order("desc").take(LIMITS.STAGING_PAGE),
+      useRange
+        ? ctx.db
+            .query("salesControl")
+            .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .take(LIMITS.SALES_PAGE)
+        : ctx.db.query("salesControl").withIndex("by_date").order("desc").take(LIMITS.SALES_PAGE),
     ]);
 
     // Aggregate revenue per day

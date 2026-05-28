@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireAuth } from "../../shared/auth";
+import { requireAuth, requireRole } from "../../shared/auth";
 import { insertAuditLog } from "../../shared/helpers";
 import { pocketKindValidator, pocketFlowReasonValidator } from "./_schema";
 
@@ -64,7 +64,7 @@ export const updatePocket = mutation({
 export const deletePocket = mutation({
   args: { id: v.id("pockets") },
   handler: async (ctx, { id }) => {
-    const userId = await requireAuth(ctx);
+    const userId = await requireRole(ctx, ["owner", "super_admin"]);
     // Soft delete via isActive=false to preserve historical FKs.
     await ctx.db.patch(id, { isActive: false, updatedAt: Date.now() });
     await insertAuditLog(ctx, {

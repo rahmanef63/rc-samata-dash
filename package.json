@@ -15,13 +15,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
     "seed:users": "npx tsx scripts/seed-users.ts",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy --yes",
     "convex:codegen": "convex dev --once",
-    "convex:push": "convex deploy --yes"
+    "convex:push": "convex deploy --yes",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@auth/core": "^0.37.2",
