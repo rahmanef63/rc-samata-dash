@@ -14,6 +14,7 @@ import { labelChannel } from "../constants/channels";
 import { useDailySales, useCreateSale, useUpdateSale, useDeleteSale } from "../api";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { ReportButton, ReportPrintHeader, ReportPrintFooter } from "@/features/report-pdf";
 
 const fields: FieldConfig[] = [
   { key: "businessDate", label: "Tanggal", type: "date", required: true },
@@ -93,7 +94,19 @@ export function DailySalesForm() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-start justify-between gap-3" data-print="hide">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">Penjualan</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Input penjualan harian per channel, settlement, dan riwayat transaksi.
+          </p>
+        </div>
+        <ReportButton hint="Cetak tab aktif sebagai PDF" />
+      </div>
+
+      <ReportPrintHeader title="Laporan Penjualan" />
+
+      <div className="flex flex-wrap gap-2" data-print="hide">
         {subTabs.map((t, i) => (
           <button key={t} onClick={() => setSub(i)}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${
@@ -226,6 +239,7 @@ export function DailySalesForm() {
           </div>
         </>
       )}
+      <ReportPrintFooter title="Laporan Penjualan" />
     </motion.div>
   );
 }
