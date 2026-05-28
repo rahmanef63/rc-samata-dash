@@ -37,6 +37,7 @@ export const getWeeklySalesTrend = query({
         ? await ctx.db
             .query("productSales")
             .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
             .take(LIMITS.BACKFILL_BATCH)
         : await ctx.db
             .query("productSales")
@@ -112,6 +113,7 @@ export const getMonthlySalesTrend = query({
         ? await ctx.db
             .query("productSales")
             .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
             .take(LIMITS.BACKFILL_BATCH)
         : await ctx.db
             .query("productSales")
@@ -622,6 +624,7 @@ export const getFinancialTrend = query({
         ? ctx.db
             .query("productSales")
             .withIndex("by_date", (q) => q.gte("businessDate", lo).lte("businessDate", hi))
+            .order("desc")
             .take(LIMITS.BACKFILL_BATCH)
         : ctx.db.query("productSales").withIndex("by_date").order("desc").take(LIMITS.BACKFILL_BATCH),
       useRange
